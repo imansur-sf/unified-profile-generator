@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unified Profile Generator</title>
+  <script src="https://cdn.tailwindcss.com/3.4.16"></script>
+  <style>
+    :root {
+      --sf-navy:    #001E5B;
+      --sf-blue:    #022AC0;
+      --sf-blue-m:  #066AFE;
+      --sf-blue-l:  #00B3FF;
+      --cloud-80:   #90D0FE;
+      --cloud-95:   #EAF5FE;
+      --off-white:  #EAF5FE;
+      --gray-100:   #F3F3F3;
+      --gray-200:   #E5E5E5;
+      --gray-500:   #737479;
+      --gray-700:   #444447;
+      --text:       #001E5B;
+      --body:       #181818;
+      --muted:      #5A5C61;
+      --font-display: 'Salesforce Sans', system-ui, -apple-system, sans-serif;
+      --font-body:    'Salesforce Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --shadow-card:  0 2px 8px -2px rgba(0,30,91,0.06), 0 8px 20px -4px rgba(0,30,91,0.08);
+      --shadow-hover: 0 4px 12px -2px rgba(0,30,91,0.10), 0 14px 30px -6px rgba(0,30,91,0.15);
+      --grad-evening: linear-gradient(135deg, #001E5B 0%, #022AC0 45%, #066AFE 80%, #00B3FF 100%);
+    }
+
+    body { font-family: var(--font-body); color: var(--body); -webkit-font-smoothing: antialiased; background: linear-gradient(180deg, #F7FAFF 0%, #EEF4FC 100%); }
+    h1, h2, h3, h4, h5 { font-family: var(--font-display); letter-spacing: -0.01em; color: var(--text); }
+
+    .app-topbar { background: var(--grad-evening); color: #fff; box-shadow: 0 4px 16px -4px rgba(0,30,91,0.25); }
+    .app-topbar h1 { color: #fff; }
+    .app-logo-mark { background: rgba(255,255,255,0.18); border: 1px solid rgba(255,255,255,0.25); backdrop-filter: blur(4px); }
+    .btn-topbar { background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.25); color: #fff; transition: background 0.2s ease, border-color 0.2s ease; }
+    .btn-topbar:hover { background: rgba(255,255,255,0.18); border-color: rgba(255,255,255,0.4); }
+
+    .stepper-shell { background: #fff; border-bottom: 1px solid rgba(0,30,91,0.08); }
+    .step-dot { background-color: #F3F3F3; color: var(--muted); font-weight: 600; border: 1.5px solid transparent; transition: all 0.2s ease; }
+    .step-dot:hover { border-color: var(--cloud-80); }
+    .step-dot.active { background-color: var(--sf-blue); color: white; border-color: var(--sf-blue); box-shadow: 0 0 0 4px rgba(2,42,192,0.15); }
+    .step-dot.completed { background-color: var(--sf-blue-l); color: var(--sf-navy); border-color: var(--sf-blue-l); }
+    .step-dot.completed::after { content: '✓'; }
+    .step-connector { background: var(--gray-200); height: 2px; border-radius: 1px; }
+
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+    .fade-in { animation: fadeIn 0.35s ease-out; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+
+    .wizard-card { background: #fff; border-radius: var(--radius-xl); border: 1px solid rgba(0,30,91,0.08); box-shadow: var(--shadow-card); }
+    .wizard-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.15em; text-transform: uppercase; color: var(--sf-blue); }
+    .wizard-title { font-size: 22px; font-weight: 600; color: var(--text); letter-spacing: -0.015em; }
+    .wizard-sub { color: var(--muted); font-size: 14px; }
+
+    input[type="text"], input[type="email"], input[type="number"], select, textarea {
+      transition: border-color 0.18s ease, box-shadow 0.18s ease, background-color 0.18s ease;
+    }
+    input[type="text"]:focus, input[type="email"]:focus, input[type="number"]:focus, select:focus, textarea:focus {
+      outline: none !important;
+      border-color: var(--sf-blue-m) !important;
+      box-shadow: 0 0 0 3px rgba(6,106,254,0.15) !important;
+    }
+    input[type="color"] { -webkit-appearance: none; border: none; width: 42px; height: 42px; cursor: pointer; border-radius: 10px; padding: 0; background: transparent; }
+    input[type="color"]::-webkit-color-swatch-wrapper { padding: 2px; }
+    input[type="color"]::-webkit-color-swatch { border: 2px solid rgba(0,30,91,0.15); border-radius: 8px; }
+
+    .btn-primary-sf { background: var(--sf-blue); color: #fff; font-weight: 600; border-radius: 999px; padding: 10px 22px; box-shadow: 0 2px 8px -2px rgba(2,42,192,0.35); transition: background 0.18s ease, transform 0.12s ease; }
+    .btn-primary-sf:hover { background: var(--sf-blue-m); transform: translateY(-1px); }
+    .btn-secondary-sf { background: #fff; color: var(--sf-blue); font-weight: 600; border: 1.5px solid var(--sf-blue); border-radius: 999px; padding: 10px 22px; transition: background 0.18s ease; }
+    .btn-secondary-sf:hover { background: var(--cloud-95); }
+
+    .preview-shell { background: #fff; border-radius: var(--radius-xl); border: 1px solid rgba(0,30,91,0.08); box-shadow: var(--shadow-card); overflow: hidden; }
+    .preview-chrome { background: linear-gradient(180deg, #FAFCFF 0%, #F3F7FD 100%); border-bottom: 1px solid rgba(0,30,91,0.08); }
+
+    .drop-zone-sf { border: 2px dashed rgba(0,30,91,0.20); background: #FAFCFF; border-radius: var(--radius-lg); transition: border-color 0.18s ease, background 0.18s ease; }
+    .drop-zone-sf:hover, .drop-zone-sf.drag-active { border-color: var(--sf-blue-m); background: var(--cloud-95); }
+
+    /* Quick Start (AI URL analysis) */
+    .quickstart { position: relative; border-radius: var(--radius-xl); padding: 20px; margin-bottom: 22px; overflow: hidden; color: #fff; background: var(--grad-evening); box-shadow: 0 8px 24px -6px rgba(0,30,91,0.30); }
+    .quickstart::after { content: ''; position: absolute; inset: 0; background-image: radial-gradient(circle at 90% 10%, rgba(255,255,255,0.14), transparent 45%), radial-gradient(circle at 10% 100%, rgba(0,179,255,0.20), transparent 40%); pointer-events: none; }
+    .quickstart-inner { position: relative; z-index: 1; }
+    .quickstart-eyebrow { font-size: 10px; font-weight: 700; letter-spacing: 0.2em; text-transform: uppercase; color: var(--sf-blue-l); }
+    .quickstart-title { color: #fff; font-family: var(--font-display); font-weight: 600; font-size: 18px; letter-spacing: -0.01em; margin-top: 4px; }
+    .quickstart-sub { color: rgba(255,255,255,0.75); font-size: 12.5px; margin-top: 4px; line-height: 1.5; }
+    .quickstart-row { display: flex; gap: 8px; margin-top: 12px; }
+    .quickstart-input { flex: 1; background: rgba(255,255,255,0.10); border: 1px solid rgba(255,255,255,0.25); color: #fff; padding: 10px 14px; border-radius: 999px; font-size: 13px; outline: none; }
+    .quickstart-input::placeholder { color: rgba(255,255,255,0.55); }
+    .quickstart-input:focus { background: rgba(255,255,255,0.16); border-color: rgba(255,255,255,0.55); box-shadow: 0 0 0 3px rgba(0,179,255,0.25); }
+    .quickstart-btn { background: var(--sf-blue-l); color: var(--sf-navy); border: none; font-weight: 700; padding: 10px 20px; border-radius: 999px; cursor: pointer; font-size: 13px; box-shadow: 0 4px 12px -2px rgba(0,179,255,0.5); transition: background 0.18s ease, transform 0.12s ease; }
+    .quickstart-btn:hover:not(:disabled) { background: #66D0FF; transform: translateY(-1px); }
+    .quickstart-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+    .quickstart-status { margin-top: 10px; font-size: 12px; color: rgba(255,255,255,0.85); min-height: 16px; display: flex; align-items: center; gap: 8px; }
+    .quickstart-status .spinner { width: 12px; height: 12px; border: 2px solid rgba(255,255,255,0.30); border-top-color: #fff; border-radius: 50%; animation: qs-spin 0.7s linear infinite; }
+    @keyframes qs-spin { to { transform: rotate(360deg); } }
+    .quickstart-error { color: #FFD5CE; font-size: 12px; margin-top: 8px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); padding: 8px 12px; border-radius: 10px; line-height: 1.4; }
+    .quickstart-byok { margin-top: 12px; padding: 12px 14px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.14); border-radius: 12px; }
+    .quickstart-byok-label { display: block; font-size: 11px; font-weight: 600; color: rgba(255,255,255,0.85); margin-bottom: 6px; }
+    .quickstart-byok-hint { font-weight: 400; color: rgba(255,255,255,0.55); font-style: italic; }
+    .quickstart-byok-row { display: flex; gap: 6px; }
+    .quickstart-byok-row input { flex: 1; background: rgba(0,0,0,0.20); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 8px 12px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; outline: none; }
+    .quickstart-byok-row input:focus { border-color: rgba(0,179,255,0.6); background: rgba(0,0,0,0.30); }
+    .quickstart-byok-clear { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.15); color: rgba(255,255,255,0.75); padding: 6px 12px; border-radius: 8px; font-size: 11px; cursor: pointer; }
+    .quickstart-byok-clear:hover { background: rgba(255,255,255,0.15); color: #fff; }
+    .quickstart-mode-badge { display: inline-block; margin-top: 10px; padding: 3px 10px; border-radius: 999px; background: rgba(0,179,255,0.15); color: var(--sf-blue-l); border: 1px solid rgba(0,179,255,0.35); font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; }
+    .quickstart-mode-badge.byok { background: rgba(255,255,255,0.10); color: #fff; border-color: rgba(255,255,255,0.30); }
+    .quickstart-note { color: rgba(255,255,255,0.65); font-size: 11px; margin-top: 8px; font-style: italic; line-height: 1.5; }
+    .quickstart-settings { display: none; margin-top: 12px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,0.15); font-size: 11px; color: rgba(255,255,255,0.65); }
+    .quickstart-settings.open { display: block; }
+    .quickstart-settings label { display: block; margin-top: 8px; color: rgba(255,255,255,0.80); font-weight: 600; }
+    .quickstart-settings input { background: rgba(0,0,0,0.20); border: 1px solid rgba(255,255,255,0.15); color: #fff; padding: 8px 12px; border-radius: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; width: 100%; margin-top: 4px; outline: none; }
+    .quickstart-settings input:focus { border-color: rgba(0,179,255,0.6); }
+    .quickstart-settings-toggle { background: none; border: none; color: rgba(255,255,255,0.60); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 10px; }
+    .quickstart-settings-toggle:hover { color: rgba(255,255,255,0.90); }
+
+    /* Editable row card (for affinity items, insights, etc.) */
+    .row-card { background: #fff; border: 1px solid rgba(0,30,91,0.08); border-radius: 10px; padding: 12px; }
+    .row-card + .row-card { margin-top: 8px; }
+    .icon-btn { background: transparent; border: 1px solid rgba(0,30,91,0.10); border-radius: 8px; padding: 4px 8px; color: var(--muted); font-size: 11px; cursor: pointer; transition: all 0.15s ease; }
+    .icon-btn:hover { border-color: var(--sf-blue-m); color: var(--sf-blue-m); }
+    .icon-btn.danger:hover { border-color: #ef4444; color: #ef4444; }
+
+    .font-500 { font-weight: 500; }
+    .font-600 { font-weight: 600; }
+    .font-700 { font-weight: 700; }
+
+    input[type="range"] { accent-color: var(--sf-blue-m); }
+  </style>
+</head>
+<body class="min-h-screen">
+
+  <!-- TOP BAR -->
+  <div class="app-topbar sticky top-0 z-50">
+    <div class="max-w-[1400px] mx-auto px-6 py-4 flex items-center justify-between">
+      <div class="flex items-center gap-3">
+        <div class="app-logo-mark w-10 h-10 rounded-xl flex items-center justify-center">
+          <svg class="w-5 h-5 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/></svg>
+        </div>
+        <div>
+          <div class="text-[10px] font-700 tracking-[0.18em] uppercase text-white/70">Salesforce · Data Cloud</div>
+          <h1 class="text-base font-600 tracking-tight text-white">Unified Profile Generator</h1>
+        </div>
+      </div>
+      <div class="flex items-center gap-2">
+        <button onclick="startOver()" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">Start Over</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- STEP INDICATORS -->
+  <div class="stepper-shell">
+    <div class="max-w-[1400px] mx-auto px-4 py-4">
+      <div class="flex items-center justify-center gap-1" id="step-indicators">
+        <button onclick="goToStep(0)" class="step-dot active w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="0">1</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(1)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="1">2</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(2)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="2">3</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(3)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="3">4</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(4)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="4">5</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(5)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="5">6</button>
+        <div class="step-connector w-10"></div>
+        <button onclick="goToStep(6)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="6">7</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MAIN LAYOUT: Wizard + Preview -->
+  <div class="max-w-[1400px] mx-auto px-4 py-6">
+    <div class="flex gap-6" id="main-layout">
+
+      <!-- LEFT: WIZARD FORM -->
+      <div class="w-full lg:w-[52%] shrink-0" id="wizard-col">
+
+        <!-- STEP 1: Brand & Colors -->
+        <div class="step-panel active fade-in" data-step="0">
+
+          <!-- Quick Start (AI URL analysis) -->
+          <div class="quickstart" id="quickstart-panel">
+            <div class="quickstart-inner">
+              <div class="quickstart-eyebrow">⚡ Quick Start</div>
+              <div class="quickstart-title">Analyze customer URL with AI</div>
+              <div class="quickstart-sub">Paste the customer's homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.</div>
+              <div class="quickstart-row">
+                <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">
+                <button id="quickstart-btn" class="quickstart-btn" onclick="onQuickStartAnalyze()">Analyze →</button>
+              </div>
+              <div class="quickstart-status" id="quickstart-status"></div>
+              <div class="quickstart-error" id="quickstart-error" style="display:none;"></div>
+              <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
+              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.</div>
+
+              <button class="quickstart-settings-toggle" onclick="toggleQuickStartSettings()">Advanced · use your own key or Worker</button>
+              <div class="quickstart-settings" id="quickstart-settings">
+                <label>API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
+                <div class="quickstart-byok-row" style="display:flex;gap:6px;margin-top:4px;">
+                  <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared default backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
+                  <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" title="Clear stored key" style="margin-top:0;">Clear</button>
+                </div>
+                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker</span></label>
+                <input type="text" id="quickstart-scraper-url" placeholder="Default: https://loyalty-scraper.imansur.workers.dev" oninput="onScraperEndpointChange()">
+              </div>
+            </div>
+          </div>
+
+          <div class="wizard-card p-7">
+            <div class="wizard-eyebrow mb-2">Step 1 of 7</div>
+            <h2 class="wizard-title mb-1">Brand & Colors</h2>
+            <p class="wizard-sub mb-6">Customer brand identity and the color tokens applied across the profile.</p>
+
+            <div class="space-y-4">
+              <div>
+                <label class="block text-sm font-600 text-gray-700 mb-1">Brand Name <span class="text-red-500">*</span></label>
+                <input type="text" id="brand-name" placeholder="e.g. NCSA College Recruiting" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+              </div>
+              <div>
+                <label class="block text-sm font-600 text-gray-700 mb-1">Industry</label>
+                <select id="brand-industry" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none bg-white" onchange="onIndustryChange()">
+                  <option value="recruiting">Sports Recruiting / Education</option>
+                  <option value="retail">Retail / Fashion</option>
+                  <option value="healthcare">Healthcare / Pharmacy</option>
+                  <option value="financial">Financial Services</option>
+                  <option value="generic">Generic</option>
+                </select>
+                <p class="text-xs text-gray-400 mt-1">Switching industry reloads all defaults — save your work first.</p>
+              </div>
+              <div>
+                <label class="block text-sm font-600 text-gray-700 mb-1">App / Cloud Name</label>
+                <input type="text" id="app-name" placeholder="Data Cloud" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                <p class="text-xs text-gray-400 mt-1">Shown in the top-nav pill (e.g. "Data Cloud", "Marketing Cloud").</p>
+              </div>
+              <div class="grid grid-cols-2 gap-4">
+                <div>
+                  <label class="block text-sm font-600 text-gray-700 mb-1">Brand Logo</label>
+                  <div id="drop-logo" class="drop-zone-sf p-4 text-center cursor-pointer">
+                    <img id="preview-logo" src="" class="hidden w-14 h-14 object-contain rounded mx-auto mb-2">
+                    <p class="text-xs text-gray-500">📷 Drop or click</p>
+                  </div>
+                  <input type="text" id="url-logo" placeholder="Or paste logo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onLogoUrlChange()">
+                </div>
+                <div>
+                  <label class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
+                  <div id="drop-user-avatar" class="drop-zone-sf p-4 text-center cursor-pointer">
+                    <img id="preview-user-avatar" src="" class="hidden w-14 h-14 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+                    <p class="text-xs text-gray-500">📷 Drop or click</p>
+                  </div>
+                  <input type="text" id="url-user-avatar" placeholder="Or paste avatar URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onUserAvatarUrlChange()">
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-3">Colors</h3>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Primary</label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-primary" value="#001E5B" onchange="onColorChange()">
+                      <input type="text" id="hex-primary" value="#001E5B" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('primary')">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Accent</label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-accent" value="#066AFE" onchange="onColorChange()">
+                      <input type="text" id="hex-accent" value="#066AFE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('accent')">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Secondary / Wash</label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-secondary" value="#EAF5FE" onchange="onColorChange()">
+                      <input type="text" id="hex-secondary" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('secondary')">
+                    </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Bar Background</label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-menu" value="#FFFFFF" onchange="onColorChange()">
+                      <input type="text" id="hex-menu" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
+                    </div>
+                  </div>
+                  <div class="col-span-2">
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-menuText" value="#3E3E3C" onchange="onColorChange()">
+                      <input type="text" id="hex-menuText" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 2: Profile Card -->
+        <div class="step-panel fade-in" data-step="1">
+          <div class="wizard-card p-7">
+            <div class="wizard-eyebrow mb-2">Step 2 of 7</div>
+            <h2 class="wizard-title mb-1">Profile Card</h2>
+            <p class="wizard-sub mb-6">The customer's demographic, contact, and segment membership shown in the left panel.</p>
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">Customer ID</label><input type="text" id="profile-customerId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">Email</label><input type="text" id="profile-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">Phone</label><input type="text" id="profile-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="col-span-2 border-t border-gray-100 pt-3">
+                <label class="flex items-center gap-2 text-xs font-600 text-gray-600 mb-2">
+                  <input type="checkbox" id="secondary-email-include" onchange="onFieldChange()">
+                  <span>Include Secondary Email in the profile</span>
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Field Label</label>
+                    <input type="text" id="secondary-email-label" placeholder="e.g. Parent's Email, Spouse's Email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Address</label>
+                    <input type="text" id="secondary-email-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                  </div>
+                </div>
+              </div>
+              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Address</label><textarea id="profile-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Segment Membership</label><textarea id="profile-segment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+            </div>
+
+            <div class="mt-4">
+              <label class="block text-xs font-600 text-gray-600 mb-1">Profile Photo <span class="text-gray-400 font-500">(optional)</span></label>
+              <div id="drop-photo" class="drop-zone-sf p-4 text-center cursor-pointer">
+                <img id="preview-photo" src="" class="hidden w-16 h-16 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+                <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
+              </div>
+              <input type="text" id="url-photo" placeholder="Or paste photo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onPhotoUrlChange()">
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 3: Insights (Loyalty + Vertical Insights) -->
+        <div class="step-panel fade-in" data-step="2">
+          <div class="wizard-card p-7 space-y-6">
+            <div>
+              <div class="wizard-eyebrow mb-2">Step 3 of 7</div>
+              <h2 class="wizard-title mb-1">Insights</h2>
+              <p class="wizard-sub mb-5">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Loyalty Insights</h3>
+              <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Member ID</label><input type="text" id="loyalty-memberId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Tier</label><input type="text" id="loyalty-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Points</label><input type="text" id="loyalty-points" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Redeemed Points</label><input type="text" id="loyalty-redeemedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Vertical Insights</h3>
+              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div id="insights-container" class="space-y-2"></div>
+              <button onclick="addInsight()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Insight</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 4: Affinities -->
+        <div class="step-panel fade-in" data-step="3">
+          <div class="wizard-card p-7 space-y-5">
+            <div>
+              <div class="wizard-eyebrow mb-2">Step 4 of 7</div>
+              <h2 class="wizard-title mb-1">Affinities</h2>
+              <p class="wizard-sub mb-5">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+              <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div></div>
+              <div>
+                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Label</label>
+                <input type="text" id="seriesA-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+              </div>
+              <div>
+                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Color</label>
+                <div class="flex items-center gap-2">
+                  <input type="color" id="seriesA-color" onchange="onFieldChange()">
+                  <input type="text" id="seriesA-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('A')">
+                </div>
+              </div>
+              <div>
+                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Label</label>
+                <input type="text" id="seriesB-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+              </div>
+              <div>
+                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Color</label>
+                <div class="flex items-center gap-2">
+                  <input type="color" id="seriesB-color" onchange="onFieldChange()">
+                  <input type="text" id="seriesB-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('B')">
+                </div>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <div id="affinity-groups-container" class="space-y-4"></div>
+              <button onclick="addAffinityGroup()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Affinity Group</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 5: Preferences, Events, Membership -->
+        <div class="step-panel fade-in" data-step="4">
+          <div class="wizard-card p-7 space-y-6">
+            <div>
+              <div class="wizard-eyebrow mb-2">Step 5 of 7</div>
+              <h2 class="wizard-title mb-1">Preferences, Events & Membership</h2>
+              <p class="wizard-sub mb-5">The three stacked cards in the middle column.</p>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Preferences</h3>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div>
+                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <div class="flex items-center gap-2">
+                    <input type="text" id="preferences-icon" placeholder="📈 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                    <div id="drop-preferences-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                  </div>
+                </div>
+              </div>
+              <div id="preferences-container" class="space-y-2"></div>
+              <button onclick="addPreference()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Preference</button>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Events</h3>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div>
+                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <div class="flex items-center gap-2">
+                    <input type="text" id="events-icon" placeholder="📅 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                    <div id="drop-events-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                  </div>
+                </div>
+              </div>
+              <div id="events-container" class="space-y-2"></div>
+              <button onclick="addEvent()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Event</button>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Membership Details</h3>
+              <div class="grid grid-cols-2 gap-3 mb-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div>
+                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <div class="flex items-center gap-2">
+                    <input type="text" id="membership-icon" placeholder="🎫 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+                    <div id="drop-membership-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                  </div>
+                </div>
+              </div>
+              <div id="membership-container" class="space-y-2"></div>
+              <button onclick="addMembership()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 6: Einstein Recs + Engagement Activity -->
+        <div class="step-panel fade-in" data-step="5">
+          <div class="wizard-card p-7 space-y-6">
+            <div>
+              <div class="wizard-eyebrow mb-2">Step 6 of 7</div>
+              <h2 class="wizard-title mb-1">Einstein Recommendations & Activity</h2>
+              <p class="wizard-sub mb-5">The right column: AI-powered recommendation cards and the engagement timeline.</p>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Einstein Recommendations</h3>
+              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div id="recs-container" class="space-y-4"></div>
+              <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Engagement Activity</h3>
+              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div id="activity-container" class="space-y-3"></div>
+              <button onclick="addActivity()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Activity Item</button>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-3">Top-Nav Links</h3>
+              <div id="nav-links-container" class="flex flex-wrap gap-2 mb-2"></div>
+              <div class="flex gap-2">
+                <input type="text" id="new-nav-link" placeholder="Add nav link" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
+                <button onclick="addNavLink()" class="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-600 rounded-lg hover:bg-gray-200">Add</button>
+              </div>
+              <label class="block text-xs font-600 text-gray-600 mt-4 mb-1">Active Tab Name (right-side pill)</label>
+              <input type="text" id="tab-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
+            </div>
+          </div>
+        </div>
+
+        <!-- STEP 7: Preview & Export -->
+        <div class="step-panel fade-in" data-step="6">
+          <div class="wizard-card p-7">
+            <div class="wizard-eyebrow mb-2">Step 7 of 7</div>
+            <h2 class="wizard-title mb-1">Preview & Export</h2>
+            <p class="wizard-sub mb-6">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
+
+            <div class="flex gap-3 mb-4">
+              <button onclick="downloadHTML()" class="btn-primary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+                Download HTML
+              </button>
+              <button onclick="copyHTML()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"/></svg>
+                Copy HTML
+              </button>
+            </div>
+            <div id="copy-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
+            <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
+          </div>
+        </div>
+
+        <!-- NAVIGATION BUTTONS -->
+        <div class="flex items-center justify-between mt-5">
+          <button id="btn-prev" onclick="prevStep()" class="btn-secondary-sf text-sm hidden">← Back</button>
+          <div class="flex-1"></div>
+          <button id="btn-next" onclick="nextStep()" class="btn-primary-sf text-sm">Next →</button>
+        </div>
+      </div>
+
+      <!-- RIGHT: LIVE PREVIEW -->
+      <div class="hidden lg:block flex-1 sticky top-28 self-start" id="preview-col">
+        <div class="preview-shell">
+          <div class="preview-chrome px-4 py-2.5 flex items-center gap-2">
+            <div class="w-3 h-3 rounded-full bg-red-400"></div>
+            <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
+            <div class="w-3 h-3 rounded-full bg-green-400"></div>
+            <span class="text-[11px] font-600 text-gray-500 ml-2 tracking-wider uppercase">Live Preview</span>
+          </div>
+          <iframe id="preview-iframe" class="w-full bg-white" style="height: calc(100vh - 200px);" sandbox="allow-scripts"></iframe>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>window.__UPG_BUILD__ = 'dev-' + Date.now();</script>
+  <script>
+    // Load modules with a per-page-load cache buster so edits are picked up
+    // without the browser's aggressive JS cache getting in the way.
+    ['js/defaults.js','js/images.js','js/generator.js','js/pagehost.js','js/localai.js','js/app.js'].forEach(src => {
+      const s = document.createElement('script');
+      s.src = src + '?v=' + window.__UPG_BUILD__;
+      s.defer = false;
+      s.async = false;
+      document.body.appendChild(s);
+    });
+  </script>
+</body>
+</html>
