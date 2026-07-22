@@ -39,6 +39,9 @@ function generateProfileHTML(state) {
   const secondary = s.colors.secondary || '#EAF5FE';
   const menuBg = s.colors.menu || '#FFFFFF';
   const menuText = s.colors.menuText || '#3E3E3C';
+  const pageBg = s.colors.pageBg || '#EAF5FE';
+  const leftW = Math.max(220, Math.min(500, Number(s.layout?.leftColWidth) || 290));
+  const middleMin = Math.max(220, Math.min(500, Number(s.layout?.middleColWidth) || 320));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -57,7 +60,7 @@ function generateProfileHTML(state) {
   --text: #080707;
   --text-muted: #706E6B;
   --card-bg: #FFFFFF;
-  --page-bg: #F3F3F3;
+  --page-bg: ${pageBg};
 }
 * { box-sizing: border-box; }
 body {
@@ -238,7 +241,7 @@ body {
   background: var(--page-bg);
   padding: 12px;
   display: grid;
-  grid-template-columns: 290px minmax(260px, 340px) 1fr;
+  grid-template-columns: ${leftW}px minmax(${middleMin}px, ${middleMin + 40}px) 1fr;
   gap: 12px;
   align-items: start;
 }
@@ -486,7 +489,7 @@ body {
 .right-bottom-col { display: flex; flex-direction: column; gap: 12px; }
 
 @media (max-width: 1100px) {
-  .up-shell { grid-template-columns: 290px 1fr; }
+  .up-shell { grid-template-columns: ${leftW}px 1fr; }
   .right-col { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {

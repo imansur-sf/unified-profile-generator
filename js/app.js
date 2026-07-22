@@ -43,6 +43,14 @@ function fillStaticFields() {
   document.getElementById('hex-menu').value = state.colors.menu;
   document.getElementById('color-menuText').value = state.colors.menuText;
   document.getElementById('hex-menuText').value = state.colors.menuText;
+  document.getElementById('color-pageBg').value = state.colors.pageBg || '#EAF5FE';
+  document.getElementById('hex-pageBg').value = state.colors.pageBg || '#EAF5FE';
+
+  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
+  document.getElementById('left-col-w').value = state.layout.leftColWidth;
+  document.getElementById('left-col-w-val').textContent = state.layout.leftColWidth + 'px';
+  document.getElementById('middle-col-w').value = state.layout.middleColWidth;
+  document.getElementById('middle-col-w-val').textContent = state.layout.middleColWidth + 'px';
 
   document.getElementById('profile-name').value = state.profile.name;
   document.getElementById('profile-city').value = state.profile.city;
@@ -91,6 +99,7 @@ function readStaticFields() {
   state.colors.secondary = document.getElementById('hex-secondary').value;
   state.colors.menu = document.getElementById('hex-menu').value;
   state.colors.menuText = document.getElementById('hex-menuText').value;
+  state.colors.pageBg = document.getElementById('hex-pageBg').value;
 
   state.profile.name = document.getElementById('profile-name').value;
   state.profile.city = document.getElementById('profile-city').value;
@@ -141,8 +150,18 @@ function onHexChange(key) {
     onFieldChange();
   }
 }
+
+// Slider-driven column widths — update state, echo px, refresh preview.
+function onLayoutChange(field, value) {
+  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
+  const n = Math.max(220, Math.min(500, +value));
+  state.layout[field] = n;
+  const echo = document.getElementById(field === 'leftColWidth' ? 'left-col-w-val' : 'middle-col-w-val');
+  if (echo) echo.textContent = n + 'px';
+  refreshPreview();
+}
 function onColorChange() {
-  ['primary', 'accent', 'secondary', 'menu', 'menuText'].forEach(k => {
+  ['primary', 'accent', 'secondary', 'menu', 'menuText', 'pageBg'].forEach(k => {
     document.getElementById('hex-' + k).value = document.getElementById('color-' + k).value;
   });
   onFieldChange();

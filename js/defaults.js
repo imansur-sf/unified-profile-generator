@@ -11,7 +11,7 @@
 const INDUSTRY_DEFAULTS = {
   recruiting: {
     label: 'Sports Recruiting / Education',
-    colors: { primary: '#001E5B', accent: '#066AFE', secondary: '#EAF5FE', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#001E5B', accent: '#066AFE', secondary: '#EAF5FE', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#EAF5FE' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Lake Objects', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Joey Vutto',
@@ -127,7 +127,7 @@ const INDUSTRY_DEFAULTS = {
 
   retail: {
     label: 'Retail / Fashion',
-    colors: { primary: '#111827', accent: '#EC4899', secondary: '#FDF2F8', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#111827', accent: '#EC4899', secondary: '#FDF2F8', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#FDF2F8' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Sarah Chen',
@@ -243,7 +243,7 @@ const INDUSTRY_DEFAULTS = {
 
   healthcare: {
     label: 'Healthcare / Pharmacy',
-    colors: { primary: '#065F46', accent: '#10B981', secondary: '#ECFDF5', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#065F46', accent: '#10B981', secondary: '#ECFDF5', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#ECFDF5' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Marcus Rivera',
@@ -356,7 +356,7 @@ const INDUSTRY_DEFAULTS = {
 
   financial: {
     label: 'Financial Services',
-    colors: { primary: '#0F172A', accent: '#7C3AED', secondary: '#F5F3FF', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#0F172A', accent: '#7C3AED', secondary: '#F5F3FF', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#F5F3FF' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Priya Shah',
@@ -469,7 +469,7 @@ const INDUSTRY_DEFAULTS = {
 
   generic: {
     label: 'Generic',
-    colors: { primary: '#1F2937', accent: '#3B82F6', secondary: '#F1F5F9', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#1F2937', accent: '#3B82F6', secondary: '#F1F5F9', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#EAF5FE' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Alex Morgan',
@@ -586,5 +586,7 @@ function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
+  if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
 }

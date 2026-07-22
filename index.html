@@ -314,12 +314,40 @@
                       <input type="text" id="hex-menu" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
                     </div>
                   </div>
-                  <div class="col-span-2">
+                  <div>
                     <label class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menuText" value="#3E3E3C" onchange="onColorChange()">
                       <input type="text" id="hex-menuText" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
                     </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-pageBg" value="#EAF5FE" onchange="onColorChange()">
+                      <input type="text" id="hex-pageBg" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-3">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
+                <p class="text-xs text-gray-500 mb-3">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-600 text-gray-600">Left Column (Profile)</label>
+                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
+                    </div>
+                    <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-600 text-gray-600">Middle Column</label>
+                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
+                    </div>
+                    <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
                   </div>
                 </div>
               </div>

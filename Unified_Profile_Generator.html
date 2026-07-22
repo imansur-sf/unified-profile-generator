@@ -318,12 +318,40 @@
                       <input type="text" id="hex-menu" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
                     </div>
                   </div>
-                  <div class="col-span-2">
+                  <div>
                     <label class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menuText" value="#3E3E3C" onchange="onColorChange()">
                       <input type="text" id="hex-menuText" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
                     </div>
+                  </div>
+                  <div>
+                    <label class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
+                    <div class="flex items-center gap-2">
+                      <input type="color" id="color-pageBg" value="#EAF5FE" onchange="onColorChange()">
+                      <input type="text" id="hex-pageBg" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="border-t border-gray-100 pt-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-3">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
+                <p class="text-xs text-gray-500 mb-3">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
+                <div class="grid grid-cols-2 gap-4">
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-600 text-gray-600">Left Column (Profile)</label>
+                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
+                    </div>
+                    <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
+                  </div>
+                  <div>
+                    <div class="flex items-center justify-between mb-1">
+                      <label class="block text-xs font-600 text-gray-600">Middle Column</label>
+                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
+                    </div>
+                    <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
                   </div>
                 </div>
               </div>
@@ -610,7 +638,7 @@
 const INDUSTRY_DEFAULTS = {
   recruiting: {
     label: 'Sports Recruiting / Education',
-    colors: { primary: '#001E5B', accent: '#066AFE', secondary: '#EAF5FE', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#001E5B', accent: '#066AFE', secondary: '#EAF5FE', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#EAF5FE' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Lake Objects', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Joey Vutto',
@@ -726,7 +754,7 @@ const INDUSTRY_DEFAULTS = {
 
   retail: {
     label: 'Retail / Fashion',
-    colors: { primary: '#111827', accent: '#EC4899', secondary: '#FDF2F8', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#111827', accent: '#EC4899', secondary: '#FDF2F8', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#FDF2F8' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Sarah Chen',
@@ -842,7 +870,7 @@ const INDUSTRY_DEFAULTS = {
 
   healthcare: {
     label: 'Healthcare / Pharmacy',
-    colors: { primary: '#065F46', accent: '#10B981', secondary: '#ECFDF5', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#065F46', accent: '#10B981', secondary: '#ECFDF5', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#ECFDF5' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Marcus Rivera',
@@ -955,7 +983,7 @@ const INDUSTRY_DEFAULTS = {
 
   financial: {
     label: 'Financial Services',
-    colors: { primary: '#0F172A', accent: '#7C3AED', secondary: '#F5F3FF', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#0F172A', accent: '#7C3AED', secondary: '#F5F3FF', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#F5F3FF' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Priya Shah',
@@ -1068,7 +1096,7 @@ const INDUSTRY_DEFAULTS = {
 
   generic: {
     label: 'Generic',
-    colors: { primary: '#1F2937', accent: '#3B82F6', secondary: '#F1F5F9', menu: '#FFFFFF', menuText: '#3E3E3C' },
+    colors: { primary: '#1F2937', accent: '#3B82F6', secondary: '#F1F5F9', menu: '#FFFFFF', menuText: '#3E3E3C', pageBg: '#EAF5FE' },
     appName: 'Data Cloud',
     navLinks: ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Model', 'Identity Resolutions', 'Calculated Insights'],
     tabName: 'Alex Morgan',
@@ -1185,6 +1213,8 @@ function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
+  if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
 }
 
@@ -1308,6 +1338,9 @@ function generateProfileHTML(state) {
   const secondary = s.colors.secondary || '#EAF5FE';
   const menuBg = s.colors.menu || '#FFFFFF';
   const menuText = s.colors.menuText || '#3E3E3C';
+  const pageBg = s.colors.pageBg || '#EAF5FE';
+  const leftW = Math.max(220, Math.min(500, Number(s.layout?.leftColWidth) || 290));
+  const middleMin = Math.max(220, Math.min(500, Number(s.layout?.middleColWidth) || 320));
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -1326,7 +1359,7 @@ function generateProfileHTML(state) {
   --text: #080707;
   --text-muted: #706E6B;
   --card-bg: #FFFFFF;
-  --page-bg: #F3F3F3;
+  --page-bg: ${pageBg};
 }
 * { box-sizing: border-box; }
 body {
@@ -1507,7 +1540,7 @@ body {
   background: var(--page-bg);
   padding: 12px;
   display: grid;
-  grid-template-columns: 290px minmax(260px, 340px) 1fr;
+  grid-template-columns: ${leftW}px minmax(${middleMin}px, ${middleMin + 40}px) 1fr;
   gap: 12px;
   align-items: start;
 }
@@ -1755,7 +1788,7 @@ body {
 .right-bottom-col { display: flex; flex-direction: column; gap: 12px; }
 
 @media (max-width: 1100px) {
-  .up-shell { grid-template-columns: 290px 1fr; }
+  .up-shell { grid-template-columns: ${leftW}px 1fr; }
   .right-col { grid-column: 1 / -1; }
 }
 @media (max-width: 520px) {
@@ -2552,6 +2585,14 @@ function fillStaticFields() {
   document.getElementById('hex-menu').value = state.colors.menu;
   document.getElementById('color-menuText').value = state.colors.menuText;
   document.getElementById('hex-menuText').value = state.colors.menuText;
+  document.getElementById('color-pageBg').value = state.colors.pageBg || '#EAF5FE';
+  document.getElementById('hex-pageBg').value = state.colors.pageBg || '#EAF5FE';
+
+  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
+  document.getElementById('left-col-w').value = state.layout.leftColWidth;
+  document.getElementById('left-col-w-val').textContent = state.layout.leftColWidth + 'px';
+  document.getElementById('middle-col-w').value = state.layout.middleColWidth;
+  document.getElementById('middle-col-w-val').textContent = state.layout.middleColWidth + 'px';
 
   document.getElementById('profile-name').value = state.profile.name;
   document.getElementById('profile-city').value = state.profile.city;
@@ -2600,6 +2641,7 @@ function readStaticFields() {
   state.colors.secondary = document.getElementById('hex-secondary').value;
   state.colors.menu = document.getElementById('hex-menu').value;
   state.colors.menuText = document.getElementById('hex-menuText').value;
+  state.colors.pageBg = document.getElementById('hex-pageBg').value;
 
   state.profile.name = document.getElementById('profile-name').value;
   state.profile.city = document.getElementById('profile-city').value;
@@ -2650,8 +2692,18 @@ function onHexChange(key) {
     onFieldChange();
   }
 }
+
+// Slider-driven column widths — update state, echo px, refresh preview.
+function onLayoutChange(field, value) {
+  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
+  const n = Math.max(220, Math.min(500, +value));
+  state.layout[field] = n;
+  const echo = document.getElementById(field === 'leftColWidth' ? 'left-col-w-val' : 'middle-col-w-val');
+  if (echo) echo.textContent = n + 'px';
+  refreshPreview();
+}
 function onColorChange() {
-  ['primary', 'accent', 'secondary', 'menu', 'menuText'].forEach(k => {
+  ['primary', 'accent', 'secondary', 'menu', 'menuText', 'pageBg'].forEach(k => {
     document.getElementById('hex-' + k).value = document.getElementById('color-' + k).value;
   });
   onFieldChange();
