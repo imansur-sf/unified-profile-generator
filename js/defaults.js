@@ -586,6 +586,7 @@ function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
+  if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
   if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
   if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;

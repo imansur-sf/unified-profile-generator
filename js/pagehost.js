@@ -142,10 +142,26 @@ Schema:
 
   "activity": {
     "title": "Engagement Activity",
-    "items": [               // 4 items — reverse chronological
+    "items": [               // AT LEAST 4 items, prefer 5-6 — reverse chronological
       { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style=\\"color:#RRGGBB\\">colored</span> HTML", "time": string }
     ]
-  }
+  },
+
+  "extraCards": [            // 1-2 items — additional middle-column cards to fill vertical space
+    {
+      "title": string,       // vertical-appropriate category (e.g. "Coaching History", "Skills Assessment", "Family Info")
+      "icon": "emoji",       // single emoji
+      "items": [ { "label": string, "value": string } ]   // 3-5 rows
+    }
+  ],
+
+  "rightExtraCards": [       // 0-1 item — extra card BELOW Membership Details in the right column
+    {
+      "title": string,       // e.g. "Recent Communications", "Program Enrollment", "Referral Sources"
+      "icon": "emoji",
+      "items": [ { "label": string, "value": string } ]   // 2-3 rows
+    }
+  ]
 }
 
 Rules:
@@ -153,6 +169,7 @@ Rules:
 - If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
 - Colors should match the customer's actual visual brand where discernible from the page.
 - Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
+- **DENSITY MATTERS** — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count in each list, not the minimum. Empty white space looks unfinished. Populate extraCards (1-2) and rightExtraCards (0-1) with content the customer's marketing team would recognize as accurate to their business.
 - Return ONLY the JSON. No explanation.`;
 
   function buildUserPrompt(scraped) {

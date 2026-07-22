@@ -724,6 +724,21 @@ body {
               <div class="member-value">${esc(it.value)}</div>`).join('')}
           </div>
         </div>
+
+        ${(s.rightExtraCards || []).map(card => `
+          <div class="card">
+            <div class="section-head">
+              <div class="section-icon-title">
+                ${renderSectionIcon(card.icon, '📋', '#066AFE')}
+                <span class="section-title">${esc(card.title || 'Custom Section')}</span>
+              </div>
+            </div>
+            <div class="member-grid">
+              ${(card.items || []).map(it => `
+                <div class="member-label">${esc(it.label)}</div>
+                <div class="member-value">${esc(it.value)}</div>`).join('')}
+            </div>
+          </div>`).join('')}
       </div>
 
       <div class="card">

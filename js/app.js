@@ -343,6 +343,59 @@ function removeExtraCard(i) { state.extraCards.splice(i, 1); renderExtraCards();
 function addExtraCardRow(ci) { state.extraCards[ci].items.push({ label: '', value: '' }); renderExtraCards(); refreshPreview(); }
 function removeExtraCardRow(ci, ri) { state.extraCards[ci].items.splice(ri, 1); renderExtraCards(); refreshPreview(); }
 
+// Right-column custom cards — render under Membership Details in the
+// right-bottom-left column, opposite Engagement Activity. Same shape
+// as middle-column extraCards to keep the editor familiar.
+function renderRightExtraCards() {
+  const c = document.getElementById('right-extra-cards-container');
+  if (!c) return;
+  if (!Array.isArray(state.rightExtraCards)) state.rightExtraCards = [];
+  c.innerHTML = state.rightExtraCards.map((card, ci) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-2">
+        <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.rightExtraCards[${ci}].title=this.value; refreshPreview()">
+        <button class="icon-btn danger" onclick="removeRightExtraCard(${ci})">Remove card</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center mb-2">
+        <input type="text" value="${escAttr(card.icon || '')}" placeholder="Icon (emoji or image URL)" class="col-span-9 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none font-mono" oninput="state.rightExtraCards[${ci}].icon=this.value; refreshPreview()">
+        <div id="drop-right-extra-icon-${ci}" class="col-span-3 drop-zone-sf p-2 text-center cursor-pointer text-[10px]">📷 Upload</div>
+      </div>
+      <div class="space-y-2">
+        ${(card.items || []).map((it, ri) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" placeholder="Label" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.rightExtraCards[${ci}].items[${ri}].label=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(it.value)}" placeholder="Value" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.rightExtraCards[${ci}].items[${ri}].value=this.value; refreshPreview()">
+            <button class="col-span-1 icon-btn danger" onclick="removeRightExtraCardRow(${ci}, ${ri})">×</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addRightExtraCardRow(${ci})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+
+  state.rightExtraCards.forEach((_, ci) => {
+    attachDropZone(`drop-right-extra-icon-${ci}`, null, (dataUrl) => {
+      state.rightExtraCards[ci].icon = dataUrl;
+      renderRightExtraCards();
+      refreshPreview();
+    });
+  });
+}
+function addRightExtraCard() {
+  if (!Array.isArray(state.rightExtraCards)) state.rightExtraCards = [];
+  state.rightExtraCards.push({
+    title: 'New Section',
+    icon: '📋',
+    items: [
+      { label: 'Field 1', value: '' },
+      { label: 'Field 2', value: '' }
+    ]
+  });
+  renderRightExtraCards();
+  refreshPreview();
+}
+function removeRightExtraCard(i) { state.rightExtraCards.splice(i, 1); renderRightExtraCards(); refreshPreview(); }
+function addRightExtraCardRow(ci) { state.rightExtraCards[ci].items.push({ label: '', value: '' }); renderRightExtraCards(); refreshPreview(); }
+function removeRightExtraCardRow(ci, ri) { state.rightExtraCards[ci].items.splice(ri, 1); renderRightExtraCards(); refreshPreview(); }
+
 function renderRecs() {
   const c = document.getElementById('recs-container');
   c.innerHTML = state.recommendations.items.map((rec, i) => `
@@ -511,6 +564,8 @@ function applyAIProfile(ai) {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
   if (Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
+  if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
+  if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
 
   // Prefer favicon as logo if AI didn't give us anything.
   if (ai._meta && ai._meta.favicon && !base.logo) base.logo = ai._meta.favicon;
@@ -529,6 +584,7 @@ function renderAll() {
   renderEvents();
   renderMembership();
   renderExtraCards();
+  renderRightExtraCards();
   renderRecs();
   renderActivity();
   renderNavLinks();
