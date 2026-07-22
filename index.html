@@ -78,6 +78,26 @@
     .preview-shell { background: #fff; border-radius: var(--radius-xl); border: 1px solid rgba(0,30,91,0.08); box-shadow: var(--shadow-card); overflow: hidden; }
     .preview-chrome { background: linear-gradient(180deg, #FAFCFF 0%, #F3F7FD 100%); border-bottom: 1px solid rgba(0,30,91,0.08); }
 
+    /* Preview stage — renders iframe at 1300×860 (desktop-shaped) and
+       scales it down to fit the preview pane so the SE sees a miniature
+       of the actual export, not the narrow mobile-stack layout. */
+    .preview-stage {
+      position: relative;
+      width: 100%;
+      aspect-ratio: 1300 / 860;
+      background: #fff;
+      overflow: hidden;
+    }
+    #preview-iframe {
+      position: absolute;
+      top: 0; left: 0;
+      width: 1300px;
+      height: 860px;
+      transform-origin: 0 0;
+      border: 0;
+      background: #fff;
+    }
+
     .drop-zone-sf { border: 2px dashed rgba(0,30,91,0.20); background: #FAFCFF; border-radius: var(--radius-lg); transition: border-color 0.18s ease, background 0.18s ease; }
     .drop-zone-sf:hover, .drop-zone-sf.drag-active { border-color: var(--sf-blue-m); background: var(--cloud-95); }
 
@@ -621,8 +641,11 @@
             <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
             <div class="w-3 h-3 rounded-full bg-green-400"></div>
             <span class="text-[11px] font-600 text-gray-500 ml-2 tracking-wider uppercase">Live Preview</span>
+            <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Desktop · 1300px</span>
           </div>
-          <iframe id="preview-iframe" class="w-full bg-white" style="height: calc(100vh - 200px);" sandbox="allow-scripts"></iframe>
+          <div class="preview-stage" id="preview-stage">
+            <iframe id="preview-iframe" sandbox="allow-scripts"></iframe>
+          </div>
         </div>
       </div>
 

@@ -21,6 +21,18 @@ function refreshPreview() {
   }, 120);
 }
 
+// The iframe renders at a fixed 1300×860 desktop viewport, then we scale
+// it down to fit the preview pane. This gives a miniature of the actual
+// export instead of the collapsed narrow-column layout.
+function fitPreviewScale() {
+  const stage = document.getElementById('preview-stage');
+  const iframe = document.getElementById('preview-iframe');
+  if (!stage || !iframe) return;
+  const scale = stage.clientWidth / 1300;
+  iframe.style.transform = `scale(${scale})`;
+}
+window.addEventListener('resize', fitPreviewScale);
+
 // ─── STATE ↔ DOM binding ────────────────────────────────────
 
 function fillStaticFields() {
@@ -749,6 +761,10 @@ function bootstrap() {
   }
 
   refreshPreview();
+  fitPreviewScale();
+  // Rescale after images/webfonts settle so the iframe's transform stays crisp
+  requestAnimationFrame(fitPreviewScale);
+  setTimeout(fitPreviewScale, 400);
 }
 
 // Script may load before or after DOMContentLoaded (index.html injects
