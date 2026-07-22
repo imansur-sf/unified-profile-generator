@@ -143,7 +143,7 @@ Schema:
   "activity": {
     "title": "Engagement Activity",
     "items": [               // AT LEAST 4 items, prefer 5-6 — reverse chronological
-      { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style=\\"color:#RRGGBB\\">colored</span> HTML", "time": string }
+      { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style='color:#RRGGBB'>colored</span> HTML — use SINGLE quotes for HTML attributes to keep the JSON string valid", "time": string }
     ]
   },
 
@@ -189,16 +189,101 @@ ${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from U
 Now generate the Unified Profile JSON per the schema.`;
   }
 
+  // Tolerant JSON parser — handles the three common ways AI models
+  // produce technically-invalid JSON:
+  //   1) Markdown fences (```json ... ```)
+  //   2) Prose wrappers around the JSON block
+  //   3) Truncation mid-object (hit max_tokens)
+  //   4) Trailing commas / smart-quote characters
   function parseAIResponseText(text) {
     if (!text) throw new Error('Empty AI response');
-    // Strip Markdown fences if present
-    let t = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim();
-    // Some models wrap JSON in extra prose — try to grab the largest {...} block
+
+    // 1) Strip Markdown fences
+    let t = text.trim();
+    if (t.startsWith('```')) {
+      t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    }
+
+    // 2) Grab from first { to last }
     const first = t.indexOf('{');
     const last = t.lastIndexOf('}');
-    if (first > 0 && last > first) t = t.slice(first, last + 1);
-    try { return JSON.parse(t); }
-    catch (e) { throw new Error('AI returned malformed JSON: ' + e.message); }
+    if (first >= 0 && last > first) t = t.slice(first, last + 1);
+
+    // Normalize smart quotes some models emit
+    t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
+
+    // 3) Happy path
+    try { return JSON.parse(t); } catch (_) { /* fall through */ }
+
+    // 4) Strip trailing commas before } or ] — a very common AI mistake
+    const noTrailingCommas = t.replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(noTrailingCommas); } catch (_) { /* fall through */ }
+
+    // 5) Truncation-recovery: if the response was cut off mid-object, walk
+    //    forward tracking string/escape state + brace depth. Close what's
+    //    open and re-parse.
+    const recovered = attemptTruncationRecovery(t);
+    if (recovered) {
+      try { return JSON.parse(recovered); } catch (_) { /* fall through */ }
+    }
+
+    // 6) Give up. Log the raw text so the SE can inspect via devtools.
+    console.error('[UPG] JSON parse failed. Raw model output:', text);
+    const err = new Error('AI returned malformed JSON. Try Analyze again — usually transient.');
+    err.raw = text;
+    throw err;
+  }
+
+  // Walk the string char-by-char honoring string/escape state; find the
+  // last balanced position and close any still-open constructs.
+  function attemptTruncationRecovery(s) {
+    let inString = false;
+    let escape = false;
+    const stack = [];
+    let lastSafe = -1;
+
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (escape) { escape = false; continue; }
+      if (inString) {
+        if (c === '\\') { escape = true; continue; }
+        if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') { inString = true; continue; }
+      if (c === '{' || c === '[') { stack.push(c); continue; }
+      if (c === '}' || c === ']') {
+        const want = c === '}' ? '{' : '[';
+        if (stack.length && stack[stack.length - 1] === want) {
+          stack.pop();
+          if (stack.length === 0) lastSafe = i + 1;
+        }
+      }
+    }
+
+    // If we ended inside a string, cut back to the last comma at safe depth
+    if (inString) {
+      const cutIdx = s.lastIndexOf(',');
+      if (cutIdx > 0) return attemptTruncationRecovery(s.slice(0, cutIdx));
+      return null;
+    }
+
+    if (stack.length === 0) return null;
+
+    let truncated = s;
+    if (lastSafe > 0) {
+      const tail = s.slice(lastSafe);
+      const cutIdx = tail.lastIndexOf(',');
+      truncated = s.slice(0, lastSafe) + (cutIdx > 0 ? tail.slice(0, cutIdx) : '');
+    } else {
+      const cutIdx = s.lastIndexOf(',');
+      if (cutIdx > 0) truncated = s.slice(0, cutIdx);
+    }
+
+    // Close what's still open
+    let closer = '';
+    for (let i = stack.length - 1; i >= 0; i--) closer += (stack[i] === '{' ? '}' : ']');
+    return truncated.replace(/,\s*$/, '') + closer;
   }
 
   window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, buildUserPrompt, parseAIResponseText };
