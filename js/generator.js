@@ -264,14 +264,31 @@ body {
 .profile-name { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1.1; }
 .profile-city { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
 .profile-fields { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
-.profile-field { display: flex; gap: 8px; align-items: flex-start; }
+.profile-field {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
 .profile-field-icon {
   width: 18px; height: 18px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--primary);
 }
-.profile-field-label { color: var(--text-muted); min-width: 92px; }
-.profile-field-value { color: var(--text); font-weight: 500; white-space: pre-line; }
+.profile-field-label {
+  color: var(--text-muted);
+  min-width: 92px;
+  flex-shrink: 0;
+}
+.profile-field-value {
+  color: var(--text);
+  font-weight: 500;
+  white-space: pre-line;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .profile-segment {
   border-top: 1px solid var(--border);
@@ -362,7 +379,7 @@ body {
 .recs-carousel {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 .rec-card {
   background: #fff;
@@ -372,26 +389,43 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* Fixed image height keeps the card at a screenshot-friendly size no matter
+   how wide the right column expands. 160px is calibrated to the NCSA
+   reference — total card ends up ~280–300px tall. */
 .rec-image {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 160px;
   background: #eee;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .rec-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.rec-body { padding: 14px 12px 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.rec-eyebrow { color: var(--accent); font-size: 13px; font-weight: 600; }
-.rec-title { color: var(--accent); font-size: 15px; font-weight: 700; line-height: 1.25; min-height: 40px; }
+.rec-body {
+  padding: 10px 10px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.rec-eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; }
+.rec-title {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  min-height: 34px;
+}
 .rec-cta {
   background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 4px;
-  padding: 6px 22px;
+  padding: 5px 20px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .rec-view-all {
   text-align: center;
@@ -604,6 +638,23 @@ body {
           </div>`).join('')}
       </div>
     </div>
+
+    ${(s.extraCards || []).map(card => `
+      <div class="card">
+        <div class="section-head">
+          <div class="section-icon-title">
+            ${renderSectionIcon(card.icon, '📋', '#066AFE')}
+            <span class="section-title">${esc(card.title || 'Custom Section')}</span>
+          </div>
+        </div>
+        <div class="pref-grid">
+          ${(card.items || []).map(it => `
+            <div class="pref-item">
+              <div class="pref-label">${esc(it.label)}</div>
+              <div class="pref-value">${esc(it.value)}</div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
   </div>
 
   <!-- RIGHT COLUMN — Einstein Recs (top) + Events/Membership + Activity (bottom split) -->

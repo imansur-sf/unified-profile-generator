@@ -271,6 +271,59 @@ function renderMembership() {
 function addMembership() { state.membership.items.push({ label: 'New', value: '' }); renderMembership(); refreshPreview(); }
 function removeMembership(i) { state.membership.items.splice(i, 1); renderMembership(); refreshPreview(); }
 
+// Extra cards — user-added cards in the middle column to fill vertical
+// space. Each card owns a title, icon (emoji or image URL/data URL),
+// and any number of label/value rows.
+function renderExtraCards() {
+  const c = document.getElementById('extra-cards-container');
+  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  c.innerHTML = state.extraCards.map((card, ci) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-2">
+        <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
+        <button class="icon-btn danger" onclick="removeExtraCard(${ci})">Remove card</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center mb-2">
+        <input type="text" value="${escAttr(card.icon || '')}" placeholder="Icon (emoji or image URL)" class="col-span-9 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none font-mono" oninput="state.extraCards[${ci}].icon=this.value; refreshPreview()">
+        <div id="drop-extra-icon-${ci}" class="col-span-3 drop-zone-sf p-2 text-center cursor-pointer text-[10px]">📷 Upload</div>
+      </div>
+      <div class="space-y-2">
+        ${(card.items || []).map((it, ri) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" placeholder="Label" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].label=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(it.value)}" placeholder="Value" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].value=this.value; refreshPreview()">
+            <button class="col-span-1 icon-btn danger" onclick="removeExtraCardRow(${ci}, ${ri})">×</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addExtraCardRow(${ci})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+
+  // Wire icon drop zones for each extra card
+  state.extraCards.forEach((_, ci) => {
+    attachDropZone(`drop-extra-icon-${ci}`, null, (dataUrl) => {
+      state.extraCards[ci].icon = dataUrl;
+      renderExtraCards();
+      refreshPreview();
+    });
+  });
+}
+function addExtraCard() {
+  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  state.extraCards.push({
+    title: 'New Section',
+    icon: '📋',
+    items: [
+      { label: 'Field 1', value: '' },
+      { label: 'Field 2', value: '' }
+    ]
+  });
+  renderExtraCards();
+  refreshPreview();
+}
+function removeExtraCard(i) { state.extraCards.splice(i, 1); renderExtraCards(); refreshPreview(); }
+function addExtraCardRow(ci) { state.extraCards[ci].items.push({ label: '', value: '' }); renderExtraCards(); refreshPreview(); }
+function removeExtraCardRow(ci, ri) { state.extraCards[ci].items.splice(ri, 1); renderExtraCards(); refreshPreview(); }
+
 function renderRecs() {
   const c = document.getElementById('recs-container');
   c.innerHTML = state.recommendations.items.map((rec, i) => `
@@ -456,6 +509,7 @@ function renderAll() {
   renderPreferences();
   renderEvents();
   renderMembership();
+  renderExtraCards();
   renderRecs();
   renderActivity();
   renderNavLinks();

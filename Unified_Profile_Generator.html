@@ -502,6 +502,15 @@
               <div id="membership-container" class="space-y-2"></div>
               <button onclick="addMembership()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
             </div>
+
+            <div class="border-t border-gray-100 pt-4">
+              <div class="flex items-center justify-between mb-1">
+                <h3 class="text-sm font-700 text-gray-800">Custom Middle-Column Cards</h3>
+              </div>
+              <p class="text-xs text-gray-500 mb-3">Add extra cards to fill empty space in the middle column so the profile looks balanced for screenshotting. Each card renders below Preferences with your own title, icon, and rows.</p>
+              <div id="extra-cards-container" class="space-y-4"></div>
+              <button onclick="addExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Custom Card</button>
+            </div>
           </div>
         </div>
 
@@ -1169,10 +1178,14 @@ const INDUSTRY_DEFAULTS = {
 };
 
 // Helper: deep-clone an industry default so edits in the UI don't
-// mutate the shared template.
+// mutate the shared template. Also seeds `extraCards: []` on every
+// industry so the middle-column custom-card feature works even for
+// older industry blocks that don't declare it.
 function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
-  return JSON.parse(JSON.stringify(base));
+  const clone = JSON.parse(JSON.stringify(base));
+  if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
+  return clone;
 }
 
 
@@ -1520,14 +1533,31 @@ body {
 .profile-name { font-size: 20px; font-weight: 600; color: var(--text); line-height: 1.1; }
 .profile-city { font-size: 13px; color: var(--text-muted); margin-top: 3px; }
 .profile-fields { display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
-.profile-field { display: flex; gap: 8px; align-items: flex-start; }
+.profile-field {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  min-width: 0;
+}
 .profile-field-icon {
   width: 18px; height: 18px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
   color: var(--primary);
 }
-.profile-field-label { color: var(--text-muted); min-width: 92px; }
-.profile-field-value { color: var(--text); font-weight: 500; white-space: pre-line; }
+.profile-field-label {
+  color: var(--text-muted);
+  min-width: 92px;
+  flex-shrink: 0;
+}
+.profile-field-value {
+  color: var(--text);
+  font-weight: 500;
+  white-space: pre-line;
+  min-width: 0;
+  flex: 1;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
 
 .profile-segment {
   border-top: 1px solid var(--border);
@@ -1618,7 +1648,7 @@ body {
 .recs-carousel {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 12px;
+  gap: 10px;
 }
 .rec-card {
   background: #fff;
@@ -1628,26 +1658,43 @@ body {
   display: flex;
   flex-direction: column;
 }
+/* Fixed image height keeps the card at a screenshot-friendly size no matter
+   how wide the right column expands. 160px is calibrated to the NCSA
+   reference — total card ends up ~280–300px tall. */
 .rec-image {
   width: 100%;
-  aspect-ratio: 16 / 9;
+  height: 160px;
   background: #eee;
   overflow: hidden;
+  flex-shrink: 0;
 }
 .rec-image img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.rec-body { padding: 14px 12px 16px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
-.rec-eyebrow { color: var(--accent); font-size: 13px; font-weight: 600; }
-.rec-title { color: var(--accent); font-size: 15px; font-weight: 700; line-height: 1.25; min-height: 40px; }
+.rec-body {
+  padding: 10px 10px 12px;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+}
+.rec-eyebrow { color: var(--accent); font-size: 12px; font-weight: 600; }
+.rec-title {
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1.25;
+  min-height: 34px;
+}
 .rec-cta {
   background: var(--primary);
   color: #fff;
   border: none;
   border-radius: 4px;
-  padding: 6px 22px;
+  padding: 5px 20px;
   font-size: 12px;
   font-weight: 600;
   cursor: pointer;
-  margin-top: 4px;
+  margin-top: 2px;
 }
 .rec-view-all {
   text-align: center;
@@ -1860,6 +1907,23 @@ body {
           </div>`).join('')}
       </div>
     </div>
+
+    ${(s.extraCards || []).map(card => `
+      <div class="card">
+        <div class="section-head">
+          <div class="section-icon-title">
+            ${renderSectionIcon(card.icon, '📋', '#066AFE')}
+            <span class="section-title">${esc(card.title || 'Custom Section')}</span>
+          </div>
+        </div>
+        <div class="pref-grid">
+          ${(card.items || []).map(it => `
+            <div class="pref-item">
+              <div class="pref-label">${esc(it.label)}</div>
+              <div class="pref-value">${esc(it.value)}</div>
+            </div>`).join('')}
+        </div>
+      </div>`).join('')}
   </div>
 
   <!-- RIGHT COLUMN — Einstein Recs (top) + Events/Membership + Activity (bottom split) -->
@@ -2716,6 +2780,59 @@ function renderMembership() {
 function addMembership() { state.membership.items.push({ label: 'New', value: '' }); renderMembership(); refreshPreview(); }
 function removeMembership(i) { state.membership.items.splice(i, 1); renderMembership(); refreshPreview(); }
 
+// Extra cards — user-added cards in the middle column to fill vertical
+// space. Each card owns a title, icon (emoji or image URL/data URL),
+// and any number of label/value rows.
+function renderExtraCards() {
+  const c = document.getElementById('extra-cards-container');
+  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  c.innerHTML = state.extraCards.map((card, ci) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-2">
+        <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
+        <button class="icon-btn danger" onclick="removeExtraCard(${ci})">Remove card</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center mb-2">
+        <input type="text" value="${escAttr(card.icon || '')}" placeholder="Icon (emoji or image URL)" class="col-span-9 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none font-mono" oninput="state.extraCards[${ci}].icon=this.value; refreshPreview()">
+        <div id="drop-extra-icon-${ci}" class="col-span-3 drop-zone-sf p-2 text-center cursor-pointer text-[10px]">📷 Upload</div>
+      </div>
+      <div class="space-y-2">
+        ${(card.items || []).map((it, ri) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" placeholder="Label" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].label=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(it.value)}" placeholder="Value" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].value=this.value; refreshPreview()">
+            <button class="col-span-1 icon-btn danger" onclick="removeExtraCardRow(${ci}, ${ri})">×</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addExtraCardRow(${ci})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+
+  // Wire icon drop zones for each extra card
+  state.extraCards.forEach((_, ci) => {
+    attachDropZone(`drop-extra-icon-${ci}`, null, (dataUrl) => {
+      state.extraCards[ci].icon = dataUrl;
+      renderExtraCards();
+      refreshPreview();
+    });
+  });
+}
+function addExtraCard() {
+  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  state.extraCards.push({
+    title: 'New Section',
+    icon: '📋',
+    items: [
+      { label: 'Field 1', value: '' },
+      { label: 'Field 2', value: '' }
+    ]
+  });
+  renderExtraCards();
+  refreshPreview();
+}
+function removeExtraCard(i) { state.extraCards.splice(i, 1); renderExtraCards(); refreshPreview(); }
+function addExtraCardRow(ci) { state.extraCards[ci].items.push({ label: '', value: '' }); renderExtraCards(); refreshPreview(); }
+function removeExtraCardRow(ci, ri) { state.extraCards[ci].items.splice(ri, 1); renderExtraCards(); refreshPreview(); }
+
 function renderRecs() {
   const c = document.getElementById('recs-container');
   c.innerHTML = state.recommendations.items.map((rec, i) => `
@@ -2901,6 +3018,7 @@ function renderAll() {
   renderPreferences();
   renderEvents();
   renderMembership();
+  renderExtraCards();
   renderRecs();
   renderActivity();
   renderNavLinks();

@@ -579,8 +579,12 @@ const INDUSTRY_DEFAULTS = {
 };
 
 // Helper: deep-clone an industry default so edits in the UI don't
-// mutate the shared template.
+// mutate the shared template. Also seeds `extraCards: []` on every
+// industry so the middle-column custom-card feature works even for
+// older industry blocks that don't declare it.
 function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
-  return JSON.parse(JSON.stringify(base));
+  const clone = JSON.parse(JSON.stringify(base));
+  if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
+  return clone;
 }
