@@ -31,6 +31,5 @@ Paste an Anthropic API key (`sk-ant-…`) into the Quick Start panel; keys are s
 | `js/generator.js` | Renders the unified profile HTML |
 | `js/app.js` | Wizard flow + state binding |
 | `js/images.js` | Drop-zone + URL image handling |
-| `js/pagehost.js` | Shared AI prompt + scrape helpers |
-| `js/localai.js` | BYOK Anthropic client + CORS-proxy scrape |
+| `js/apiclient.js` | Gemini backend + BYOK Anthropic client + CORS-proxy scrape |
 | `build-standalone.py` | Bundler → single HTML |

@@ -24,8 +24,7 @@ SCRIPTS = [
     "js/defaults.js",
     "js/images.js",
     "js/generator.js",
-    "js/pagehost.js",
-    "js/localai.js",
+    "js/apiclient.js",
     "js/app.js",
 ]
 

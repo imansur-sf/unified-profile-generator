@@ -233,7 +233,7 @@
               <div class="quickstart-status" id="quickstart-status"></div>
               <div class="quickstart-error" id="quickstart-error" style="display:none;"></div>
               <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
-              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.</div>
+              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared Gemini backend that holds the LLM API key. Open <b>Advanced</b> to use your own LLM Gateway Express or Anthropic key.</div>
 
               <div class="quickstart-fallback-hint">
                 <span class="quickstart-fallback-icon">💡</span>
@@ -249,10 +249,10 @@
               <div class="quickstart-settings" id="quickstart-settings">
                 <label>API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
                 <div class="quickstart-byok-row" style="display:flex;gap:6px;margin-top:4px;">
-                  <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared default backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
+                  <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared Gemini backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
                   <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" title="Clear stored key" style="margin-top:0;">Clear</button>
                 </div>
-                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker</span></label>
+                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker (used when BYOK key is set)</span></label>
                 <input type="text" id="quickstart-scraper-url" placeholder="Default: https://loyalty-scraper.imansur.workers.dev" oninput="onScraperEndpointChange()">
               </div>
             </div>
@@ -656,7 +656,7 @@
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
     // without the browser's aggressive JS cache getting in the way.
-    ['js/defaults.js','js/images.js','js/generator.js','js/pagehost.js','js/localai.js','js/app.js'].forEach(src => {
+    ['js/defaults.js','js/images.js','js/generator.js','js/apiclient.js','js/app.js'].forEach(src => {
       const s = document.createElement('script');
       s.src = src + '?v=' + window.__UPG_BUILD__;
       s.defer = false;

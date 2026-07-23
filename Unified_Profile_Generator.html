@@ -237,7 +237,7 @@
               <div class="quickstart-status" id="quickstart-status"></div>
               <div class="quickstart-error" id="quickstart-error" style="display:none;"></div>
               <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
-              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.</div>
+              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared Gemini backend that holds the LLM API key. Open <b>Advanced</b> to use your own LLM Gateway Express or Anthropic key.</div>
 
               <div class="quickstart-fallback-hint">
                 <span class="quickstart-fallback-icon">💡</span>
@@ -253,10 +253,10 @@
               <div class="quickstart-settings" id="quickstart-settings">
                 <label>API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
                 <div class="quickstart-byok-row" style="display:flex;gap:6px;margin-top:4px;">
-                  <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared default backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
+                  <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared Gemini backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
                   <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" title="Clear stored key" style="margin-top:0;">Clear</button>
                 </div>
-                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker</span></label>
+                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker (used when BYOK key is set)</span></label>
                 <input type="text" id="quickstart-scraper-url" placeholder="Default: https://loyalty-scraper.imansur.workers.dev" oninput="onScraperEndpointChange()">
               </div>
             </div>
@@ -2103,22 +2103,65 @@ body {
 }
 
 
-// ==== inlined from ./js/pagehost.js ====
+// ==== inlined from ./js/apiclient.js ====
 // ============================================================
-// pagehost.js — Shared prompt/scrape helpers used by localai.js
-// ============================================================
-// A pared-down version of the Loyalty Portal's pagehost module.
-// It exposes:
-//   - window.UPG_Shared.normalizeURL(u)
-//   - window.UPG_Shared.extractCoreHTML(html, url)
-//   - window.UPG_Shared.SYSTEM_PROMPT
-//   - window.UPG_Shared.buildUserPrompt(scraped)
-//   - window.UPG_Shared.parseAIResponseText(text)
-// The BYOK client in localai.js uses these to turn a raw
-// customer URL into a Unified Profile object.
+// apiclient.js — Cloudflare Worker API client for the Gemini variant
+// ------------------------------------------------------------
+// Primary path: calls the shared upg-gemini-proxy Worker, which
+// holds the Gemini API key as a Cloudflare secret. Any Salesforce
+// employee visiting the GitHub Pages site can use the tool out of
+// the box — no BYOK, no key hunting.
+//
+// Fallback (BYOK) path: if the user pastes an API key into the
+// Advanced panel, this client routes through the legacy
+// loyalty-scraper Worker instead — that Worker knows how to talk
+// to both Anthropic (sk-ant-*) and the SF LLM Gateway (other sk-*).
+// The Gemini Worker is bypassed entirely in that mode.
+//
+//   POST {WORKER}/scrape { url }             → { html, title, favicon, og_image }
+//   POST {WORKER}/llm    { prompt, system }  → { text, model }
 // ============================================================
 
 (function () {
+  const GEMINI_WORKER_BASE = (typeof window !== 'undefined' && window.UPG_WORKER_BASE)
+    || 'https://upg-gemini-proxy.imansur.workers.dev';
+  const LEGACY_WORKER_BASE = 'https://loyalty-scraper.imansur.workers.dev';
+
+  // Namespaced under `upg_gemini_*` so this variant does NOT inherit a stale
+  // key from the original UPG (same GH Pages origin → shared localStorage).
+  const LS_KEY = 'upg_gemini_api_key';
+  const LS_MODEL = 'upg_gemini_model';
+  const LS_SCRAPER = 'upg_gemini_scraper_endpoint';
+
+  function getStoredKey() {
+    try { return (localStorage.getItem(LS_KEY) || '').trim(); } catch { return ''; }
+  }
+  function setStoredKey(v) {
+    try { if (v) localStorage.setItem(LS_KEY, v); else localStorage.removeItem(LS_KEY); } catch {}
+  }
+  function getStoredScraper() {
+    try { return (localStorage.getItem(LS_SCRAPER) || '').trim(); } catch { return ''; }
+  }
+  function setStoredScraper(v) {
+    try { if (v) localStorage.setItem(LS_SCRAPER, v); else localStorage.removeItem(LS_SCRAPER); } catch {}
+  }
+
+  // Provider detection — mirrors legacy localai.js semantics.
+  //   no key           → 'default'  (Gemini Worker)
+  //   sk-ant-*         → 'anthropic'
+  //   other sk-*       → 'sfgateway'
+  function currentProvider() {
+    const k = getStoredKey();
+    if (!k) return 'default';
+    if (/^sk-ant-/i.test(k)) return 'anthropic';
+    return 'sfgateway';
+  }
+
+  function legacyScraperEndpoint() {
+    const custom = getStoredScraper();
+    return custom || `${LEGACY_WORKER_BASE}/scrape`;
+  }
+
   function normalizeURL(raw) {
     if (!raw) return null;
     let u = raw.trim();
@@ -2141,7 +2184,7 @@ body {
     const faviconEl = doc.querySelector('link[rel~="icon"]') || doc.querySelector('link[rel="apple-touch-icon"]');
     let favicon = faviconEl?.getAttribute('href') || '';
     if (favicon && !favicon.startsWith('http')) {
-      try { favicon = new URL(favicon, url).toString(); } catch { /* leave */ }
+      try { favicon = new URL(favicon, url).toString(); } catch {}
     }
 
     const bodyText = (doc.body?.innerText || doc.body?.textContent || '')
@@ -2173,109 +2216,28 @@ Schema:
 {
   "brandName": string,
   "industry": "recruiting" | "retail" | "healthcare" | "financial" | "generic",
-  "appName": string,     // e.g. "Data Cloud", "Marketing Cloud"
-  "tabName": string,     // usually the demo profile's name — shown in the top-right nav tab
-  "colors": {
-    "primary":  "#RRGGBB",   // brand-dark, used for text + primary accents
-    "accent":   "#RRGGBB",   // brand highlight (buttons, active indicators)
-    "secondary":"#RRGGBB",   // near-white wash
-    "menu":     "#RRGGBB",   // background of the app-nav bar (often white)
-    "menuText": "#RRGGBB"    // text color inside the app-nav bar
-  },
-  "navLinks": [ string ],    // 6-8 items — real Data Cloud sections (Home, Data Streams, Segments, Activations, Data Lake Objects, Data Model, Identity Resolutions, Calculated Insights). Keep these exact when unsure.
-
-  "profile": {
-    "name": string,          // realistic fictional person for this industry
-    "city": "City, ST",
-    "customerId": string,    // 8-digit number
-    "email": "name@gmail.com",
-    "parentEmail": string,   // ONLY for recruiting/education/youth; else ""
-    "phone": "(NNN) NNN-NNNN",
-    "address": "Street\\nCity, ST ZIP",
-    "segment": string        // 4-5 comma-separated segment memberships this customer would be in
-  },
-
-  "loyalty": {
-    "title": string,         // e.g. "Loyalty Insights", "Relationship Insights", "Wellness Rewards"
-    "memberId": string,
-    "tier": string,          // brand-appropriate tier name
-    "points": string,
-    "redeemedPoints": string
-  },
-
-  "insights": {
-    "title": string,         // vertical-flavored: "Athlete Insights", "Patient Insights", "Shopper Insights", "Client Insights"
-    "items": [               // 6 items
-      { "icon": "emoji", "label": string, "value": string }
-    ]
-  },
-
-  "affinities": {
-    "title": "Affinities",
-    "seriesA": { "label": string, "color": "#RRGGBB" },  // e.g. Views / Browse / Research / Interest
-    "seriesB": { "label": string, "color": "#RRGGBB" },  // e.g. Interaction / Purchase / Transactions / Engagement
-    "groups": [              // 3-4 groups
-      { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] }
-    ]
-  },
-
-  "preferences": {
-    "title": string,         // "Athlete Preferences", "Customer Preferences", etc.
-    "items": [ { "label": string, "value": string } ]  // 4 items
-  },
-
-  "events": {
-    "title": string,         // e.g. "Events (All Brands)", "Recent Visits"
-    "items": [ { "name": string, "date": "M/D/YY - M/D/YY", "confirmation": string } ]  // 1-3 items
-  },
-
-  "membership": {
-    "title": string,         // e.g. "NCSA Membership Details"
-    "items": [ { "label": string, "value": string } ]  // 2-3 items
-  },
-
-  "recommendations": {
-    "title": "Einstein Recommendations",
-    "items": [               // 2 items — Next Best Action + Recommended
-      {
-        "eyebrow": "Next Best Action:" | "Recommended:",
-        "title": string,     // action-oriented, brand-appropriate
-        "cta": string,       // 1-2 word button label
-        "image": ""          // leave empty; the app fills a default
-      }
-    ]
-  },
-
-  "activity": {
-    "title": "Engagement Activity",
-    "items": [               // AT LEAST 4 items, prefer 5-6 — reverse chronological
-      { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style='color:#RRGGBB'>colored</span> HTML — use SINGLE quotes for HTML attributes to keep the JSON string valid", "time": string }
-    ]
-  },
-
-  "extraCards": [            // 1-2 items — additional middle-column cards to fill vertical space
-    {
-      "title": string,       // vertical-appropriate category (e.g. "Coaching History", "Skills Assessment", "Family Info")
-      "icon": "emoji",       // single emoji
-      "items": [ { "label": string, "value": string } ]   // 3-5 rows
-    }
-  ],
-
-  "rightExtraCards": [       // 0-1 item — extra card BELOW Membership Details in the right column
-    {
-      "title": string,       // e.g. "Recent Communications", "Program Enrollment", "Referral Sources"
-      "icon": "emoji",
-      "items": [ { "label": string, "value": string } ]   // 2-3 rows
-    }
-  ]
+  "appName": string,
+  "tabName": string,
+  "colors": { "primary": "#RRGGBB", "accent": "#RRGGBB", "secondary": "#RRGGBB", "menu": "#RRGGBB", "menuText": "#RRGGBB", "pageBg": "#RRGGBB" },
+  "navLinks": [ string ],
+  "profile": { "name": string, "city": "City, ST", "customerId": string, "email": string, "secondaryEmail": string, "secondaryEmailLabel": string, "secondaryEmailInclude": boolean, "phone": "(NNN) NNN-NNNN", "address": "Street\\nCity, ST ZIP", "segment": string },
+  "loyalty": { "title": string, "memberId": string, "tier": string, "points": string, "redeemedPoints": string },
+  "insights": { "title": string, "items": [ { "icon": "emoji", "label": string, "value": string } ] },
+  "affinities": { "title": "Affinities", "seriesA": { "label": string, "color": "#RRGGBB" }, "seriesB": { "label": string, "color": "#RRGGBB" }, "groups": [ { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] } ] },
+  "preferences": { "title": string, "items": [ { "label": string, "value": string } ] },
+  "events": { "title": string, "items": [ { "name": string, "date": string, "confirmation": string } ] },
+  "membership": { "title": string, "items": [ { "label": string, "value": string } ] },
+  "recommendations": { "title": "Einstein Recommendations", "items": [ { "eyebrow": string, "title": string, "cta": string, "image": "" } ] },
+  "activity": { "title": "Engagement Activity", "items": [ { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style='color:#RRGGBB'>colored</span> HTML — use SINGLE quotes for HTML attrs", "time": string } ] },
+  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ],
+  "rightExtraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ]
 }
 
 Rules:
-- The profile MUST feel specific to this customer's business — not generic.
-- If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
-- Colors should match the customer's actual visual brand where discernible from the page.
-- Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
-- **DENSITY MATTERS** — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count in each list, not the minimum. Empty white space looks unfinished. Populate extraCards (1-2) and rightExtraCards (0-1) with content the customer's marketing team would recognize as accurate to their business.
+- Profile MUST feel specific to this customer's business — not generic.
+- For sports-recruiting/education/youth-athletics brands, set industry:"recruiting" and secondaryEmailInclude:true with a parent-email label.
+- Colors should match the customer's actual visual brand where discernible.
+- DENSITY MATTERS — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count. Populate extraCards (1-2) and rightExtraCards (0-1).
 - Return ONLY the JSON. No explanation.`;
 
   function buildUserPrompt(scraped) {
@@ -2284,70 +2246,39 @@ Site title: ${scraped.title || '(not extracted)'}
 Description: ${scraped.description || '(not extracted)'}
 Site name (og): ${scraped.siteName || '(not extracted)'}
 
-Headings on the homepage:
-${scraped.headings || '(none extracted)'}
+Headings:
+${scraped.headings || '(none)'}
 
-Nav links seen: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
+Nav links: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
 
 Body text (truncated):
-${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from URL/domain alone)'}
+${scraped.bodyText.slice(0, 5000) || '(no body text — analyze from URL/domain alone)'}
 
 Now generate the Unified Profile JSON per the schema.`;
   }
 
-  // Tolerant JSON parser — handles the three common ways AI models
-  // produce technically-invalid JSON:
-  //   1) Markdown fences (```json ... ```)
-  //   2) Prose wrappers around the JSON block
-  //   3) Truncation mid-object (hit max_tokens)
-  //   4) Trailing commas / smart-quote characters
   function parseAIResponseText(text) {
     if (!text) throw new Error('Empty AI response');
-
-    // 1) Strip Markdown fences
     let t = text.trim();
-    if (t.startsWith('```')) {
-      t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-    }
-
-    // 2) Grab from first { to last }
+    if (t.startsWith('```')) t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
     const first = t.indexOf('{');
     const last = t.lastIndexOf('}');
     if (first >= 0 && last > first) t = t.slice(first, last + 1);
-
-    // Normalize smart quotes some models emit
     t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
-
-    // 3) Happy path
-    try { return JSON.parse(t); } catch (_) { /* fall through */ }
-
-    // 4) Strip trailing commas before } or ] — a very common AI mistake
-    const noTrailingCommas = t.replace(/,\s*([}\]])/g, '$1');
-    try { return JSON.parse(noTrailingCommas); } catch (_) { /* fall through */ }
-
-    // 5) Truncation-recovery: if the response was cut off mid-object, walk
-    //    forward tracking string/escape state + brace depth. Close what's
-    //    open and re-parse.
+    try { return JSON.parse(t); } catch (_) {}
+    try { return JSON.parse(t.replace(/,\s*([}\]])/g, '$1')); } catch (_) {}
     const recovered = attemptTruncationRecovery(t);
     if (recovered) {
-      try { return JSON.parse(recovered); } catch (_) { /* fall through */ }
+      try { return JSON.parse(recovered); } catch (_) {}
     }
-
-    // 6) Give up. Log the raw text so the SE can inspect via devtools.
-    console.error('[UPG] JSON parse failed. Raw model output:', text);
-    const err = new Error('AI returned malformed JSON. Try Analyze again — usually transient.');
-    err.raw = text;
-    throw err;
+    console.error('[UPG-Gemini] JSON parse failed. Raw:', text);
+    throw new Error('AI returned malformed JSON. Try again — usually transient.');
   }
 
-  // Walk the string char-by-char honoring string/escape state; find the
-  // last balanced position and close any still-open constructs.
   function attemptTruncationRecovery(s) {
-    let inString = false;
-    let escape = false;
+    let inString = false, escape = false;
     const stack = [];
     let lastSafe = -1;
-
     for (let i = 0; i < s.length; i++) {
       const c = s[i];
       if (escape) { escape = false; continue; }
@@ -2366,16 +2297,12 @@ Now generate the Unified Profile JSON per the schema.`;
         }
       }
     }
-
-    // If we ended inside a string, cut back to the last comma at safe depth
     if (inString) {
       const cutIdx = s.lastIndexOf(',');
       if (cutIdx > 0) return attemptTruncationRecovery(s.slice(0, cutIdx));
       return null;
     }
-
     if (stack.length === 0) return null;
-
     let truncated = s;
     if (lastSafe > 0) {
       const tail = s.slice(lastSafe);
@@ -2385,306 +2312,160 @@ Now generate the Unified Profile JSON per the schema.`;
       const cutIdx = s.lastIndexOf(',');
       if (cutIdx > 0) truncated = s.slice(0, cutIdx);
     }
-
-    // Close what's still open
     let closer = '';
     for (let i = stack.length - 1; i >= 0; i--) closer += (stack[i] === '{' ? '}' : ']');
     return truncated.replace(/,\s*$/, '') + closer;
   }
 
-  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, buildUserPrompt, parseAIResponseText };
-})();
-
-
-// ==== inlined from ./js/localai.js ====
-// ============================================================
-// localai.js — AI client (Worker default + BYOK Anthropic/SF Gateway)
-// ============================================================
-// Mirrors the Loyalty Portal Generator v2.1 architecture:
-//   • Default path  →  Cloudflare Worker /llm (holds SF Gateway key
-//                      server-side; no user key required).
-//   • sk-ant-* key  →  Anthropic direct.
-//   • Any other sk- →  SF LLM Gateway direct.
-// Scraping uses the same Worker's /scrape endpoint first, then falls
-// back to public CORS proxies.
-// ============================================================
-
-(function () {
-  if (!window.UPG_Shared) {
-    console.error('[localai] pagehost.js must load before localai.js');
-    return;
-  }
-  const shared = window.UPG_Shared;
-
-  // Share storage keys with the Loyalty Portal Generator so a BYOK key
-  // pasted into either app auto-applies in the other. This also lets UPG
-  // inherit any `sk-ant-…` key you've already saved from LPG, which
-  // matters when the shared Worker's SF Gateway upstream is down —
-  // Anthropic direct still works.
-  const KEY_STORAGE = 'anthropic_api_key';
-  const MODEL_STORAGE = 'anthropic_model';
-  const SCRAPER_URL_STORAGE = 'scraper_endpoint_url';
-
-  // Reuse the Loyalty Portal Generator's Worker — same shape (/scrape + /llm).
-  // Users can override in Advanced → Scraper Endpoint.
-  const DEFAULT_SCRAPER_URL = 'https://loyalty-scraper.imansur.workers.dev';
-  const SF_GATEWAY_BASE = 'https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl';
-
-  const TIER_MODELS_ANTHROPIC = {
-    fast:      'claude-haiku-4-5-20251001',
-    balanced:  'claude-sonnet-5',
-    powerful:  'claude-opus-4-8'
-  };
-  const TIER_MODELS_SF_GATEWAY = {
-    fast:      'claude-3-5-sonnet-20241022',
-    balanced:  'claude-sonnet-4-5-20250929',
-    powerful:  'claude-sonnet-4-5-20250929'
-  };
-  const DEFAULT_MODEL = TIER_MODELS_ANTHROPIC.balanced;
-
-  const CORS_PROXIES = [
-    { name: 'corsproxy.io',   wrap: u => `https://corsproxy.io/?${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'allorigins.win', wrap: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, unwrap: async r => { const d = await r.json(); return d?.contents || ''; } },
-    { name: 'codetabs',       wrap: u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'thingproxy',     wrap: u => `https://thingproxy.freeboard.io/fetch/${u}`, unwrap: async r => await r.text() }
-  ];
-
-  function localError(code, extra) {
-    const err = new Error(code);
-    err.code = code;
-    Object.assign(err, extra || {});
-    return err;
-  }
-
-  // ---- KEY / MODEL / ENDPOINT STORAGE ----
-  function getApiKey()   { try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; } }
-  function setApiKey(k)  { try { k?.trim() ? localStorage.setItem(KEY_STORAGE, k.trim()) : localStorage.removeItem(KEY_STORAGE); } catch {} }
-  function hasKey()      { return getApiKey().length > 10; }
-  function getModel()    { try { return localStorage.getItem(MODEL_STORAGE) || DEFAULT_MODEL; } catch { return DEFAULT_MODEL; } }
-  function setModel(m)   { try { m ? localStorage.setItem(MODEL_STORAGE, m) : localStorage.removeItem(MODEL_STORAGE); } catch {} }
-  function getScraperEndpoint() {
-    try {
-      const override = (localStorage.getItem(SCRAPER_URL_STORAGE) || '').trim();
-      return override || DEFAULT_SCRAPER_URL;
-    } catch { return DEFAULT_SCRAPER_URL; }
-  }
-  function setScraperEndpoint(u) {
-    try {
-      const t = (u || '').trim();
-      if (t) localStorage.setItem(SCRAPER_URL_STORAGE, t.replace(/\/+$/, ''));
-      else localStorage.removeItem(SCRAPER_URL_STORAGE);
-    } catch {}
-  }
-  function hasCustomScraperEndpoint() {
-    try { return Boolean((localStorage.getItem(SCRAPER_URL_STORAGE) || '').trim()); }
-    catch { return false; }
-  }
-  function getDefaultScraperEndpoint() { return DEFAULT_SCRAPER_URL; }
-
-  // ---- PROVIDER DETECTION ----
-  //   no key         → 'default' (Worker /llm)
-  //   sk-ant-* key   → 'anthropic'
-  //   any other sk-* → 'sfgateway'
-  function detectProvider(key) {
-    if (!key) return 'default';
-    if (/^sk-ant-/i.test(key)) return 'anthropic';
-    return 'sfgateway';
-  }
-  function currentProvider() { return detectProvider(getApiKey()); }
-
-  // ---- SCRAPING (Worker first, then public proxies) ----
-  async function scrape(url) {
-    let last = null;
-    const own = getScraperEndpoint();
-    if (own) {
-      try {
-        const res = await fetch(`${own}/scrape?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          const html = await res.text();
-          if (html && html.length >= 40) {
-            const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
-            if (!looksJson) return html;
-          }
-          last = localError('own_scraper_empty', { endpoint: own });
-        } else {
-          last = localError('own_scraper_status', { status: res.status, endpoint: own });
-        }
-      } catch (e) {
-        last = localError('own_scraper_network', { endpoint: own, cause: e.message });
-      }
+  // ============================================================
+  // DEFAULT PATH — Gemini Worker
+  // ============================================================
+  async function callGeminiScrape(url) {
+    const res = await fetch(`${GEMINI_WORKER_BASE}/scrape`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`Scrape failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
     }
-    for (const p of CORS_PROXIES) {
-      try {
-        const res = await fetch(p.wrap(url));
-        if (!res.ok) { last = localError('proxy_fetch_failed', { proxy: p.name, status: res.status }); continue; }
-        const html = await p.unwrap(res);
-        if (!html || html.length < 40) { last = localError('proxy_empty_response', { proxy: p.name }); continue; }
-        return html;
-      } catch (e) {
-        last = localError('proxy_network_error', { proxy: p.name, cause: e.message });
-      }
-    }
-    throw last || localError('scrape_failed');
+    return res.json();
   }
 
-  // ---- LLM ROUTER ----
-  async function callLLM({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
-    const provider = currentProvider();
-    if (provider === 'anthropic')  return callAnthropicDirect({ prompt, system, tier, maxTokens });
-    if (provider === 'sfgateway')  return callSFGateway({ prompt, system, tier, maxTokens });
-    return callDefaultBackend({ prompt, system, tier, maxTokens });
-  }
-
-  // Worker /llm — server holds the LLM key. No BYOK required for typical use.
-  // A 45s AbortController guards against Cloudflare-side hangs (SF Gateway
-  // can occasionally take a long time to first byte).
-  async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
-    const base = getScraperEndpoint();
-    if (!base) throw localError('no_default_backend');
+  async function callGeminiLLM({ prompt, system }) {
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 45000);
+    const timer = setTimeout(() => ctl.abort(), 90000);
     let res;
     try {
-      res = await fetch(`${base}/llm`, {
+      res = await fetch(`${GEMINI_WORKER_BASE}/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, system, tier, maxTokens }),
+        body: JSON.stringify({ prompt, system }),
         signal: ctl.signal
       });
     } catch (e) {
       clearTimeout(timer);
-      if (e.name === 'AbortError') throw localError('default_timeout', { endpoint: base });
-      throw localError('default_network', { endpoint: base, cause: e.message });
+      if (e.name === 'AbortError') throw new Error('Gemini took longer than 90s — try again.');
+      throw new Error(`Network error contacting Gemini proxy: ${e.message}`);
     }
     clearTimeout(timer);
-    if (res.status === 429) throw localError('default_rate_limited');
-    if (res.status === 503) {
-      const body = await res.json().catch(() => ({}));
-      if (body.error === 'llm_not_configured') throw localError('default_not_configured');
-      throw localError('default_unavailable', { status: 503, upstream: body.error, upstreamStatus: body.status, upstreamBody: body.body });
-    }
     if (!res.ok) {
       const body = await res.json().catch(() => ({}));
-      throw localError('default_failed', {
-        status: res.status,
-        upstream: body.error,
-        upstreamStatus: body.status,
-        upstreamBody: typeof body.body === 'string' ? body.body.slice(0, 300) : undefined
+      throw new Error(`LLM failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
+    }
+    return res.json();
+  }
+
+  // ============================================================
+  // BYOK PATH — legacy loyalty-scraper Worker
+  // ============================================================
+  async function callLegacyScrape(url) {
+    const endpoint = legacyScraperEndpoint();
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ url })
+    });
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`Scrape failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
+    }
+    return res.json();
+  }
+
+  async function callLegacyLLM({ prompt, system }) {
+    const key = getStoredKey();
+    const provider = currentProvider();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 90000);
+    let res;
+    try {
+      res = await fetch(`${LEGACY_WORKER_BASE}/llm`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Api-Key': key,
+          'X-Provider': provider,
+        },
+        body: JSON.stringify({ prompt, system }),
+        signal: ctl.signal
       });
+    } catch (e) {
+      clearTimeout(timer);
+      if (e.name === 'AbortError') throw new Error('LLM took longer than 90s — try again.');
+      throw new Error(`Network error contacting legacy proxy: ${e.message}`);
     }
-    const data = await res.json();
-    if (!data || !data.text) throw localError('default_empty_response');
-    return { text: data.text, model_used: data.model_used, usage: data.usage };
-  }
-
-  async function callAnthropicDirect({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
-    const key = getApiKey();
-    if (!key) throw localError('missing_api_key');
-    const chosenModel = getModel() || TIER_MODELS_ANTHROPIC[tier] || DEFAULT_MODEL;
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': key,
-        'anthropic-version': '2023-06-01',
-        'anthropic-dangerous-direct-browser-access': 'true',
-        'content-type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: chosenModel,
-        max_tokens: maxTokens,
-        system,
-        messages: [{ role: 'user', content: prompt }]
-      })
-    });
-    if (res.status === 401) throw localError('anthropic_bad_key');
-    if (res.status === 403) throw localError('anthropic_forbidden');
-    if (res.status === 429) throw localError('anthropic_rate_limited');
-    if (res.status === 529) throw localError('anthropic_overloaded');
+    clearTimeout(timer);
     if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw localError('anthropic_failed', { status: res.status, body: body.slice(0, 200) });
+      const body = await res.json().catch(() => ({}));
+      throw new Error(`LLM failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
     }
-    const data = await res.json();
-    const text = Array.isArray(data.content)
-      ? data.content.filter(b => b.type === 'text').map(b => b.text).join('')
-      : '';
-    if (!text) throw localError('anthropic_empty_response');
-    return { text, model_used: data.model, usage: data.usage };
+    return res.json();
   }
 
-  async function callSFGateway({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
-    const key = getApiKey();
-    if (!key) throw localError('missing_api_key');
-    const chosenModel = getModel() || TIER_MODELS_SF_GATEWAY[tier] || TIER_MODELS_SF_GATEWAY.balanced;
-    const messages = [];
-    if (system) messages.push({ role: 'system', content: system });
-    messages.push({ role: 'user', content: prompt });
-    const res = await fetch(`${SF_GATEWAY_BASE}/v1/chat/completions`, {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${key}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: chosenModel, messages, max_tokens: maxTokens })
-    });
-    if (res.status === 401) throw localError('sfgateway_bad_key');
-    if (res.status === 403) throw localError('sfgateway_forbidden');
-    if (res.status === 429) throw localError('sfgateway_rate_limited');
-    if (!res.ok) {
-      const body = await res.text().catch(() => '');
-      throw localError('sfgateway_failed', { status: res.status, body: body.slice(0, 200) });
-    }
-    const data = await res.json();
-    const text = data?.choices?.[0]?.message?.content || '';
-    if (!text) throw localError('sfgateway_empty_response');
-    return { text, model_used: data.model || chosenModel, usage: data.usage };
-  }
-
-  // ---- MAIN ----
+  // ============================================================
+  // Orchestration — picks the path based on BYOK state
+  // ============================================================
   async function analyzeCustomerURL(rawUrl, opts = {}) {
-    const url = shared.normalizeURL(rawUrl);
-    if (!url) throw localError('invalid_url');
+    const url = normalizeURL(rawUrl);
+    if (!url) throw new Error("That URL doesn't look right — include the domain (e.g. ncsasports.org).");
+
     const onStatus = opts.onStatus || (() => {});
     const provider = currentProvider();
-    const tier = opts.tier || 'balanced';
+    const useBYOK = provider !== 'default';
 
     let scraped = null, fallbackReason = null;
+
     onStatus('fetching');
     try {
-      const html = await scrape(url);
-      scraped = shared.extractCoreHTML(html, url);
+      const { html } = useBYOK ? await callLegacyScrape(url) : await callGeminiScrape(url);
+      scraped = extractCoreHTML(html, url);
     } catch (e) {
-      fallbackReason = e.code || 'scrape_failed';
+      console.warn('[UPG-Gemini] scrape failed, falling back to URL-only:', e.message);
+      fallbackReason = 'scrape_failed';
       onStatus('fallback_url_only');
     }
     if (!scraped) scraped = { url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
-    const { text, model_used } = await callLLM({
-      prompt: shared.buildUserPrompt(scraped),
-      system: shared.SYSTEM_PROMPT,
-      tier,
-      maxTokens: 4000
-    });
+    const { text, model } = useBYOK
+      ? await callLegacyLLM({ prompt: buildUserPrompt(scraped), system: SYSTEM_PROMPT })
+      : await callGeminiLLM({ prompt: buildUserPrompt(scraped), system: SYSTEM_PROMPT });
 
-    const parsed = shared.parseAIResponseText(text);
+    const parsed = parseAIResponseText(text);
     parsed._meta = {
       source_url: url,
       favicon: scraped.favicon,
       og_image: scraped.ogImage,
-      model_used,
-      tier,
-      provider,
-      mode: fallbackReason ? 'scrape-fallback-url-only' : provider,
+      model_used: model || (useBYOK ? provider : 'gemini'),
+      mode: useBYOK
+        ? (fallbackReason ? `${provider}-url-only` : provider)
+        : (fallbackReason ? 'gemini-url-only' : 'gemini'),
       fallback_reason: fallbackReason
     };
     return parsed;
   }
 
+  // ============================================================
+  // Public surface — matches what app.js expects.
+  // ============================================================
   window.LocalAI = {
-    getKey: getApiKey, setKey: setApiKey, hasKey,
-    getModel, setModel,
-    getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
+    analyzeCustomerURL,
+    hasKey: () => !!getStoredKey(),
+    getKey: () => getStoredKey(),
+    setKey: (v) => setStoredKey((v || '').trim()),
+    getModel: () => {
+      try { return localStorage.getItem(LS_MODEL) || ''; } catch { return ''; }
+    },
+    setModel: (v) => {
+      try { if (v) localStorage.setItem(LS_MODEL, v); else localStorage.removeItem(LS_MODEL); } catch {}
+    },
+    getScraperEndpoint: () => getStoredScraper() || `${LEGACY_WORKER_BASE}/scrape`,
+    setScraperEndpoint: (v) => setStoredScraper((v || '').trim()),
+    getDefaultScraperEndpoint: () => `${LEGACY_WORKER_BASE}/scrape`,
+    hasCustomScraperEndpoint: () => !!getStoredScraper(),
     currentProvider,
-    analyzeCustomerURL
   };
 })();
 
