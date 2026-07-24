@@ -1,25 +1,24 @@
 // ============================================================
-// apiclient.js — Cloudflare Worker API client for the Gemini variant
+// apiclient.js — Cloudflare Worker API client (LPG-mirror)
 // ------------------------------------------------------------
-// Primary path: calls the shared upg-gemini-proxy Worker, which
-// holds the Gemini API key as a Cloudflare secret. Any Salesforce
-// employee visiting the GitHub Pages site can use the tool out of
-// the box — no BYOK, no key hunting.
+// Mirrors the Loyalty Portal Generator's architecture:
 //
-// Fallback (BYOK) path: if the user pastes an API key into the
-// Advanced panel, this client routes through the legacy
-// loyalty-scraper Worker instead — that Worker knows how to talk
-// to both Anthropic (sk-ant-*) and the SF LLM Gateway (other sk-*).
-// The Gemini Worker is bypassed entirely in that mode.
+// Default path (no BYOK): calls the shared loyalty-scraper Worker,
+// which holds an SF LLM Gateway key as a Cloudflare secret. Any
+// Salesforce employee visiting the GitHub Pages site can use the
+// tool out of the box.
 //
-//   POST {WORKER}/scrape { url }             → { html, title, favicon, og_image }
-//   POST {WORKER}/llm    { prompt, system }  → { text, model }
+// BYOK path: if the user pastes an API key into the Advanced
+// panel, this client sends X-Api-Key and X-Provider headers so
+// the same Worker routes to Anthropic (sk-ant-*) or the SF LLM
+// Gateway (other keys) using the user's key.
+//
+//   POST {WORKER}/scrape { url }                      → { html, title, favicon, og_image }
+//   POST {WORKER}/llm    { prompt, system, tier, ... } → { text, model }
 // ============================================================
 
 (function () {
-  const GEMINI_WORKER_BASE = (typeof window !== 'undefined' && window.UPG_WORKER_BASE)
-    || 'https://upg-gemini-proxy.imansur.workers.dev';
-  const LEGACY_WORKER_BASE = 'https://loyalty-scraper.imansur.workers.dev';
+  const WORKER_BASE = 'https://loyalty-scraper.imansur.workers.dev';
 
   // Namespaced under `upg_gemini_*` so this variant does NOT inherit a stale
   // key from the original UPG (same GH Pages origin → shared localStorage).
@@ -40,10 +39,10 @@
     try { if (v) localStorage.setItem(LS_SCRAPER, v); else localStorage.removeItem(LS_SCRAPER); } catch {}
   }
 
-  // Provider detection — mirrors legacy localai.js semantics.
-  //   no key           → 'default'  (Gemini Worker)
+  // Provider detection — mirrors LPG's localai.js semantics.
+  //   no key           → 'default'    (Worker uses server-side SF Gateway key)
   //   sk-ant-*         → 'anthropic'
-  //   other sk-*       → 'sfgateway'
+  //   other non-empty  → 'sfgateway'
   function currentProvider() {
     const k = getStoredKey();
     if (!k) return 'default';
@@ -51,9 +50,9 @@
     return 'sfgateway';
   }
 
-  function legacyScraperEndpoint() {
+  function scraperEndpoint() {
     const custom = getStoredScraper();
-    return custom || `${LEGACY_WORKER_BASE}/scrape`;
+    return custom || `${WORKER_BASE}/scrape`;
   }
 
   function normalizeURL(raw) {
@@ -212,50 +211,10 @@ Now generate the Unified Profile JSON per the schema.`;
   }
 
   // ============================================================
-  // DEFAULT PATH — Gemini Worker
+  // Scrape — always hits the shared loyalty-scraper Worker.
   // ============================================================
-  async function callGeminiScrape(url) {
-    const res = await fetch(`${GEMINI_WORKER_BASE}/scrape`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ url })
-    });
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`Scrape failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
-    }
-    return res.json();
-  }
-
-  async function callGeminiLLM({ prompt, system }) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 90000);
-    let res;
-    try {
-      res = await fetch(`${GEMINI_WORKER_BASE}/llm`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ prompt, system }),
-        signal: ctl.signal
-      });
-    } catch (e) {
-      clearTimeout(timer);
-      if (e.name === 'AbortError') throw new Error('Gemini took longer than 90s — try again.');
-      throw new Error(`Network error contacting Gemini proxy: ${e.message}`);
-    }
-    clearTimeout(timer);
-    if (!res.ok) {
-      const body = await res.json().catch(() => ({}));
-      throw new Error(`LLM failed (HTTP ${res.status}): ${body.detail || body.error || res.statusText}`);
-    }
-    return res.json();
-  }
-
-  // ============================================================
-  // BYOK PATH — legacy loyalty-scraper Worker
-  // ============================================================
-  async function callLegacyScrape(url) {
-    const endpoint = legacyScraperEndpoint();
+  async function callScrape(url) {
+    const endpoint = scraperEndpoint();
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -268,27 +227,36 @@ Now generate the Unified Profile JSON per the schema.`;
     return res.json();
   }
 
-  async function callLegacyLLM({ prompt, system }) {
+  // ============================================================
+  // LLM — hits the same Worker. When BYOK key is present, forwards
+  // it via X-Api-Key / X-Provider; otherwise Worker uses its
+  // server-side SF Gateway secret.
+  // ============================================================
+  async function callLLM({ prompt, system }) {
     const key = getStoredKey();
     const provider = currentProvider();
+    const headers = { 'Content-Type': 'application/json' };
+    if (key) {
+      headers['X-Api-Key'] = key;
+      headers['X-Provider'] = provider;
+    }
+    let model;
+    try { model = localStorage.getItem(LS_MODEL) || undefined; } catch {}
+
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 90000);
     let res;
     try {
-      res = await fetch(`${LEGACY_WORKER_BASE}/llm`, {
+      res = await fetch(`${WORKER_BASE}/llm`, {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-Api-Key': key,
-          'X-Provider': provider,
-        },
-        body: JSON.stringify({ prompt, system }),
+        headers,
+        body: JSON.stringify({ prompt, system, tier: 'balanced', model, maxTokens: 8000 }),
         signal: ctl.signal
       });
     } catch (e) {
       clearTimeout(timer);
       if (e.name === 'AbortError') throw new Error('LLM took longer than 90s — try again.');
-      throw new Error(`Network error contacting legacy proxy: ${e.message}`);
+      throw new Error(`Network error contacting proxy: ${e.message}`);
     }
     clearTimeout(timer);
     if (!res.ok) {
@@ -299,7 +267,7 @@ Now generate the Unified Profile JSON per the schema.`;
   }
 
   // ============================================================
-  // Orchestration — picks the path based on BYOK state
+  // Orchestration
   // ============================================================
   async function analyzeCustomerURL(rawUrl, opts = {}) {
     const url = normalizeURL(rawUrl);
@@ -307,35 +275,33 @@ Now generate the Unified Profile JSON per the schema.`;
 
     const onStatus = opts.onStatus || (() => {});
     const provider = currentProvider();
-    const useBYOK = provider !== 'default';
 
     let scraped = null, fallbackReason = null;
 
     onStatus('fetching');
     try {
-      const { html } = useBYOK ? await callLegacyScrape(url) : await callGeminiScrape(url);
+      const { html } = await callScrape(url);
       scraped = extractCoreHTML(html, url);
     } catch (e) {
-      console.warn('[UPG-Gemini] scrape failed, falling back to URL-only:', e.message);
+      console.warn('[UPG] scrape failed, falling back to URL-only:', e.message);
       fallbackReason = 'scrape_failed';
       onStatus('fallback_url_only');
     }
     if (!scraped) scraped = { url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
-    const { text, model } = useBYOK
-      ? await callLegacyLLM({ prompt: buildUserPrompt(scraped), system: SYSTEM_PROMPT })
-      : await callGeminiLLM({ prompt: buildUserPrompt(scraped), system: SYSTEM_PROMPT });
+    const { text, model } = await callLLM({
+      prompt: buildUserPrompt(scraped),
+      system: SYSTEM_PROMPT
+    });
 
     const parsed = parseAIResponseText(text);
     parsed._meta = {
       source_url: url,
       favicon: scraped.favicon,
       og_image: scraped.ogImage,
-      model_used: model || (useBYOK ? provider : 'gemini'),
-      mode: useBYOK
-        ? (fallbackReason ? `${provider}-url-only` : provider)
-        : (fallbackReason ? 'gemini-url-only' : 'gemini'),
+      model_used: model || provider,
+      mode: fallbackReason ? `${provider}-url-only` : provider,
       fallback_reason: fallbackReason
     };
     return parsed;
@@ -355,9 +321,9 @@ Now generate the Unified Profile JSON per the schema.`;
     setModel: (v) => {
       try { if (v) localStorage.setItem(LS_MODEL, v); else localStorage.removeItem(LS_MODEL); } catch {}
     },
-    getScraperEndpoint: () => getStoredScraper() || `${LEGACY_WORKER_BASE}/scrape`,
+    getScraperEndpoint: () => getStoredScraper() || `${WORKER_BASE}/scrape`,
     setScraperEndpoint: (v) => setStoredScraper((v || '').trim()),
-    getDefaultScraperEndpoint: () => `${LEGACY_WORKER_BASE}/scrape`,
+    getDefaultScraperEndpoint: () => `${WORKER_BASE}/scrape`,
     hasCustomScraperEndpoint: () => !!getStoredScraper(),
     currentProvider,
   };
