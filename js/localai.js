@@ -1,13 +1,13 @@
 // ============================================================
-// localai.js — AI client (Worker default + BYOK Anthropic/SF Gateway)
+// localai.js — AI client (Heroku server default + BYOK Anthropic/SF Gateway)
 // ============================================================
-// Mirrors the Loyalty Portal Generator v2.1 architecture:
-//   • Default path  →  Cloudflare Worker /llm (holds SF Gateway key
-//                      server-side; no user key required).
+// Architecture:
+//   • Default path  →  Same-origin Heroku server /api/llm (holds Gemini
+//                      API key server-side; no user key required).
 //   • sk-ant-* key  →  Anthropic direct.
 //   • Any other sk- →  SF LLM Gateway direct.
-// Scraping uses the same Worker's /scrape endpoint first, then falls
-// back to public CORS proxies.
+// Scraping uses the same-origin /api/scrape endpoint (server-side fetch,
+// no CORS issues).
 // ============================================================
 
 (function () {
@@ -18,16 +18,14 @@
   const shared = window.UPG_Shared;
 
   // Share storage keys with the Loyalty Portal Generator so a BYOK key
-  // pasted into either app auto-applies in the other. This also lets UPG
-  // inherit any `sk-ant-…` key you've already saved from LPG, which
-  // matters when the shared Worker's SF Gateway upstream is down —
-  // Anthropic direct still works.
+  // pasted into either app auto-applies in the other.
   const KEY_STORAGE = 'anthropic_api_key';
   const MODEL_STORAGE = 'anthropic_model';
   const SCRAPER_URL_STORAGE = 'scraper_endpoint_url';
 
-  // Reuse the Loyalty Portal Generator's Worker — same shape (/scrape + /llm).
-  // Users can override in Advanced → Scraper Endpoint.
+  // Default: same-origin (empty string). The Express server on Heroku
+  // serves both the frontend and the API endpoints.
+  // Users can override in Advanced → Backend Endpoint.
   const DEFAULT_SCRAPER_URL = '';
   const SF_GATEWAY_BASE = 'https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl';
 
@@ -42,13 +40,6 @@
     powerful:  'claude-sonnet-4-5-20250929'
   };
   const DEFAULT_MODEL = TIER_MODELS_ANTHROPIC.balanced;
-
-  const CORS_PROXIES = [
-    { name: 'corsproxy.io',   wrap: u => `https://corsproxy.io/?${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'allorigins.win', wrap: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, unwrap: async r => { const d = await r.json(); return d?.contents || ''; } },
-    { name: 'codetabs',       wrap: u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'thingproxy',     wrap: u => `https://thingproxy.freeboard.io/fetch/${u}`, unwrap: async r => await r.text() }
-  ];
 
   function localError(code, extra) {
     const err = new Error(code);
@@ -83,7 +74,7 @@
   function getDefaultScraperEndpoint() { return DEFAULT_SCRAPER_URL; }
 
   // ---- PROVIDER DETECTION ----
-  //   no key         → 'default' (Worker /llm)
+  //   no key         → 'default' (Heroku server /api/llm → Gemini)
   //   sk-ant-* key   → 'anthropic'
   //   any other sk-* → 'sfgateway'
   function detectProvider(key) {
@@ -93,40 +84,27 @@
   }
   function currentProvider() { return detectProvider(getApiKey()); }
 
-  // ---- SCRAPING (Worker first, then public proxies) ----
+  // ---- SCRAPING (server-side via /api/scrape) ----
   async function scrape(url) {
-    let last = null;
-    const own = getScraperEndpoint();
-    if (own) {
-      try {
-        const res = await fetch(`${base}/api/scrape?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          const html = await res.text();
-          if (html && html.length >= 40) {
-            const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
-            if (!looksJson) return html;
-          }
-          last = localError('own_scraper_empty', { endpoint: own });
-        } else {
-          last = localError('own_scraper_status', { status: res.status, endpoint: own });
+    const base = getScraperEndpoint();
+    try {
+      const res = await fetch(`${base}/api/scrape?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        const html = await res.text();
+        if (html && html.length >= 40) {
+          const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
+          if (!looksJson) return html;
         }
-      } catch (e) {
-        last = localError('own_scraper_network', { endpoint: own, cause: e.message });
+        throw localError('scraper_empty', { endpoint: base });
+      } else {
+        const body = await res.json().catch(() => ({}));
+        throw localError('scraper_status', { status: res.status, endpoint: base, upstream: body.error });
       }
+    } catch (e) {
+      if (e.code) throw e; // already a localError
+      throw localError('scraper_network', { endpoint: base, cause: e.message });
     }
-    for (const p of CORS_PROXIES) {
-      try {
-        const res = await fetch(p.wrap(url));
-        if (!res.ok) { last = localError('proxy_fetch_failed', { proxy: p.name, status: res.status }); continue; }
-        const html = await p.unwrap(res);
-        if (!html || html.length < 40) { last = localError('proxy_empty_response', { proxy: p.name }); continue; }
-        return html;
-      } catch (e) {
-        last = localError('proxy_network_error', { proxy: p.name, cause: e.message });
-      }
-    }
-    throw last || localError('scrape_failed');
   }
 
   // ---- LLM ROUTER ----
@@ -137,9 +115,8 @@
     return callDefaultBackend({ prompt, system, tier, maxTokens });
   }
 
-  // Worker /llm — server holds the LLM key. No BYOK required for typical use.
-  // A 45s AbortController guards against Cloudflare-side hangs (SF Gateway
-  // can occasionally take a long time to first byte).
+  // Heroku server /api/llm — server holds the Gemini API key. No BYOK required.
+  // A 60s AbortController guards against slow Gemini responses.
   async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
     const base = getScraperEndpoint();
     const ctl = new AbortController();
@@ -238,15 +215,84 @@
     return { text, model_used: data.model || chosenModel, usage: data.usage };
   }
 
+  // ---- AI IMAGE GENERATION ----
+  // Calls the server-side /api/generate-images endpoint to generate images
+  // using Gemini's image generation model. Each prompt includes a slot ID
+  // so results can be mapped back to the right field.
+  async function generateImages(prompts) {
+    const base = getScraperEndpoint();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 90000); // 90s for batch
+    let res;
+    try {
+      res = await fetch(`${base}/api/generate-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts }),
+        signal: ctl.signal
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[UPG] Image generation network error:', e.message);
+      return []; // Non-fatal — profile works without images
+    }
+    clearTimeout(timer);
+    if (!res.ok) {
+      console.warn('[UPG] Image generation failed:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    return data.results || [];
+  }
+
+  // Build image generation prompts from the parsed AI profile.
+  // Returns an array of { slot, prompt } objects.
+  function buildImagePrompts(parsed) {
+    const prompts = [];
+    const brand = parsed.brandName || 'company';
+    const industry = parsed.industry || 'generic';
+
+    // Profile photo — realistic headshot
+    if (!parsed.profile?.photo) {
+      const name = parsed.profile?.name || 'person';
+      const city = parsed.profile?.city || '';
+      prompts.push({
+        slot: 'profile_photo',
+        prompt: 'Professional headshot photograph of a person named ' + name + (city ? ' from ' + city : '') + '. ' +
+          'They are a customer of ' + brand + ' (' + industry + ' industry). ' +
+          'Realistic photograph, warm lighting, friendly natural smile, business casual attire, ' +
+          'clean neutral background. High quality portrait photo, shot on DSLR, shallow depth of field. ' +
+          'Do NOT include any text or labels in the image.'
+      });
+    }
+
+    // Einstein recommendation images
+    if (Array.isArray(parsed.recommendations?.items)) {
+      parsed.recommendations.items.forEach(function(rec, i) {
+        if (!rec.image && rec.title) {
+          prompts.push({
+            slot: 'rec_' + i,
+            prompt: 'Marketing lifestyle photograph for ' + brand + ': "' + rec.title + '". ' +
+              industry + ' industry context. Beautiful commercial photography, ' +
+              'vibrant colors, professional product/lifestyle shot suitable for a recommendation card. ' +
+              'Aspirational, on-brand imagery. No text overlays, no logos, no words in the image.'
+          });
+        }
+      });
+    }
+
+    return prompts;
+  }
+
   // ---- MAIN ----
   async function analyzeCustomerURL(rawUrl, opts = {}) {
     const url = shared.normalizeURL(rawUrl);
     if (!url) throw localError('invalid_url');
-    const onStatus = opts.onStatus || (() => {});
+    const onStatus = opts.onStatus || (function() {});
     const provider = currentProvider();
     const tier = opts.tier || 'balanced';
 
-    let scraped = null, fallbackReason = null;
+    var scraped = null, fallbackReason = null;
     onStatus('fetching');
     try {
       const html = await scrape(url);
@@ -255,13 +301,13 @@
       fallbackReason = e.code || 'scrape_failed';
       onStatus('fallback_url_only');
     }
-    if (!scraped) scraped = { url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
+    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
     const { text, model_used } = await callLLM({
       prompt: shared.buildUserPrompt(scraped),
       system: shared.SYSTEM_PROMPT,
-      tier,
+      tier: tier,
       maxTokens: 8000
     });
 
@@ -270,12 +316,39 @@
       source_url: url,
       favicon: scraped.favicon,
       og_image: scraped.ogImage,
-      model_used,
-      tier,
-      provider,
+      model_used: model_used,
+      tier: tier,
+      provider: provider,
       mode: fallbackReason ? 'scrape-fallback-url-only' : provider,
       fallback_reason: fallbackReason
     };
+
+    // Generate images for profile photo + recommendation cards
+    // Only when using the default (Gemini) backend which has the image endpoint
+    const imagePrompts = buildImagePrompts(parsed);
+    if (imagePrompts.length > 0 && provider === 'default') {
+      onStatus('generating_images');
+      try {
+        const imageResults = await generateImages(imagePrompts);
+        // Map results back into the parsed profile
+        for (var r = 0; r < imageResults.length; r++) {
+          var result = imageResults[r];
+          if (result.error) continue;
+          if (result.slot === 'profile_photo' && result.imageData) {
+            parsed.profile.photo = result.imageData;
+          } else if (result.slot && result.slot.indexOf('rec_') === 0 && result.imageData) {
+            var idx = parseInt(result.slot.split('_')[1], 10);
+            if (parsed.recommendations && parsed.recommendations.items && parsed.recommendations.items[idx]) {
+              parsed.recommendations.items[idx].image = result.imageData;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[UPG] Image generation failed (non-fatal):', e.message);
+        // Continue without images — the profile still works
+      }
+    }
+
     return parsed;
   }
 
