@@ -262,7 +262,7 @@
       prompt: shared.buildUserPrompt(scraped),
       system: shared.SYSTEM_PROMPT,
       tier,
-      maxTokens: 4000
+      maxTokens: 8000
     });
 
     const parsed = shared.parseAIResponseText(text);

@@ -57,7 +57,7 @@ app.post('/api/llm', async (req, res) => {
   if (prompt.length > 200000) return res.status(413).json({ error: 'prompt_too_long' });
   const chosenTier = ['fast', 'balanced', 'powerful'].includes(tier) ? tier : 'balanced';
   const model = TIER_MODELS[chosenTier] || DEFAULT_MODEL;
-  const tokens = Math.min(Math.max(parseInt(maxTokens, 10) || 8000, 100), 8000);
+  const tokens = Math.min(Math.max(parseInt(maxTokens, 10) || 8000, 100), 16000);
   const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`;
   const geminiBody = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { maxOutputTokens: tokens } };
   if (system && typeof system === 'string' && system.trim()) geminiBody.systemInstruction = { parts: [{ text: system }] };
