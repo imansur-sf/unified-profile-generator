@@ -28,7 +28,7 @@
 
   // Reuse the Loyalty Portal Generator's Worker — same shape (/scrape + /llm).
   // Users can override in Advanced → Scraper Endpoint.
-  const DEFAULT_SCRAPER_URL = 'https://loyalty-scraper.imansur.workers.dev';
+  const DEFAULT_SCRAPER_URL = '';
   const SF_GATEWAY_BASE = 'https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl';
 
   const TIER_MODELS_ANTHROPIC = {
@@ -99,7 +99,7 @@
     const own = getScraperEndpoint();
     if (own) {
       try {
-        const res = await fetch(`${own}/scrape?url=${encodeURIComponent(url)}`);
+        const res = await fetch(`${base}/api/scrape?url=${encodeURIComponent(url)}`);
         if (res.ok) {
           const ct = res.headers.get('content-type') || '';
           const html = await res.text();
@@ -142,12 +142,11 @@
   // can occasionally take a long time to first byte).
   async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
     const base = getScraperEndpoint();
-    if (!base) throw localError('no_default_backend');
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 45000);
+    const timer = setTimeout(() => ctl.abort(), 60000);
     let res;
     try {
-      res = await fetch(`${base}/llm`, {
+      res = await fetch(`${base}/api/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, system, tier, maxTokens }),
