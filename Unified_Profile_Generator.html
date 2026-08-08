@@ -187,8 +187,19 @@
           <h1 class="text-base font-600 tracking-tight text-white">Unified Profile Generator</h1>
         </div>
       </div>
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 relative">
+        <button onclick="openMyProjects()" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">My Projects</button>
+        <span id="auth-email" class="hidden text-xs text-white/70 max-w-[160px] truncate"></span>
+        <button id="btn-auth" onclick="onAuthButtonClick()" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">Sign In</button>
         <button onclick="startOver()" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">Start Over</button>
+
+        <div id="my-projects-panel" class="hidden absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 text-left z-50 overflow-hidden">
+          <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
+            <span class="text-xs font-700 uppercase tracking-wide text-gray-500">My Projects</span>
+            <button onclick="closeMyProjects()" class="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+          </div>
+          <div id="my-projects-list" class="max-h-72 overflow-y-auto divide-y divide-gray-100"></div>
+        </div>
       </div>
     </div>
   </div>
@@ -614,6 +625,14 @@
             <h2 class="wizard-title mb-1">Preview & Export</h2>
             <p class="wizard-sub mb-6">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
 
+            <div class="flex gap-3 mb-3">
+              <button onclick="saveCurrentProject()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/></svg>
+                Save Project
+              </button>
+            </div>
+            <div id="save-project-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
+
             <div class="flex gap-3 mb-4">
               <button onclick="downloadHTML()" class="btn-primary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
@@ -625,6 +644,15 @@
               </button>
             </div>
             <div id="copy-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
+
+            <div class="flex gap-3 mb-3">
+              <button onclick="exportForCloudy()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 15a4 4 0 004 4h9a5 5 0 001.7-9.7 5.5 5.5 0 00-10.7-1.9A4.5 4.5 0 003 15z"/></svg>
+                Export for Cloudy
+              </button>
+            </div>
+            <div id="cloudy-hint" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
+
             <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
           </div>
         </div>
@@ -655,6 +683,18 @@
 
     </div>
   </div>
+
+  <div id="save-project-modal" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center px-4" onclick="if(event.target===this) closeSaveProjectModal()">
+    <div class="bg-white rounded-xl shadow-lg max-w-sm w-full p-6">
+      <h3 class="text-base font-700 text-gray-800 mb-1">Save Project</h3>
+      <p class="text-xs text-gray-500 mb-4">Give this project a name so you can find it later.</p>
+      <input id="save-project-name-input" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" placeholder="e.g. Acme Corp — Recruiting" autocomplete="off" onkeydown="if(event.key==='Enter'){ event.preventDefault(); confirmSaveProject(false); }">
+      <div id="save-project-modal-actions" class="flex gap-2"></div>
+      <button onclick="closeSaveProjectModal()" class="mt-3 w-full text-xs text-gray-400 hover:text-gray-600">Cancel</button>
+    </div>
+  </div>
+
+  <script src="https://sassysolutions-accounts-8215113235cf.aster-virginia.herokuapp.com/saasy-auth.js"></script>
 <script>
 // ==== inlined from ./js/defaults.js ====
 // ============================================================
@@ -2398,15 +2438,15 @@ Now generate the Unified Profile JSON per the schema.`;
 
 // ==== inlined from ./js/localai.js ====
 // ============================================================
-// localai.js — AI client (Worker default + BYOK Anthropic/SF Gateway)
+// localai.js — AI client (Heroku server default + BYOK Anthropic/SF Gateway)
 // ============================================================
-// Mirrors the Loyalty Portal Generator v2.1 architecture:
-//   • Default path  →  Cloudflare Worker /llm (holds SF Gateway key
-//                      server-side; no user key required).
+// Architecture:
+//   • Default path  →  Same-origin Heroku server /api/llm (holds Gemini
+//                      API key server-side; no user key required).
 //   • sk-ant-* key  →  Anthropic direct.
 //   • Any other sk- →  SF LLM Gateway direct.
-// Scraping uses the same Worker's /scrape endpoint first, then falls
-// back to public CORS proxies.
+// Scraping uses the same-origin /api/scrape endpoint (server-side fetch,
+// no CORS issues).
 // ============================================================
 
 (function () {
@@ -2417,17 +2457,15 @@ Now generate the Unified Profile JSON per the schema.`;
   const shared = window.UPG_Shared;
 
   // Share storage keys with the Loyalty Portal Generator so a BYOK key
-  // pasted into either app auto-applies in the other. This also lets UPG
-  // inherit any `sk-ant-…` key you've already saved from LPG, which
-  // matters when the shared Worker's SF Gateway upstream is down —
-  // Anthropic direct still works.
+  // pasted into either app auto-applies in the other.
   const KEY_STORAGE = 'anthropic_api_key';
   const MODEL_STORAGE = 'anthropic_model';
   const SCRAPER_URL_STORAGE = 'scraper_endpoint_url';
 
-  // Reuse the Loyalty Portal Generator's Worker — same shape (/scrape + /llm).
-  // Users can override in Advanced → Scraper Endpoint.
-  const DEFAULT_SCRAPER_URL = 'https://loyalty-scraper.imansur.workers.dev';
+  // Default: same-origin (empty string). The Express server on Heroku
+  // serves both the frontend and the API endpoints.
+  // Users can override in Advanced → Backend Endpoint.
+  const DEFAULT_SCRAPER_URL = '';
   const SF_GATEWAY_BASE = 'https://eng-ai-model-gateway.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl';
 
   const TIER_MODELS_ANTHROPIC = {
@@ -2441,13 +2479,6 @@ Now generate the Unified Profile JSON per the schema.`;
     powerful:  'claude-sonnet-4-5-20250929'
   };
   const DEFAULT_MODEL = TIER_MODELS_ANTHROPIC.balanced;
-
-  const CORS_PROXIES = [
-    { name: 'corsproxy.io',   wrap: u => `https://corsproxy.io/?${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'allorigins.win', wrap: u => `https://api.allorigins.win/get?url=${encodeURIComponent(u)}`, unwrap: async r => { const d = await r.json(); return d?.contents || ''; } },
-    { name: 'codetabs',       wrap: u => `https://api.codetabs.com/v1/proxy/?quest=${encodeURIComponent(u)}`, unwrap: async r => await r.text() },
-    { name: 'thingproxy',     wrap: u => `https://thingproxy.freeboard.io/fetch/${u}`, unwrap: async r => await r.text() }
-  ];
 
   function localError(code, extra) {
     const err = new Error(code);
@@ -2482,7 +2513,7 @@ Now generate the Unified Profile JSON per the schema.`;
   function getDefaultScraperEndpoint() { return DEFAULT_SCRAPER_URL; }
 
   // ---- PROVIDER DETECTION ----
-  //   no key         → 'default' (Worker /llm)
+  //   no key         → 'default' (Heroku server /api/llm → Gemini)
   //   sk-ant-* key   → 'anthropic'
   //   any other sk-* → 'sfgateway'
   function detectProvider(key) {
@@ -2492,40 +2523,27 @@ Now generate the Unified Profile JSON per the schema.`;
   }
   function currentProvider() { return detectProvider(getApiKey()); }
 
-  // ---- SCRAPING (Worker first, then public proxies) ----
+  // ---- SCRAPING (server-side via /api/scrape) ----
   async function scrape(url) {
-    let last = null;
-    const own = getScraperEndpoint();
-    if (own) {
-      try {
-        const res = await fetch(`${own}/scrape?url=${encodeURIComponent(url)}`);
-        if (res.ok) {
-          const ct = res.headers.get('content-type') || '';
-          const html = await res.text();
-          if (html && html.length >= 40) {
-            const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
-            if (!looksJson) return html;
-          }
-          last = localError('own_scraper_empty', { endpoint: own });
-        } else {
-          last = localError('own_scraper_status', { status: res.status, endpoint: own });
+    const base = getScraperEndpoint();
+    try {
+      const res = await fetch(`${base}/api/scrape?url=${encodeURIComponent(url)}`);
+      if (res.ok) {
+        const ct = res.headers.get('content-type') || '';
+        const html = await res.text();
+        if (html && html.length >= 40) {
+          const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
+          if (!looksJson) return html;
         }
-      } catch (e) {
-        last = localError('own_scraper_network', { endpoint: own, cause: e.message });
+        throw localError('scraper_empty', { endpoint: base });
+      } else {
+        const body = await res.json().catch(() => ({}));
+        throw localError('scraper_status', { status: res.status, endpoint: base, upstream: body.error });
       }
+    } catch (e) {
+      if (e.code) throw e; // already a localError
+      throw localError('scraper_network', { endpoint: base, cause: e.message });
     }
-    for (const p of CORS_PROXIES) {
-      try {
-        const res = await fetch(p.wrap(url));
-        if (!res.ok) { last = localError('proxy_fetch_failed', { proxy: p.name, status: res.status }); continue; }
-        const html = await p.unwrap(res);
-        if (!html || html.length < 40) { last = localError('proxy_empty_response', { proxy: p.name }); continue; }
-        return html;
-      } catch (e) {
-        last = localError('proxy_network_error', { proxy: p.name, cause: e.message });
-      }
-    }
-    throw last || localError('scrape_failed');
   }
 
   // ---- LLM ROUTER ----
@@ -2536,17 +2554,15 @@ Now generate the Unified Profile JSON per the schema.`;
     return callDefaultBackend({ prompt, system, tier, maxTokens });
   }
 
-  // Worker /llm — server holds the LLM key. No BYOK required for typical use.
-  // A 45s AbortController guards against Cloudflare-side hangs (SF Gateway
-  // can occasionally take a long time to first byte).
+  // Heroku server /api/llm — server holds the Gemini API key. No BYOK required.
+  // A 60s AbortController guards against slow Gemini responses.
   async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
     const base = getScraperEndpoint();
-    if (!base) throw localError('no_default_backend');
     const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 45000);
+    const timer = setTimeout(() => ctl.abort(), 60000);
     let res;
     try {
-      res = await fetch(`${base}/llm`, {
+      res = await fetch(`${base}/api/llm`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ prompt, system, tier, maxTokens }),
@@ -2638,15 +2654,84 @@ Now generate the Unified Profile JSON per the schema.`;
     return { text, model_used: data.model || chosenModel, usage: data.usage };
   }
 
+  // ---- AI IMAGE GENERATION ----
+  // Calls the server-side /api/generate-images endpoint to generate images
+  // using Gemini's image generation model. Each prompt includes a slot ID
+  // so results can be mapped back to the right field.
+  async function generateImages(prompts) {
+    const base = getScraperEndpoint();
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 90000); // 90s for batch
+    let res;
+    try {
+      res = await fetch(`${base}/api/generate-images`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ prompts }),
+        signal: ctl.signal
+      });
+    } catch (e) {
+      clearTimeout(timer);
+      console.warn('[UPG] Image generation network error:', e.message);
+      return []; // Non-fatal — profile works without images
+    }
+    clearTimeout(timer);
+    if (!res.ok) {
+      console.warn('[UPG] Image generation failed:', res.status);
+      return [];
+    }
+    const data = await res.json();
+    return data.results || [];
+  }
+
+  // Build image generation prompts from the parsed AI profile.
+  // Returns an array of { slot, prompt } objects.
+  function buildImagePrompts(parsed) {
+    const prompts = [];
+    const brand = parsed.brandName || 'company';
+    const industry = parsed.industry || 'generic';
+
+    // Profile photo — realistic headshot
+    if (!parsed.profile?.photo) {
+      const name = parsed.profile?.name || 'person';
+      const city = parsed.profile?.city || '';
+      prompts.push({
+        slot: 'profile_photo',
+        prompt: 'Professional headshot photograph of a person named ' + name + (city ? ' from ' + city : '') + '. ' +
+          'They are a customer of ' + brand + ' (' + industry + ' industry). ' +
+          'Realistic photograph, warm lighting, friendly natural smile, business casual attire, ' +
+          'clean neutral background. High quality portrait photo, shot on DSLR, shallow depth of field. ' +
+          'Do NOT include any text or labels in the image.'
+      });
+    }
+
+    // Einstein recommendation images
+    if (Array.isArray(parsed.recommendations?.items)) {
+      parsed.recommendations.items.forEach(function(rec, i) {
+        if (!rec.image && rec.title) {
+          prompts.push({
+            slot: 'rec_' + i,
+            prompt: 'Marketing lifestyle photograph for ' + brand + ': "' + rec.title + '". ' +
+              industry + ' industry context. Beautiful commercial photography, ' +
+              'vibrant colors, professional product/lifestyle shot suitable for a recommendation card. ' +
+              'Aspirational, on-brand imagery. No text overlays, no logos, no words in the image.'
+          });
+        }
+      });
+    }
+
+    return prompts;
+  }
+
   // ---- MAIN ----
   async function analyzeCustomerURL(rawUrl, opts = {}) {
     const url = shared.normalizeURL(rawUrl);
     if (!url) throw localError('invalid_url');
-    const onStatus = opts.onStatus || (() => {});
+    const onStatus = opts.onStatus || (function() {});
     const provider = currentProvider();
     const tier = opts.tier || 'balanced';
 
-    let scraped = null, fallbackReason = null;
+    var scraped = null, fallbackReason = null;
     onStatus('fetching');
     try {
       const html = await scrape(url);
@@ -2655,14 +2740,14 @@ Now generate the Unified Profile JSON per the schema.`;
       fallbackReason = e.code || 'scrape_failed';
       onStatus('fallback_url_only');
     }
-    if (!scraped) scraped = { url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
+    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
     const { text, model_used } = await callLLM({
       prompt: shared.buildUserPrompt(scraped),
       system: shared.SYSTEM_PROMPT,
-      tier,
-      maxTokens: 4000
+      tier: tier,
+      maxTokens: 8000
     });
 
     const parsed = shared.parseAIResponseText(text);
@@ -2670,12 +2755,39 @@ Now generate the Unified Profile JSON per the schema.`;
       source_url: url,
       favicon: scraped.favicon,
       og_image: scraped.ogImage,
-      model_used,
-      tier,
-      provider,
+      model_used: model_used,
+      tier: tier,
+      provider: provider,
       mode: fallbackReason ? 'scrape-fallback-url-only' : provider,
       fallback_reason: fallbackReason
     };
+
+    // Generate images for profile photo + recommendation cards
+    // Only when using the default (Gemini) backend which has the image endpoint
+    const imagePrompts = buildImagePrompts(parsed);
+    if (imagePrompts.length > 0 && provider === 'default') {
+      onStatus('generating_images');
+      try {
+        const imageResults = await generateImages(imagePrompts);
+        // Map results back into the parsed profile
+        for (var r = 0; r < imageResults.length; r++) {
+          var result = imageResults[r];
+          if (result.error) continue;
+          if (result.slot === 'profile_photo' && result.imageData) {
+            parsed.profile.photo = result.imageData;
+          } else if (result.slot && result.slot.indexOf('rec_') === 0 && result.imageData) {
+            var idx = parseInt(result.slot.split('_')[1], 10);
+            if (parsed.recommendations && parsed.recommendations.items && parsed.recommendations.items[idx]) {
+              parsed.recommendations.items[idx].image = result.imageData;
+            }
+          }
+        }
+      } catch (e) {
+        console.warn('[UPG] Image generation failed (non-fatal):', e.message);
+        // Continue without images — the profile still works
+      }
+    }
+
     return parsed;
   }
 
@@ -3245,6 +3357,16 @@ function copyHTML() {
   });
 }
 
+function exportForCloudy() {
+  downloadHTML();
+  window.open('https://sfdc.co/cloudy', '_blank', 'noopener');
+  const hint = document.getElementById('cloudy-hint');
+  if (hint) {
+    hint.classList.remove('hidden');
+    setTimeout(() => hint.classList.add('hidden'), 6000);
+  }
+}
+
 // ─── AI-driven ingest — apply parsed profile from URL analysis ─
 function applyAIProfile(ai) {
   // Preserve current industry unless AI came back with something else.
@@ -3292,6 +3414,161 @@ function renderAll() {
   renderRecs();
   renderActivity();
   renderNavLinks();
+}
+
+// ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
+const SAASY_TOOL = 'upg';
+let currentProjectId = null;
+let currentProjectName = null;
+
+function syncAuthUI() {
+  if (!window.SaasyAuth) return;
+  const btn = document.getElementById('btn-auth');
+  const emailEl = document.getElementById('auth-email');
+  if (SaasyAuth.isSignedIn()) {
+    btn.textContent = 'Sign Out';
+    emailEl.textContent = SaasyAuth.getEmail();
+    emailEl.classList.remove('hidden');
+  } else {
+    btn.textContent = 'Sign In';
+    emailEl.classList.add('hidden');
+  }
+}
+
+async function onAuthButtonClick() {
+  if (!window.SaasyAuth) return;
+  if (SaasyAuth.isSignedIn()) {
+    SaasyAuth.signOut();
+    syncAuthUI();
+    return;
+  }
+  try {
+    await SaasyAuth.signIn();
+    syncAuthUI();
+  } catch (e) {
+    // user cancelled sign-in — nothing to do
+  }
+}
+
+async function saveCurrentProject() {
+  if (!window.SaasyAuth) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  openSaveProjectModal();
+}
+
+function openSaveProjectModal() {
+  const input = document.getElementById('save-project-name-input');
+  input.value = currentProjectName || state.brandName || '';
+  const actions = document.getElementById('save-project-modal-actions');
+  actions.innerHTML = currentProjectId
+    ? `<button onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
+       <button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
+    : `<button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
+  document.getElementById('save-project-modal').classList.remove('hidden');
+  setTimeout(() => input.focus(), 0);
+}
+
+function closeSaveProjectModal() {
+  document.getElementById('save-project-modal').classList.add('hidden');
+}
+
+async function confirmSaveProject(asNew) {
+  const input = document.getElementById('save-project-name-input');
+  const name = input.value.trim() || state.brandName || 'Untitled Profile';
+  const id = asNew ? null : currentProjectId;
+  try {
+    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload: state, id });
+    currentProjectId = project.id;
+    currentProjectName = project.name;
+    closeSaveProjectModal();
+    const s = document.getElementById('save-project-success');
+    s.classList.remove('hidden');
+    setTimeout(() => s.classList.add('hidden'), 2200);
+  } catch (e) {
+    alert('Could not save project: ' + e.message);
+  }
+}
+
+async function openMyProjects() {
+  if (!window.SaasyAuth) return;
+  const panel = document.getElementById('my-projects-panel');
+  if (!panel.classList.contains('hidden')) { closeMyProjects(); return; }
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  panel.classList.remove('hidden');
+  const list = document.getElementById('my-projects-list');
+  list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">Loading…</div>';
+  try {
+    const projects = await SaasyAuth.listProjects({ tool: SAASY_TOOL });
+    if (!projects.length) {
+      list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">No saved projects yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    projects.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'px-4 py-3 flex items-center justify-between gap-2';
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-600 text-gray-700 truncate">${escHTML(p.name)}</div>
+          <div class="text-[11px] text-gray-400">${new Date(p.updated_at).toLocaleDateString()}</div>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <button class="icon-btn" data-action="load">Load</button>
+          <button class="icon-btn danger" data-action="delete">Delete</button>
+        </div>`;
+      row.querySelector('[data-action="load"]').onclick = () => loadProjectAndHydrate(p.id);
+      row.querySelector('[data-action="delete"]').onclick = () => deleteProjectFromList(p.id, row);
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="px-4 py-4 text-xs text-red-500">Failed to load projects.</div>';
+  }
+}
+
+function closeMyProjects() {
+  document.getElementById('my-projects-panel').classList.add('hidden');
+}
+
+async function deleteProjectFromList(id, row) {
+  if (!confirm('Delete this saved project?')) return;
+  try {
+    await SaasyAuth.deleteProject(id);
+    row.remove();
+    if (id === currentProjectId) { currentProjectId = null; currentProjectName = null; }
+  } catch (e) {
+    alert('Could not delete project: ' + e.message);
+  }
+}
+
+async function loadProjectAndHydrate(id) {
+  try {
+    const project = await SaasyAuth.loadProject(id);
+    state = project.payload;
+    currentProjectId = project.id;
+    currentProjectName = project.name;
+    document.getElementById('brand-industry').value = state._industry || 'recruiting';
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+    closeMyProjects();
+    goToStep(0);
+  } catch (e) {
+    alert('Could not load project: ' + e.message);
+  }
+}
+
+async function hydrateFromProjectId() {
+  if (!window.SaasyAuth) return;
+  const id = new URLSearchParams(window.location.search).get('projectId');
+  if (!id) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  await loadProjectAndHydrate(id);
 }
 
 // ─── QUICK START (AI URL analysis) ──────────────────────────
@@ -3457,6 +3734,9 @@ function bootstrap() {
   // Rescale after images/webfonts settle so the iframe's transform stays crisp
   requestAnimationFrame(fitPreviewScale);
   setTimeout(fitPreviewScale, 400);
+
+  syncAuthUI();
+  hydrateFromProjectId();
 }
 
 // Script may load before or after DOMContentLoaded (index.html injects

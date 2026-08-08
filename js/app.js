@@ -615,6 +615,7 @@ function renderAll() {
 // ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
 const SAASY_TOOL = 'upg';
 let currentProjectId = null;
+let currentProjectName = null;
 
 function syncAuthUI() {
   if (!window.SaasyAuth) return;
@@ -650,10 +651,34 @@ async function saveCurrentProject() {
   if (!SaasyAuth.isSignedIn()) {
     try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
   }
-  const name = state.brandName || 'Untitled Profile';
+  openSaveProjectModal();
+}
+
+function openSaveProjectModal() {
+  const input = document.getElementById('save-project-name-input');
+  input.value = currentProjectName || state.brandName || '';
+  const actions = document.getElementById('save-project-modal-actions');
+  actions.innerHTML = currentProjectId
+    ? `<button onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
+       <button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
+    : `<button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
+  document.getElementById('save-project-modal').classList.remove('hidden');
+  setTimeout(() => input.focus(), 0);
+}
+
+function closeSaveProjectModal() {
+  document.getElementById('save-project-modal').classList.add('hidden');
+}
+
+async function confirmSaveProject(asNew) {
+  const input = document.getElementById('save-project-name-input');
+  const name = input.value.trim() || state.brandName || 'Untitled Profile';
+  const id = asNew ? null : currentProjectId;
   try {
-    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload: state, id: currentProjectId });
+    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload: state, id });
     currentProjectId = project.id;
+    currentProjectName = project.name;
+    closeSaveProjectModal();
     const s = document.getElementById('save-project-success');
     s.classList.remove('hidden');
     setTimeout(() => s.classList.add('hidden'), 2200);
@@ -709,7 +734,7 @@ async function deleteProjectFromList(id, row) {
   try {
     await SaasyAuth.deleteProject(id);
     row.remove();
-    if (id === currentProjectId) currentProjectId = null;
+    if (id === currentProjectId) { currentProjectId = null; currentProjectName = null; }
   } catch (e) {
     alert('Could not delete project: ' + e.message);
   }
@@ -720,6 +745,7 @@ async function loadProjectAndHydrate(id) {
     const project = await SaasyAuth.loadProject(id);
     state = project.payload;
     currentProjectId = project.id;
+    currentProjectName = project.name;
     document.getElementById('brand-industry').value = state._industry || 'recruiting';
     fillStaticFields();
     renderAll();
