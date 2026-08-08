@@ -553,6 +553,16 @@ function copyHTML() {
   });
 }
 
+function exportForCloudy() {
+  downloadHTML();
+  window.open('https://sfdc.co/cloudy', '_blank', 'noopener');
+  const hint = document.getElementById('cloudy-hint');
+  if (hint) {
+    hint.classList.remove('hidden');
+    setTimeout(() => hint.classList.add('hidden'), 6000);
+  }
+}
+
 // ─── AI-driven ingest — apply parsed profile from URL analysis ─
 function applyAIProfile(ai) {
   // Preserve current industry unless AI came back with something else.
@@ -600,6 +610,135 @@ function renderAll() {
   renderRecs();
   renderActivity();
   renderNavLinks();
+}
+
+// ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
+const SAASY_TOOL = 'upg';
+let currentProjectId = null;
+
+function syncAuthUI() {
+  if (!window.SaasyAuth) return;
+  const btn = document.getElementById('btn-auth');
+  const emailEl = document.getElementById('auth-email');
+  if (SaasyAuth.isSignedIn()) {
+    btn.textContent = 'Sign Out';
+    emailEl.textContent = SaasyAuth.getEmail();
+    emailEl.classList.remove('hidden');
+  } else {
+    btn.textContent = 'Sign In';
+    emailEl.classList.add('hidden');
+  }
+}
+
+async function onAuthButtonClick() {
+  if (!window.SaasyAuth) return;
+  if (SaasyAuth.isSignedIn()) {
+    SaasyAuth.signOut();
+    syncAuthUI();
+    return;
+  }
+  try {
+    await SaasyAuth.signIn();
+    syncAuthUI();
+  } catch (e) {
+    // user cancelled sign-in — nothing to do
+  }
+}
+
+async function saveCurrentProject() {
+  if (!window.SaasyAuth) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  const name = state.brandName || 'Untitled Profile';
+  try {
+    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload: state, id: currentProjectId });
+    currentProjectId = project.id;
+    const s = document.getElementById('save-project-success');
+    s.classList.remove('hidden');
+    setTimeout(() => s.classList.add('hidden'), 2200);
+  } catch (e) {
+    alert('Could not save project: ' + e.message);
+  }
+}
+
+async function openMyProjects() {
+  if (!window.SaasyAuth) return;
+  const panel = document.getElementById('my-projects-panel');
+  if (!panel.classList.contains('hidden')) { closeMyProjects(); return; }
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  panel.classList.remove('hidden');
+  const list = document.getElementById('my-projects-list');
+  list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">Loading…</div>';
+  try {
+    const projects = await SaasyAuth.listProjects({ tool: SAASY_TOOL });
+    if (!projects.length) {
+      list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">No saved projects yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    projects.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'px-4 py-3 flex items-center justify-between gap-2';
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-600 text-gray-700 truncate">${escHTML(p.name)}</div>
+          <div class="text-[11px] text-gray-400">${new Date(p.updated_at).toLocaleDateString()}</div>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <button class="icon-btn" data-action="load">Load</button>
+          <button class="icon-btn danger" data-action="delete">Delete</button>
+        </div>`;
+      row.querySelector('[data-action="load"]').onclick = () => loadProjectAndHydrate(p.id);
+      row.querySelector('[data-action="delete"]').onclick = () => deleteProjectFromList(p.id, row);
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="px-4 py-4 text-xs text-red-500">Failed to load projects.</div>';
+  }
+}
+
+function closeMyProjects() {
+  document.getElementById('my-projects-panel').classList.add('hidden');
+}
+
+async function deleteProjectFromList(id, row) {
+  if (!confirm('Delete this saved project?')) return;
+  try {
+    await SaasyAuth.deleteProject(id);
+    row.remove();
+    if (id === currentProjectId) currentProjectId = null;
+  } catch (e) {
+    alert('Could not delete project: ' + e.message);
+  }
+}
+
+async function loadProjectAndHydrate(id) {
+  try {
+    const project = await SaasyAuth.loadProject(id);
+    state = project.payload;
+    currentProjectId = project.id;
+    document.getElementById('brand-industry').value = state._industry || 'recruiting';
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+    closeMyProjects();
+    goToStep(0);
+  } catch (e) {
+    alert('Could not load project: ' + e.message);
+  }
+}
+
+async function hydrateFromProjectId() {
+  if (!window.SaasyAuth) return;
+  const id = new URLSearchParams(window.location.search).get('projectId');
+  if (!id) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  await loadProjectAndHydrate(id);
 }
 
 // ─── QUICK START (AI URL analysis) ──────────────────────────
@@ -765,6 +904,9 @@ function bootstrap() {
   // Rescale after images/webfonts settle so the iframe's transform stays crisp
   requestAnimationFrame(fitPreviewScale);
   setTimeout(fitPreviewScale, 400);
+
+  syncAuthUI();
+  hydrateFromProjectId();
 }
 
 // Script may load before or after DOMContentLoaded (index.html injects
