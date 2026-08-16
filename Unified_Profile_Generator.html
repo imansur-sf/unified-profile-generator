@@ -3350,11 +3350,100 @@ function downloadHTML() {
 
 function copyHTML() {
   const html = generateProfileHTML(state);
-  navigator.clipboard.writeText(html).then(() => {
+  showCopyModal(html);
+  tryCopyToClipboard(html);
+}
+
+function tryCopyToClipboard(html, sourceTextarea) {
+  const flashToast = () => {
     const s = document.getElementById('copy-success');
+    if (!s) return;
     s.classList.remove('hidden');
     setTimeout(() => s.classList.add('hidden'), 2200);
-  });
+  };
+  const flashModalStatus = (msg, ok) => {
+    const st = document.getElementById('copy-modal-status');
+    if (!st) return;
+    st.textContent = msg;
+    st.className = 'text-sm font-600 ' + (ok ? 'text-green-700' : 'text-red-700');
+    setTimeout(() => { st.textContent = ''; st.className = 'text-sm font-600'; }, 2500);
+  };
+  const legacyCopy = () => {
+    try {
+      const ta = sourceTextarea || document.getElementById('copy-modal-textarea');
+      if (!ta) return false;
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      return !!ok;
+    } catch (e) { return false; }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(html).then(() => {
+      flashToast();
+      flashModalStatus('✓ Copied to clipboard', true);
+    }).catch(() => {
+      if (legacyCopy()) {
+        flashToast();
+        flashModalStatus('✓ Copied to clipboard', true);
+      } else {
+        flashModalStatus('Copy blocked — select the text and press ⌘/Ctrl+C', false);
+      }
+    });
+  } else if (legacyCopy()) {
+    flashToast();
+    flashModalStatus('✓ Copied to clipboard', true);
+  } else {
+    flashModalStatus('Select the text and press ⌘/Ctrl+C to copy', false);
+  }
+}
+
+function showCopyModal(html) {
+  let modal = document.getElementById('copy-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'copy-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:24px;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-weight:700;font-size:15px;color:#0f172a;">Copy Profile HTML</div>
+          <button id="copy-modal-close-x" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
+        </div>
+        <div style="padding:12px 20px;font-size:13px;color:#475569;">Select-all is already applied. Click <b>Copy</b> below, or press ⌘/Ctrl+C.</div>
+        <div style="padding:0 20px 12px;flex:1;overflow:hidden;display:flex;">
+          <textarea id="copy-modal-textarea" readonly spellcheck="false" style="width:100%;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid #cbd5e1;border-radius:8px;padding:10px;resize:none;background:#f8fafc;color:#0f172a;"></textarea>
+        </div>
+        <div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div id="copy-modal-status" class="text-sm font-600"></div>
+          <div style="display:flex;gap:8px;">
+            <button id="copy-modal-close" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;">Close</button>
+            <button id="copy-modal-copy" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:#0176d3;color:#fff;cursor:pointer;">Copy</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => modal.remove();
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('#copy-modal-close').addEventListener('click', close);
+    modal.querySelector('#copy-modal-close-x').addEventListener('click', close);
+    modal.querySelector('#copy-modal-copy').addEventListener('click', () => {
+      const ta = document.getElementById('copy-modal-textarea');
+      tryCopyToClipboard(ta ? ta.value : html, ta);
+    });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape' && document.getElementById('copy-modal')) {
+        close();
+        document.removeEventListener('keydown', onEsc);
+      }
+    });
+  }
+  const ta = document.getElementById('copy-modal-textarea');
+  if (ta) {
+    ta.value = html;
+    setTimeout(() => { ta.focus(); ta.select(); }, 40);
+  }
 }
 
 function exportForCloudy() {
