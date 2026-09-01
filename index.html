@@ -164,6 +164,21 @@
     .quickstart-settings-toggle { background: none; border: none; color: rgba(255,255,255,0.60); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 10px; }
     .quickstart-settings-toggle:hover { color: rgba(255,255,255,0.90); }
 
+    /* Profile type is a first-class choice because it changes both the AI
+       brief and the generated experience. Keep both modes visible rather
+       than hiding this important distinction in a dropdown. */
+    .profile-type-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .profile-type-option { text-align: left; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.72); cursor: pointer; transition: all .18s ease; }
+    .profile-type-option:hover { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.13); color: #fff; }
+    .profile-type-option.active { background: #fff; color: var(--sf-navy); border-color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .profile-type-option strong { display: block; font-size: 12px; font-weight: 700; }
+    .profile-type-option span { display: block; font-size: 10.5px; margin-top: 3px; line-height: 1.35; opacity: .82; }
+    .mode-b2b { display: none; }
+    body.profile-mode-b2b .mode-b2b { display: block; }
+    body.profile-mode-b2b label.mode-b2b { display: flex; }
+    body.profile-mode-b2b .mode-b2c { display: none; }
+    .account-mode-note { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: #F0F7FF; border: 1px solid #C7E2FF; color: #34516D; font-size: 12px; line-height: 1.45; }
+
     /* Editable row card (for affinity items, insights, etc.) */
     .row-card { background: #fff; border: 1px solid rgba(0,30,91,0.08); border-radius: 10px; padding: 12px; }
     .row-card + .row-card { margin-top: 8px; }
@@ -244,8 +259,16 @@
           <div class="quickstart" id="quickstart-panel">
             <div class="quickstart-inner">
               <div class="quickstart-eyebrow">⚡ Quick Start</div>
-              <div class="quickstart-title">Analyze customer URL with AI</div>
-              <div class="quickstart-sub">Paste the customer's homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.</div>
+              <div class="quickstart-title" id="quickstart-title">Analyze customer URL with AI</div>
+              <div class="quickstart-sub" id="quickstart-sub">Paste the customer's homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.</div>
+              <div class="profile-type-switch" role="radiogroup" aria-label="Profile type">
+                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true">
+                  <strong>Individual · B2C</strong><span>Generate a person-level unified profile.</span>
+                </button>
+                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false">
+                  <strong>Account · B2B</strong><span>Generate a company-level account profile.</span>
+                </button>
+              </div>
               <div class="quickstart-row">
                 <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">
                 <button id="quickstart-btn" class="quickstart-btn" onclick="onQuickStartAnalyze()">Analyze →</button>
@@ -399,8 +422,9 @@
         <div class="step-panel fade-in" data-step="1">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 2 of 7</div>
-            <h2 class="wizard-title mb-1">Profile Card</h2>
-            <p class="wizard-sub mb-6">The customer's demographic, contact, and segment membership shown in the left panel.</p>
+            <h2 class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
+            <p class="wizard-sub mb-6" id="step-2-sub">The customer's demographic, contact, and segment membership shown in the left panel.</p>
+            <div class="mode-b2c">
             <div class="grid grid-cols-2 gap-3">
               <div><label class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div><label class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -435,6 +459,24 @@
               </div>
               <input type="text" id="url-photo" placeholder="Or paste photo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onPhotoUrlChange()">
             </div>
+            </div>
+
+            <div class="mode-b2b">
+              <div class="account-mode-note">Account profiles replace person-level contact details with firmographics, ownership, and account hierarchy. Brand styling from Step 1 still applies to the generated view.</div>
+              <div class="grid grid-cols-2 gap-3 mt-4">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -443,11 +485,11 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 3 of 7</div>
-              <h2 class="wizard-title mb-1">Insights</h2>
-              <p class="wizard-sub mb-5">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
+              <h2 class="wizard-title mb-1" id="step-3-title">Insights</h2>
+              <p class="wizard-sub mb-5" id="step-3-sub">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
             </div>
 
-            <div class="border-t border-gray-100 pt-4">
+            <div class="mode-b2c border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Loyalty Insights</h3>
               <div class="grid grid-cols-2 gap-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -458,8 +500,25 @@
               </div>
             </div>
 
+            <div class="mode-b2b border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-1">Account Overview Metrics</h3>
+              <p class="text-xs text-gray-500 mb-3">These three scorecards anchor the account dashboard. Values are demo data until mapped to connected sources.</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              </div>
+            </div>
+
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Vertical Insights</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-3-insights-heading">Vertical Insights</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="insights-container" class="space-y-2"></div>
               <button onclick="addInsight()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Insight</button>
@@ -472,9 +531,14 @@
           <div class="wizard-card p-7 space-y-5">
             <div>
               <div class="wizard-eyebrow mb-2">Step 4 of 7</div>
-              <h2 class="wizard-title mb-1">Affinities</h2>
-              <p class="wizard-sub mb-5">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
+              <h2 class="wizard-title mb-1" id="step-4-title">Affinities</h2>
+              <p class="wizard-sub mb-5" id="step-4-sub">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
             </div>
+
+            <label class="mode-b2b flex items-start gap-3 p-3 rounded-lg border border-blue-100 bg-blue-50 text-xs text-gray-600">
+              <input type="checkbox" id="account-affinities-include" class="mt-0.5" onchange="onFieldChange()">
+              <span><strong class="text-gray-700">Include aggregated people signals</strong><br>Show account interests derived from associated contacts alongside account-level engagement.</span>
+            </label>
 
             <div class="grid grid-cols-2 gap-3">
               <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -515,12 +579,12 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 5 of 7</div>
-              <h2 class="wizard-title mb-1">Preferences, Events & Membership</h2>
-              <p class="wizard-sub mb-5">The three stacked cards in the middle column.</p>
+              <h2 class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
+              <p class="wizard-sub mb-5" id="step-5-sub">The three stacked cards in the middle column.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Preferences</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-preferences-heading">Preferences</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -536,7 +600,7 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Events</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-events-heading">Events</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -552,7 +616,7 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Membership Details</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-membership-heading">Membership Details</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -592,19 +656,19 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 6 of 7</div>
-              <h2 class="wizard-title mb-1">Einstein Recommendations & Activity</h2>
-              <p class="wizard-sub mb-5">The right column: AI-powered recommendation cards and the engagement timeline.</p>
+              <h2 class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
+              <p class="wizard-sub mb-5" id="step-6-sub">The right column: AI-powered recommendation cards and the engagement timeline.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Einstein Recommendations</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-recs-heading">Einstein Recommendations</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="recs-container" class="space-y-4"></div>
               <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Engagement Activity</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-activity-heading">Engagement Activity</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="activity-container" class="space-y-3"></div>
               <button onclick="addActivity()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Activity Item</button>

@@ -172,7 +172,65 @@ Rules:
 - **DENSITY MATTERS** — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count in each list, not the minimum. Empty white space looks unfinished. Populate extraCards (1-2) and rightExtraCards (0-1) with content the customer's marketing team would recognize as accurate to their business.
 - Return ONLY the JSON. No explanation.`;
 
-  function buildUserPrompt(scraped) {
+  const B2B_SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Salesforce Data Cloud unified ACCOUNT profile for a specific customer.
+
+You will receive scraped content from a customer website. Extract brand identity and generate a realistic, on-brand B2B account — a fictional but plausible company that buys from this customer's business. The account dashboard must feel appropriate for a sales, customer success, or account-management user.
+
+Return ONLY one JSON object. No preamble, markdown fences, or trailing prose. All commercial, product-usage, and score data is modeled demo data; make it internally consistent and plausible, never claim it was sourced from the website.
+
+Schema:
+{
+  "profileType": "b2b",
+  "brandName": string,
+  "industry": "recruiting" | "retail" | "healthcare" | "financial" | "generic",
+  "appName": string,
+  "tabName": string,
+  "colors": { "primary": "#RRGGBB", "accent": "#RRGGBB", "secondary": "#RRGGBB", "menu": "#RRGGBB", "menuText": "#RRGGBB" },
+  "navLinks": [string],
+  "account": {
+    "name": string, "headquarters": "City, ST", "accountId": string,
+    "industry": string, "type": string, "owner": string, "website": string,
+    "employees": string, "address": "Street\\nCity, ST ZIP", "tier": string,
+    "parentAccount": string
+  },
+  "accountMetrics": {
+    "revenue": string, "revenueTrend": string, "pipeline": string,
+    "usageScore": string, "usageTrend": string, "activeUsers": string,
+    "healthScore": string, "healthTrend": string, "supportCases": string,
+    "renewalDate": string
+  },
+  "insights": { "title": "Calculated Insights", "items": [ { "icon": "emoji", "label": string, "value": string } ] },
+  "affinities": {
+    "title": "Account Interests & Signals", "includeAggregate": true,
+    "seriesA": { "label": string, "color": "#RRGGBB" },
+    "seriesB": { "label": string, "color": "#RRGGBB" },
+    "groups": [ { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] } ]
+  },
+  "preferences": { "title": "Account Details", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "events": { "title": "Key Stakeholders", "icon": "emoji", "items": [ { "name": string, "date": string, "confirmation": string } ] },
+  "membership": { "title": "Products & Contracts", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "recommendations": { "title": "Next Best Actions", "items": [ { "eyebrow": string, "title": string, "cta": string, "image": "" } ] },
+  "activity": { "title": "Account Activity", "items": [ { "icon": "emoji", "title": string, "body": string, "time": string } ] },
+  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ],
+  "rightExtraCards": []
+}
+
+Rules:
+- The account must be a fictional organization that credibly buys from the analyzed customer's business; it is not the analyzed customer itself.
+- Account metrics must include revenue/ARR or spend, pipeline, usage, health, support, and renewal context. Use realistic rounded demo values.
+- Return 6 calculated insights, including Account Health, Expansion Propensity, Renewal/Churn Risk, Stakeholder Coverage, Product Adoption, and Engagement Score.
+- Include 2 affinity groups that combine aggregate people signals with account engagement. Explain scale only through the labels; do not invent source citations.
+- Put 3 named people in events, using date for their buying-committee role and confirmation for their job title.
+- Populate Products & Contracts, the Billing/Renewal extra card, 2 next-best actions, and 4-6 account activity items. The output should be dense enough to screenshot cleanly.
+- Keep actual brand colors discernible from the page when possible.
+- Return ONLY the JSON. No explanation.`;
+
+  function getSystemPrompt(profileType) {
+    return profileType === 'b2b' ? B2B_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  }
+
+  function buildUserPrompt(scraped, opts = {}) {
+    const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
     return `Customer URL: ${scraped.url}
 Site title: ${scraped.title || '(not extracted)'}
 Description: ${scraped.description || '(not extracted)'}
@@ -186,7 +244,7 @@ Nav links seen: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
 Body text (truncated):
 ${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from URL/domain alone)'}
 
-Now generate the Unified Profile JSON per the schema.`;
+Generate the ${profileType} Unified Profile JSON per the schema.`;
   }
 
   // Tolerant JSON parser — handles the three common ways AI models
@@ -286,5 +344,5 @@ Now generate the Unified Profile JSON per the schema.`;
     return truncated.replace(/,\s*$/, '') + closer;
   }
 
-  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, buildUserPrompt, parseAIResponseText };
+  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, getSystemPrompt, buildUserPrompt, parseAIResponseText };
 })();

@@ -168,6 +168,21 @@
     .quickstart-settings-toggle { background: none; border: none; color: rgba(255,255,255,0.60); font-size: 11px; cursor: pointer; text-decoration: underline; padding: 0; margin-top: 10px; }
     .quickstart-settings-toggle:hover { color: rgba(255,255,255,0.90); }
 
+    /* Profile type is a first-class choice because it changes both the AI
+       brief and the generated experience. Keep both modes visible rather
+       than hiding this important distinction in a dropdown. */
+    .profile-type-switch { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 14px; }
+    .profile-type-option { text-align: left; padding: 10px 12px; border-radius: 10px; background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); color: rgba(255,255,255,0.72); cursor: pointer; transition: all .18s ease; }
+    .profile-type-option:hover { border-color: rgba(255,255,255,0.46); background: rgba(255,255,255,0.13); color: #fff; }
+    .profile-type-option.active { background: #fff; color: var(--sf-navy); border-color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
+    .profile-type-option strong { display: block; font-size: 12px; font-weight: 700; }
+    .profile-type-option span { display: block; font-size: 10.5px; margin-top: 3px; line-height: 1.35; opacity: .82; }
+    .mode-b2b { display: none; }
+    body.profile-mode-b2b .mode-b2b { display: block; }
+    body.profile-mode-b2b label.mode-b2b { display: flex; }
+    body.profile-mode-b2b .mode-b2c { display: none; }
+    .account-mode-note { margin-top: 10px; padding: 10px 12px; border-radius: 9px; background: #F0F7FF; border: 1px solid #C7E2FF; color: #34516D; font-size: 12px; line-height: 1.45; }
+
     /* Editable row card (for affinity items, insights, etc.) */
     .row-card { background: #fff; border: 1px solid rgba(0,30,91,0.08); border-radius: 10px; padding: 12px; }
     .row-card + .row-card { margin-top: 8px; }
@@ -248,8 +263,16 @@
           <div class="quickstart" id="quickstart-panel">
             <div class="quickstart-inner">
               <div class="quickstart-eyebrow">⚡ Quick Start</div>
-              <div class="quickstart-title">Analyze customer URL with AI</div>
-              <div class="quickstart-sub">Paste the customer's homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.</div>
+              <div class="quickstart-title" id="quickstart-title">Analyze customer URL with AI</div>
+              <div class="quickstart-sub" id="quickstart-sub">Paste the customer's homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.</div>
+              <div class="profile-type-switch" role="radiogroup" aria-label="Profile type">
+                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true">
+                  <strong>Individual · B2C</strong><span>Generate a person-level unified profile.</span>
+                </button>
+                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false">
+                  <strong>Account · B2B</strong><span>Generate a company-level account profile.</span>
+                </button>
+              </div>
               <div class="quickstart-row">
                 <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">
                 <button id="quickstart-btn" class="quickstart-btn" onclick="onQuickStartAnalyze()">Analyze →</button>
@@ -403,8 +426,9 @@
         <div class="step-panel fade-in" data-step="1">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 2 of 7</div>
-            <h2 class="wizard-title mb-1">Profile Card</h2>
-            <p class="wizard-sub mb-6">The customer's demographic, contact, and segment membership shown in the left panel.</p>
+            <h2 class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
+            <p class="wizard-sub mb-6" id="step-2-sub">The customer's demographic, contact, and segment membership shown in the left panel.</p>
+            <div class="mode-b2c">
             <div class="grid grid-cols-2 gap-3">
               <div><label class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div><label class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -439,6 +463,24 @@
               </div>
               <input type="text" id="url-photo" placeholder="Or paste photo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onPhotoUrlChange()">
             </div>
+            </div>
+
+            <div class="mode-b2b">
+              <div class="account-mode-note">Account profiles replace person-level contact details with firmographics, ownership, and account hierarchy. Brand styling from Step 1 still applies to the generated view.</div>
+              <div class="grid grid-cols-2 gap-3 mt-4">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -447,11 +489,11 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 3 of 7</div>
-              <h2 class="wizard-title mb-1">Insights</h2>
-              <p class="wizard-sub mb-5">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
+              <h2 class="wizard-title mb-1" id="step-3-title">Insights</h2>
+              <p class="wizard-sub mb-5" id="step-3-sub">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
             </div>
 
-            <div class="border-t border-gray-100 pt-4">
+            <div class="mode-b2c border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Loyalty Insights</h3>
               <div class="grid grid-cols-2 gap-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -462,8 +504,25 @@
               </div>
             </div>
 
+            <div class="mode-b2b border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-1">Account Overview Metrics</h3>
+              <p class="text-xs text-gray-500 mb-3">These three scorecards anchor the account dashboard. Values are demo data until mapped to connected sources.</p>
+              <div class="grid grid-cols-2 gap-3">
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              </div>
+            </div>
+
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Vertical Insights</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-3-insights-heading">Vertical Insights</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="insights-container" class="space-y-2"></div>
               <button onclick="addInsight()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Insight</button>
@@ -476,9 +535,14 @@
           <div class="wizard-card p-7 space-y-5">
             <div>
               <div class="wizard-eyebrow mb-2">Step 4 of 7</div>
-              <h2 class="wizard-title mb-1">Affinities</h2>
-              <p class="wizard-sub mb-5">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
+              <h2 class="wizard-title mb-1" id="step-4-title">Affinities</h2>
+              <p class="wizard-sub mb-5" id="step-4-sub">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
             </div>
+
+            <label class="mode-b2b flex items-start gap-3 p-3 rounded-lg border border-blue-100 bg-blue-50 text-xs text-gray-600">
+              <input type="checkbox" id="account-affinities-include" class="mt-0.5" onchange="onFieldChange()">
+              <span><strong class="text-gray-700">Include aggregated people signals</strong><br>Show account interests derived from associated contacts alongside account-level engagement.</span>
+            </label>
 
             <div class="grid grid-cols-2 gap-3">
               <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
@@ -519,12 +583,12 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 5 of 7</div>
-              <h2 class="wizard-title mb-1">Preferences, Events & Membership</h2>
-              <p class="wizard-sub mb-5">The three stacked cards in the middle column.</p>
+              <h2 class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
+              <p class="wizard-sub mb-5" id="step-5-sub">The three stacked cards in the middle column.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Preferences</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-preferences-heading">Preferences</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -540,7 +604,7 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Events</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-events-heading">Events</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -556,7 +620,7 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Membership Details</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-membership-heading">Membership Details</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
@@ -596,19 +660,19 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 6 of 7</div>
-              <h2 class="wizard-title mb-1">Einstein Recommendations & Activity</h2>
-              <p class="wizard-sub mb-5">The right column: AI-powered recommendation cards and the engagement timeline.</p>
+              <h2 class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
+              <p class="wizard-sub mb-5" id="step-6-sub">The right column: AI-powered recommendation cards and the engagement timeline.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Einstein Recommendations</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-recs-heading">Einstein Recommendations</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="recs-container" class="space-y-4"></div>
               <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <h3 class="text-sm font-700 text-gray-800 mb-3">Engagement Activity</h3>
+              <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-activity-heading">Engagement Activity</h3>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="activity-container" class="space-y-3"></div>
               <button onclick="addActivity()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Activity Item</button>
@@ -1293,11 +1357,113 @@ const INDUSTRY_DEFAULTS = {
 function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
+  clone.profileType = 'b2c';
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
   if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
   if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
   if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
+}
+
+// B2B accounts share the brand, navigation, recommendations, and activity
+// primitives with B2C profiles, but have a purpose-built account schema and
+// a distinctly different rendered dashboard. Keeping this in defaults.js
+// makes mode switching and AI ingestion use the same predictable state shape.
+function cloneAccountIndustry(key) {
+  const accountSeeds = {
+    recruiting: { name: 'Westfield Athletics', industry: 'Education Services', type: 'Enterprise', headquarters: 'Chicago, IL' },
+    retail: { name: 'Northstar Retail Group', industry: 'Retail', type: 'Enterprise', headquarters: 'San Francisco, CA' },
+    healthcare: { name: 'Meridian Health Systems', industry: 'Healthcare', type: 'Enterprise', headquarters: 'Austin, TX' },
+    financial: { name: 'Harborline Capital', industry: 'Financial Services', type: 'Strategic', headquarters: 'New York, NY' },
+    generic: { name: 'Northstar Group', industry: 'Technology', type: 'Enterprise', headquarters: 'San Francisco, CA' }
+  };
+  const base = cloneIndustry(key);
+  const seed = accountSeeds[key] || accountSeeds.generic;
+  base.profileType = 'b2b';
+  base.tabName = seed.name;
+  base.account = {
+    name: seed.name,
+    headquarters: seed.headquarters,
+    accountId: '0017A00000B2B01',
+    industry: seed.industry,
+    type: seed.type,
+    owner: 'Morgan Lee',
+    website: 'www.northstargroup.example',
+    employees: '2,500',
+    address: `100 Market Street\n${seed.headquarters}`,
+    tier: 'Growth Account',
+    parentAccount: '—',
+    logo: ''
+  };
+  base.accountMetrics = {
+    revenue: '$1.28M',
+    revenueTrend: '↑ 12% MoM',
+    pipeline: '$428K',
+    usageScore: '74%',
+    usageTrend: '↑ 7% MoM',
+    activeUsers: '328 active users',
+    healthScore: '82%',
+    healthTrend: '↑ 6% MoM',
+    supportCases: '3 open cases',
+    renewalDate: 'Nov 30, 2026',
+    utilization: '81% utilization'
+  };
+  base.profile = {
+    name: seed.name,
+    city: seed.headquarters,
+    customerId: '0017A00000B2B01',
+    email: '', secondaryEmail: '', secondaryEmailLabel: '', secondaryEmailInclude: false,
+    phone: '', address: `100 Market Street\n${seed.headquarters}`, segment: 'Growth Account', photo: ''
+  };
+  base.loyalty = { title: 'Commercial Overview', memberId: '$1.28M', tier: 'Growth Account', points: '$428K', redeemedPoints: 'Nov 30, 2026' };
+  base.insights = {
+    title: 'Calculated Insights',
+    items: [
+      { icon: '💚', label: 'Account Health', value: '82% · Healthy' },
+      { icon: '↗', label: 'Expansion Propensity', value: '71% · High' },
+      { icon: '⚠', label: 'Renewal Risk', value: 'Low · 4 months out' },
+      { icon: '◉', label: 'Stakeholder Coverage', value: '8 of 10 roles mapped' },
+      { icon: '▦', label: 'Product Adoption', value: '74% · Trending up' },
+      { icon: '✦', label: 'Engagement Score', value: '84% · Highly engaged' }
+    ]
+  };
+  base.affinities = {
+    title: 'Account Interests & Signals',
+    includeAggregate: true,
+    seriesA: { label: 'People signals', color: base.colors.primary },
+    seriesB: { label: 'Account engagement', color: base.colors.accent },
+    groups: [
+      { name: 'Solution Interest', items: [{ label: 'Analytics', a: 82, b: 76 }, { label: 'Automation', a: 68, b: 72 }, { label: 'AI', a: 61, b: 67 }] },
+      { name: 'Intent Signals', items: [{ label: 'Expansion', a: 74, b: 81 }, { label: 'Renewal', a: 58, b: 66 }, { label: 'Integration', a: 63, b: 59 }] }
+    ]
+  };
+  base.preferences = {
+    title: 'Account Details', icon: '🏢',
+    items: [{ label: 'Account Tier', value: 'Growth Account' }, { label: 'Account Owner', value: 'Morgan Lee' }, { label: 'Employees', value: '2,500' }, { label: 'Parent Account', value: '—' }]
+  };
+  base.events = {
+    title: 'Key Stakeholders', icon: '👥',
+    items: [{ name: 'Avery Johnson', date: 'Executive Sponsor', confirmation: 'VP, Operations' }, { name: 'Priya Shah', date: 'Champion', confirmation: 'Director, Platform' }, { name: 'Jordan Kim', date: 'Economic Buyer', confirmation: 'CFO' }]
+  };
+  base.membership = {
+    title: 'Products & Contracts', icon: '📦',
+    items: [{ label: 'Core Platform', value: 'Enterprise · 250 seats' }, { label: 'Analytics', value: 'Growth add-on' }, { label: 'Renewal', value: 'Nov 30, 2026' }]
+  };
+  base.recommendations = {
+    title: 'Next Best Actions',
+    items: [{ eyebrow: 'Recommended:', title: 'Schedule an adoption review with the champion', cta: 'Activate', image: '' }, { eyebrow: 'Opportunity:', title: 'Introduce Analytics expansion for the renewal', cta: 'Suggest', image: '' }]
+  };
+  base.activity = {
+    title: 'Account Activity',
+    items: [{ icon: '↗', title: 'Usage increased', body: '<b>7%</b> month over month across active teams', time: '2 days ago' }, { icon: '◉', title: 'Executive sponsor engaged', body: 'Avery Johnson reviewed the <b>Q3 value summary</b>', time: '5 days ago' }, { icon: '⚠', title: 'Renewal planning started', body: 'Renewal is due in <b>120 days</b>', time: '1 week ago' }, { icon: '✦', title: 'Expansion signal detected', body: 'High interest in <b>Analytics</b> from 14 contacts', time: '2 weeks ago' }]
+  };
+  base.extraCards = [{ title: 'Billing & Renewal', icon: '📄', items: [{ label: 'Current ARR', value: '$1.28M' }, { label: 'Open Pipeline', value: '$428K' }, { label: 'Renewal Date', value: 'Nov 30, 2026' }] }];
+  base.rightExtraCards = [];
+  return base;
+}
+
+function cloneProfileMode(profileType, key) {
+  return profileType === 'b2b' ? cloneAccountIndustry(key) : cloneIndustry(key);
 }
 
 
@@ -1415,6 +1581,7 @@ function renderSectionIcon(icon, emojiFallback, bgColor) {
 
 function generateProfileHTML(state) {
   const s = state;
+  if (s.profileType === 'b2b') return generateAccountProfileHTML(s);
   const primary = s.colors.primary || '#001E5B';
   const accent = s.colors.accent || '#066AFE';
   const secondary = s.colors.secondary || '#EAF5FE';
@@ -2151,6 +2318,115 @@ body {
 </html>`;
 }
 
+// B2B account template. It intentionally has a different information
+// hierarchy from the person-level profile above: account identity and value
+// stay persistent, while commercial, adoption, relationship, and action
+// signals become the primary working surface.
+function generateAccountProfileHTML(state) {
+  const s = state;
+  const primary = s.colors?.primary || '#001E5B';
+  const accent = s.colors?.accent || '#066AFE';
+  const secondary = s.colors?.secondary || '#EAF5FE';
+  const menuBg = s.colors?.menu || '#FFFFFF';
+  const menuText = s.colors?.menuText || '#3E3E3C';
+  const pageBg = s.colors?.pageBg || '#F4F8FC';
+  const a = Object.assign({ name: 'Account', headquarters: '', accountId: '', industry: '', type: '', owner: '', website: '', employees: '', address: '', tier: '', parentAccount: '', logo: '' }, s.account || {});
+  const m = Object.assign({ revenue: '—', revenueTrend: '', pipeline: '—', usageScore: '—', usageTrend: '', activeUsers: '', healthScore: '—', healthTrend: '', supportCases: '', renewalDate: '—', utilization: '' }, s.accountMetrics || {});
+  const navLinks = Array.isArray(s.navLinks) ? s.navLinks : [];
+  const insights = Array.isArray(s.insights?.items) ? s.insights.items : [];
+  const affinities = s.affinities || { title: 'Account Interests & Signals', seriesA: {}, seriesB: {}, groups: [] };
+  const affinityGroups = Array.isArray(affinities.groups) ? affinities.groups : [];
+  const details = Array.isArray(s.preferences?.items) ? s.preferences.items : [];
+  const stakeholders = Array.isArray(s.events?.items) ? s.events.items : [];
+  const products = Array.isArray(s.membership?.items) ? s.membership.items : [];
+  const recommendations = Array.isArray(s.recommendations?.items) ? s.recommendations.items.slice(0, 2) : [];
+  const activity = Array.isArray(s.activity?.items) ? s.activity.items.slice(0, 5) : [];
+  const extraCards = Array.isArray(s.extraCards) ? s.extraCards.slice(0, 1) : [];
+  const initials = a.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'A';
+  const numberWidth = (value, fallback) => {
+    const number = Number.parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+    return `${Math.max(8, Math.min(100, Number.isFinite(number) ? number : fallback))}%`;
+  };
+  const accountMark = a.logo ? `<img src="${esc(a.logo)}" alt="">` : initials;
+  const affinityPanel = affinities.includeAggregate === false ? '' : `
+    <section class="b2b-card b2b-signals-card">
+      <div class="b2b-section-head">
+        <div><span class="b2b-overline">Aggregate intelligence</span><h2>${esc(affinities.title || 'Account Interests & Signals')}</h2></div>
+        <div class="b2b-legend"><span><i style="background:${esc(affinities.seriesA?.color || primary)}"></i>${esc(affinities.seriesA?.label || 'People signals')}</span><span><i style="background:${esc(affinities.seriesB?.color || accent)}"></i>${esc(affinities.seriesB?.label || 'Account engagement')}</span></div>
+      </div>
+      <div class="b2b-signal-grid">
+        ${affinityGroups.slice(0, 2).map(group => `
+          <div class="b2b-signal-group"><h3>${esc(group.name)}</h3>
+          ${(group.items || []).slice(0, 4).map(item => `
+            <div class="b2b-signal-row"><span>${esc(item.label)}</span><div class="b2b-signal-bars"><b style="width:${Math.max(0, Math.min(100, Number(item.a) || 0))}%;background:${esc(affinities.seriesA?.color || primary)}"></b><em style="width:${Math.max(0, Math.min(100, Number(item.b) || 0))}%;background:${esc(affinities.seriesB?.color || accent)}"></em></div></div>`).join('')}
+          </div>`).join('')}
+      </div>
+    </section>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(a.name)} — Account Unified Profile</title>
+<style>
+:root{--primary:${primary};--accent:${accent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--ink:#13213a;--muted:#60708a;--line:#dbe5f0;--card:#fff;}
+*{box-sizing:border-box}body{margin:0;min-width:1160px;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.35}.b2b-topbar{height:48px;padding:0 22px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f5f7fa);border-bottom:1px solid var(--line)}.b2b-brand{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--primary)}.b2b-brand-mark{width:28px;height:28px;border-radius:5px;background:var(--primary);color:#fff;display:grid;place-items:center;overflow:hidden;font-size:12px}.b2b-brand-mark img{width:100%;height:100%;object-fit:contain}.b2b-search{margin:auto;max-width:500px;flex:1;background:#fff;border:1px solid #cdd8e5;border-radius:5px;color:#8b98aa;padding:7px 12px}.b2b-actions{color:#6b7890;font-size:18px;letter-spacing:8px}.b2b-nav{height:45px;padding:0 22px;display:flex;align-items:stretch;gap:24px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.b2b-nav-app{display:flex;align-items:center;gap:8px;padding-right:18px;border-right:1px solid var(--line);font-size:15px;font-weight:700;color:var(--menu-text)}.b2b-waffle{font-size:17px;color:var(--accent)}.b2b-nav a{display:flex;align-items:center;text-decoration:none;color:var(--menu-text);white-space:nowrap;font-size:12px}.b2b-nav a:first-of-type{font-weight:700;color:var(--primary);border-bottom:3px solid var(--accent)}.b2b-nav-tab{margin-left:auto;display:flex;align-items:center;padding:0 14px;background:#fff;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;font-weight:600;white-space:nowrap}.b2b-shell{padding:14px;display:grid;grid-template-columns:278px minmax(540px,1fr) 276px;gap:14px;align-items:start}.b2b-card{background:var(--card);border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(16,35,68,.04)}.b2b-account-rail{background:linear-gradient(160deg,var(--primary),#111c3b);color:#fff;border:none;padding:20px 18px;min-height:692px}.b2b-account-head{display:flex;align-items:center;gap:12px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,.2)}.b2b-account-mark{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:var(--accent);border:2px solid rgba(255,255,255,.4);font-weight:700;font-size:18px;overflow:hidden}.b2b-account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.b2b-account-name{font-size:20px;font-weight:700;line-height:1.1}.b2b-account-location{margin-top:4px;color:rgba(255,255,255,.75);font-size:13px}.b2b-rail-fields{margin:18px 0 14px}.b2b-rail-field{display:grid;grid-template-columns:18px 86px 1fr;gap:6px;align-items:start;margin:10px 0;font-size:11.5px}.b2b-rail-icon{color:#b9d8ff}.b2b-rail-label{color:rgba(255,255,255,.68)}.b2b-rail-value{font-weight:600;overflow-wrap:anywhere}.b2b-rail-rule{height:1px;background:rgba(255,255,255,.19);margin:15px 0}.b2b-rail-stat{padding:11px 0;border-bottom:1px solid rgba(255,255,255,.16)}.b2b-rail-stat:last-of-type{border-bottom:0}.b2b-rail-stat span{display:block;color:rgba(255,255,255,.69);font-size:11px}.b2b-rail-stat strong{display:block;margin-top:3px;font-size:15px}.b2b-health-meter{display:flex;align-items:center;gap:9px;margin-top:16px;padding:10px;background:rgba(255,255,255,.08);border-radius:6px}.b2b-meter{width:39px;height:39px;border-radius:50%;border:5px solid rgba(255,255,255,.22);border-top-color:#56e0b2;border-right-color:#56e0b2}.b2b-health-meter b{font-size:12px}.b2b-health-meter small{display:block;color:rgba(255,255,255,.7);margin-top:2px}.b2b-powered{position:relative;margin-top:24px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.72);font-size:10px}.b2b-core{display:flex;flex-direction:column;gap:12px}.b2b-tabs{padding:0 16px;display:flex;gap:27px;height:47px;align-items:flex-end}.b2b-tabs span{padding:0 1px 11px;font-size:13px;color:#63718a;font-weight:600}.b2b-tabs span.active{color:var(--primary);border-bottom:3px solid var(--accent)}.b2b-overview{padding:13px}.b2b-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.b2b-section-head h2{margin:2px 0 0;font-size:16px;letter-spacing:-.01em}.b2b-overline{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-weight:800}.b2b-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.b2b-metric{min-height:188px;padding:13px;border:1px solid #d9e7ff;background:linear-gradient(180deg,#fff,#f7fbff)}.b2b-metric h3{margin:0;color:#263a58;font-size:14px}.b2b-metric-primary{display:flex;align-items:flex-end;gap:7px;margin-top:12px}.b2b-metric-primary strong{font-size:25px;line-height:1}.b2b-trend{padding:3px 7px;border-radius:99px;background:#e9f8ee;color:#247342;font-size:10px;font-weight:700}.b2b-spark{height:34px;margin:14px 0 12px;background:linear-gradient(172deg,transparent 43%,rgba(6,106,254,.16) 44%,rgba(6,106,254,.16) 75%,transparent 76%);border-bottom:2px solid var(--accent);clip-path:polygon(0 68%,12% 38%,24% 45%,36% 65%,48% 39%,60% 56%,72% 29%,84% 47%,100% 62%,100% 100%,0 100%)}.b2b-metric-row{display:flex;justify-content:space-between;gap:8px;border-top:1px solid #dce7f5;padding-top:8px;margin-top:8px;color:var(--muted);font-size:10.5px}.b2b-metric-row b{color:var(--ink);font-size:11px}.b2b-progress{height:7px;background:#dfe9f4;border-radius:99px;overflow:hidden;margin-top:10px}.b2b-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#6d8eff);border-radius:inherit}.b2b-details{padding:14px 16px}.b2b-details h2{font-size:15px;margin:0 0 12px}.b2b-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:36px}.b2b-detail{padding:8px 0;border-bottom:1px solid var(--line)}.b2b-detail label{display:block;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.b2b-detail div{margin-top:4px;font-size:12px;font-weight:600}.b2b-signals-card{padding:14px 16px}.b2b-legend{display:flex;gap:10px;color:var(--muted);font-size:10px}.b2b-legend span{display:flex;align-items:center;gap:4px}.b2b-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}.b2b-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.b2b-signal-group h3{font-size:11px;margin:0 0 7px}.b2b-signal-row{display:grid;grid-template-columns:92px 1fr;gap:7px;align-items:center;margin:7px 0;font-size:10.5px}.b2b-signal-row>span{text-align:right;color:#384a64}.b2b-signal-bars{height:14px;display:flex;flex-direction:column;justify-content:center;gap:2px}.b2b-signal-bars b,.b2b-signal-bars em{display:block;height:5px;border-radius:2px}.b2b-side{display:flex;flex-direction:column;gap:12px}.b2b-side-card{padding:14px 15px}.b2b-side-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:15px;font-weight:700}.b2b-side-icon{display:grid;place-items:center;width:23px;height:23px;color:#fff;background:var(--primary);border-radius:4px;font-size:12px}.b2b-alert{padding:10px 0;border-top:1px solid var(--line)}.b2b-alert:first-of-type{border-top:0;padding-top:0}.b2b-alert b{display:block;font-size:12px}.b2b-alert span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.b2b-alert .risk{color:#c23934}.b2b-action{border-top:1px solid var(--line);padding:12px 0}.b2b-action:first-of-type{border-top:0;padding-top:0}.b2b-action-eyebrow{color:var(--accent);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.b2b-action-title{font-weight:700;margin:4px 0 9px;font-size:12px;line-height:1.3}.b2b-action button{border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:4px;padding:5px 12px;font-weight:700;font-size:11px}.b2b-insight{display:grid;grid-template-columns:22px 1fr auto;gap:7px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:11px}.b2b-insight:first-of-type{border-top:0;padding-top:0}.b2b-insight-icon{color:var(--accent);font-weight:800}.b2b-insight-value{font-weight:700;text-align:right;max-width:94px}.b2b-table{width:100%;border-collapse:collapse;font-size:11px}.b2b-table th{text-align:left;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em;padding:0 0 7px}.b2b-table td{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.b2b-table td:first-child{font-weight:700;color:#235da5}.b2b-table td small{display:block;color:var(--muted);margin-top:2px}.b2b-activity{padding:0;overflow:hidden}.b2b-activity .b2b-side-head{padding:14px 15px;margin:0;border-bottom:1px solid var(--line)}.b2b-activity-item{display:flex;gap:8px;padding:10px 14px;border-top:1px solid #eef3f8}.b2b-activity-item:first-of-type{border-top:0}.b2b-activity-bullet{width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:11px;flex:0 0 auto}.b2b-activity-item b{display:block;font-size:11px}.b2b-activity-item p{margin:2px 0 0;color:var(--muted);font-size:10px}.b2b-activity-item time{display:block;color:#8794a7;font-size:9px;margin-top:2px}.b2b-empty{color:var(--muted);font-size:11px;padding:8px 0}
+</style>
+</head>
+<body>
+  <header class="b2b-topbar"><div class="b2b-brand"><span class="b2b-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Data Cloud')}</span></div><div class="b2b-search">⌕&nbsp;&nbsp;Search this account, contacts, opportunities…</div><div class="b2b-actions">☆ ＋ ? ⚙ ●</div></header>
+  <nav class="b2b-nav"><div class="b2b-nav-app"><span class="b2b-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${navLinks.map(link => `<a href="#">${esc(link)}</a>`).join('')}<div class="b2b-nav-tab">▣&nbsp; ${esc(s.tabName || a.name)}</div></nav>
+  <main class="b2b-shell">
+    <aside class="b2b-card b2b-account-rail">
+      <div class="b2b-account-head"><div class="b2b-account-mark">${accountMark}</div><div><div class="b2b-account-name">${esc(a.name)}</div><div class="b2b-account-location">${esc(a.headquarters)}</div></div></div>
+      <div class="b2b-rail-fields">
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▣</span><span class="b2b-rail-label">Account ID</span><span class="b2b-rail-value">${esc(a.accountId)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▥</span><span class="b2b-rail-label">Industry</span><span class="b2b-rail-value">${esc(a.industry)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▰</span><span class="b2b-rail-label">Type</span><span class="b2b-rail-value">${esc(a.type)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">⌖</span><span class="b2b-rail-label">Employees</span><span class="b2b-rail-value">${esc(a.employees)}</span></div>
+      </div>
+      <div class="b2b-rail-rule"></div>
+      <div class="b2b-rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div>
+      <div class="b2b-rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div>
+      <div class="b2b-rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div>
+      <div class="b2b-rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div>
+      <div class="b2b-health-meter"><div class="b2b-meter"></div><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Calculated from adoption, engagement & support')}</small></div></div>
+      <div class="b2b-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div>
+    </aside>
+
+    <section class="b2b-core">
+      <div class="b2b-card b2b-tabs"><span class="active">Overview</span><span>People</span><span>Sales</span><span>Success</span><span>Related</span></div>
+      <section class="b2b-card b2b-overview">
+        <div class="b2b-section-head"><div><span class="b2b-overline">Account 360</span><h2>Commercial, usage & customer experience</h2></div><span class="b2b-overline">Modeled demo data</span></div>
+        <div class="b2b-metric-grid">
+          <article class="b2b-metric"><h3>Commercial</h3><div class="b2b-metric-primary"><strong>${esc(m.revenue)}</strong><span class="b2b-trend">${esc(m.revenueTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Open pipeline</span><b>${esc(m.pipeline)}</b></div><div class="b2b-metric-row"><span>Renewal</span><b>${esc(m.renewalDate)}</b></div></article>
+          <article class="b2b-metric"><h3>Product Usage</h3><div class="b2b-metric-primary"><strong>${esc(m.usageScore)}</strong><span class="b2b-trend">${esc(m.usageTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Adoption</span><b>${esc(m.activeUsers)}</b></div><div class="b2b-progress"><i style="width:${numberWidth(m.usageScore, 65)}"></i></div><div class="b2b-metric-row"><span>Utilization</span><b>${esc(m.utilization || m.usageScore)}</b></div></article>
+          <article class="b2b-metric"><h3>Customer Experience</h3><div class="b2b-metric-primary"><strong>${esc(m.healthScore)}</strong><span class="b2b-trend">${esc(m.healthTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Support</span><b>${esc(m.supportCases)}</b></div><div class="b2b-progress"><i style="width:${numberWidth(m.healthScore, 72)}"></i></div><div class="b2b-metric-row"><span>Relationship</span><b>${esc(insights.find(item => /stakeholder/i.test(item.label))?.value || 'Mapped')}</b></div></article>
+        </div>
+      </section>
+      <section class="b2b-card b2b-details"><h2>Account details</h2><div class="b2b-detail-grid">
+        <div class="b2b-detail"><label>Account owner</label><div>${esc(a.owner)}</div></div><div class="b2b-detail"><label>Website</label><div>${esc(a.website)}</div></div>
+        <div class="b2b-detail"><label>Account type</label><div>${esc(a.type)}</div></div><div class="b2b-detail"><label>Parent account</label><div>${esc(a.parentAccount)}</div></div>
+        ${details.slice(0, 4).map(item => `<div class="b2b-detail"><label>${esc(item.label)}</label><div>${esc(item.value)}</div></div>`).join('')}
+      </div></section>
+      ${affinityPanel}
+    </section>
+
+    <aside class="b2b-side">
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">▤</span>Notification Center</div><div class="b2b-alert"><b class="risk">Renewal planning window</b><span>Renewal ${esc(m.renewalDate)} · review coverage and adoption now.</span></div><div class="b2b-alert"><b>Account engagement ${esc(m.usageTrend || 'trending')}</b><span>${esc(m.activeUsers || 'Usage signal')} with monitored stakeholder activity.</span></div></section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">✦</span>${esc(s.recommendations?.title || 'Next Best Actions')}</div>${recommendations.length ? recommendations.map(rec => `<div class="b2b-action"><div class="b2b-action-eyebrow">${esc(rec.eyebrow)}</div><div class="b2b-action-title">${esc(rec.title)}</div><button>${esc(rec.cta || 'Activate')}</button></div>`).join('') : '<div class="b2b-empty">No actions configured.</div>'}</section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">◎</span>${esc(s.insights?.title || 'Calculated Insights')}</div>${insights.slice(0, 6).map(item => `<div class="b2b-insight"><span class="b2b-insight-icon">${raw(item.icon || '•')}</span><span>${esc(item.label)}</span><span class="b2b-insight-value">${esc(item.value)}</span></div>`).join('')}</section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">♙</span>${esc(s.events?.title || 'Key Stakeholders')}</div><table class="b2b-table"><thead><tr><th>Person</th><th>Role</th></tr></thead><tbody>${stakeholders.slice(0, 4).map(item => `<tr><td>${esc(item.name)}<small>${esc(item.confirmation)}</small></td><td>${esc(item.date)}</td></tr>`).join('')}</tbody></table></section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">▣</span>${esc(s.membership?.title || 'Products & Contracts')}</div><table class="b2b-table"><tbody>${products.slice(0, 4).map(item => `<tr><td>${esc(item.label)}</td><td>${esc(item.value)}</td></tr>`).join('')}</tbody></table></section>
+      ${extraCards.map(card => `<section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">${raw(card.icon || '▤')}</span>${esc(card.title)}</div><table class="b2b-table"><tbody>${(card.items || []).slice(0, 4).map(item => `<tr><td>${esc(item.label)}</td><td>${esc(item.value)}</td></tr>`).join('')}</tbody></table></section>`).join('')}
+      <section class="b2b-card b2b-activity"><div class="b2b-side-head"><span class="b2b-side-icon">≡</span>${esc(s.activity?.title || 'Account Activity')}</div>${activity.map(item => `<div class="b2b-activity-item"><span class="b2b-activity-bullet">${raw(item.icon || '•')}</span><div><b>${esc(item.title)}</b><p>${raw(item.body)}</p><time>${esc(item.time)}</time></div></div>`).join('')}</section>
+    </aside>
+  </main>
+</body>
+</html>`;
+}
+
 
 // ==== inlined from ./js/pagehost.js ====
 // ============================================================
@@ -2327,7 +2603,65 @@ Rules:
 - **DENSITY MATTERS** — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count in each list, not the minimum. Empty white space looks unfinished. Populate extraCards (1-2) and rightExtraCards (0-1) with content the customer's marketing team would recognize as accurate to their business.
 - Return ONLY the JSON. No explanation.`;
 
-  function buildUserPrompt(scraped) {
+  const B2B_SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Salesforce Data Cloud unified ACCOUNT profile for a specific customer.
+
+You will receive scraped content from a customer website. Extract brand identity and generate a realistic, on-brand B2B account — a fictional but plausible company that buys from this customer's business. The account dashboard must feel appropriate for a sales, customer success, or account-management user.
+
+Return ONLY one JSON object. No preamble, markdown fences, or trailing prose. All commercial, product-usage, and score data is modeled demo data; make it internally consistent and plausible, never claim it was sourced from the website.
+
+Schema:
+{
+  "profileType": "b2b",
+  "brandName": string,
+  "industry": "recruiting" | "retail" | "healthcare" | "financial" | "generic",
+  "appName": string,
+  "tabName": string,
+  "colors": { "primary": "#RRGGBB", "accent": "#RRGGBB", "secondary": "#RRGGBB", "menu": "#RRGGBB", "menuText": "#RRGGBB" },
+  "navLinks": [string],
+  "account": {
+    "name": string, "headquarters": "City, ST", "accountId": string,
+    "industry": string, "type": string, "owner": string, "website": string,
+    "employees": string, "address": "Street\\nCity, ST ZIP", "tier": string,
+    "parentAccount": string
+  },
+  "accountMetrics": {
+    "revenue": string, "revenueTrend": string, "pipeline": string,
+    "usageScore": string, "usageTrend": string, "activeUsers": string,
+    "healthScore": string, "healthTrend": string, "supportCases": string,
+    "renewalDate": string
+  },
+  "insights": { "title": "Calculated Insights", "items": [ { "icon": "emoji", "label": string, "value": string } ] },
+  "affinities": {
+    "title": "Account Interests & Signals", "includeAggregate": true,
+    "seriesA": { "label": string, "color": "#RRGGBB" },
+    "seriesB": { "label": string, "color": "#RRGGBB" },
+    "groups": [ { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] } ]
+  },
+  "preferences": { "title": "Account Details", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "events": { "title": "Key Stakeholders", "icon": "emoji", "items": [ { "name": string, "date": string, "confirmation": string } ] },
+  "membership": { "title": "Products & Contracts", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "recommendations": { "title": "Next Best Actions", "items": [ { "eyebrow": string, "title": string, "cta": string, "image": "" } ] },
+  "activity": { "title": "Account Activity", "items": [ { "icon": "emoji", "title": string, "body": string, "time": string } ] },
+  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ],
+  "rightExtraCards": []
+}
+
+Rules:
+- The account must be a fictional organization that credibly buys from the analyzed customer's business; it is not the analyzed customer itself.
+- Account metrics must include revenue/ARR or spend, pipeline, usage, health, support, and renewal context. Use realistic rounded demo values.
+- Return 6 calculated insights, including Account Health, Expansion Propensity, Renewal/Churn Risk, Stakeholder Coverage, Product Adoption, and Engagement Score.
+- Include 2 affinity groups that combine aggregate people signals with account engagement. Explain scale only through the labels; do not invent source citations.
+- Put 3 named people in events, using date for their buying-committee role and confirmation for their job title.
+- Populate Products & Contracts, the Billing/Renewal extra card, 2 next-best actions, and 4-6 account activity items. The output should be dense enough to screenshot cleanly.
+- Keep actual brand colors discernible from the page when possible.
+- Return ONLY the JSON. No explanation.`;
+
+  function getSystemPrompt(profileType) {
+    return profileType === 'b2b' ? B2B_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  }
+
+  function buildUserPrompt(scraped, opts = {}) {
+    const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
     return `Customer URL: ${scraped.url}
 Site title: ${scraped.title || '(not extracted)'}
 Description: ${scraped.description || '(not extracted)'}
@@ -2341,7 +2675,7 @@ Nav links seen: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
 Body text (truncated):
 ${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from URL/domain alone)'}
 
-Now generate the Unified Profile JSON per the schema.`;
+Generate the ${profileType} Unified Profile JSON per the schema.`;
   }
 
   // Tolerant JSON parser — handles the three common ways AI models
@@ -2441,7 +2775,7 @@ Now generate the Unified Profile JSON per the schema.`;
     return truncated.replace(/,\s*$/, '') + closer;
   }
 
-  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, buildUserPrompt, parseAIResponseText };
+  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, getSystemPrompt, buildUserPrompt, parseAIResponseText };
 })();
 
 
@@ -2695,13 +3029,15 @@ Now generate the Unified Profile JSON per the schema.`;
 
   // Build image generation prompts from the parsed AI profile.
   // Returns an array of { slot, prompt } objects.
-  function buildImagePrompts(parsed) {
+  function buildImagePrompts(parsed, profileType) {
     const prompts = [];
     const brand = parsed.brandName || 'company';
     const industry = parsed.industry || 'generic';
 
-    // Profile photo — realistic headshot
-    if (!parsed.profile?.photo) {
+    // A person-level profile benefits from a headshot. Account profiles use a
+    // company monogram/logo treatment instead, so don't spend an image call on
+    // a misleading individual portrait in B2B mode.
+    if (profileType !== 'b2b' && !parsed.profile?.photo) {
       const name = parsed.profile?.name || 'person';
       const city = parsed.profile?.city || '';
       prompts.push({
@@ -2752,9 +3088,10 @@ Now generate the Unified Profile JSON per the schema.`;
     if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
+    const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
     const { text, model_used } = await callLLM({
-      prompt: shared.buildUserPrompt(scraped),
-      system: shared.SYSTEM_PROMPT,
+      prompt: shared.buildUserPrompt(scraped, { profileType: profileType }),
+      system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
       tier: tier,
       maxTokens: 8000
     });
@@ -2773,7 +3110,7 @@ Now generate the Unified Profile JSON per the schema.`;
 
     // Generate images for profile photo + recommendation cards
     // Only when using the default (Gemini) backend which has the image endpoint
-    const imagePrompts = buildImagePrompts(parsed);
+    const imagePrompts = buildImagePrompts(parsed, profileType);
     if (imagePrompts.length > 0 && provider === 'default') {
       onStatus('generating_images');
       try {
@@ -2822,6 +3159,67 @@ state.brandName = 'NCSA College Recruiting';
 state.logo = '';
 state.userAvatar = '';
 
+function isB2B() { return state.profileType === 'b2b'; }
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateProfileModeUI() {
+  const b2b = isB2B();
+  document.body.classList.toggle('profile-mode-b2b', b2b);
+  const b2cButton = document.getElementById('profile-type-b2c');
+  const b2bButton = document.getElementById('profile-type-b2b');
+  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); }
+  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); }
+
+  setText('quickstart-title', b2b ? 'Analyze customer URL for an account profile' : 'Analyze customer URL with AI');
+  setText('quickstart-sub', b2b
+    ? 'Paste the customer’s homepage — AI extracts brand context and images, then creates a plausible account-level Unified Profile with commercial, usage, and health signals.'
+    : 'Paste the customer’s homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.');
+  setText('step-2-title', b2b ? 'Account Profile' : 'Profile Card');
+  setText('step-2-sub', b2b ? 'Firmographics, ownership, hierarchy, and account identity shown in the left rail.' : 'The customer’s demographic, contact, and segment membership shown in the left panel.');
+  setText('step-3-title', b2b ? 'Account Metrics & Insights' : 'Insights');
+  setText('step-3-sub', b2b ? 'Configure commercial, product-usage, and customer-health scorecards alongside calculated insights.' : 'Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).');
+  setText('step-3-insights-heading', b2b ? 'Calculated Insights' : 'Vertical Insights');
+  setText('step-4-title', b2b ? 'Account Signals' : 'Affinities');
+  setText('step-4-sub', b2b ? 'Optionally aggregate contacts’ interests and intent with company-level engagement signals.' : 'The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).');
+  setText('step-5-title', b2b ? 'Account Details & Relationships' : 'Preferences, Events & Membership');
+  setText('step-5-sub', b2b ? 'Configure operational details, key stakeholders, products, contracts, and supporting account cards.' : 'The three stacked cards in the middle column.');
+  setText('step-5-preferences-heading', b2b ? 'Account Details' : 'Preferences');
+  setText('step-5-events-heading', b2b ? 'Key Stakeholders' : 'Events');
+  setText('step-5-membership-heading', b2b ? 'Products & Contracts' : 'Membership Details');
+  setText('step-6-title', b2b ? 'Next Best Actions & Account Activity' : 'Einstein Recommendations & Activity');
+  setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
+  setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
+  setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
+}
+
+function setProfileType(profileType) {
+  const next = profileType === 'b2b' ? 'b2b' : 'b2c';
+  if ((state.profileType || 'b2c') === next) return;
+  if (currentStep > 0 && !confirm(`Switching to a ${next === 'b2b' ? 'B2B account' : 'B2C individual'} profile replaces mode-specific fields. Brand styling and website analysis are retained. Continue?`)) return;
+
+  const key = state._industry || document.getElementById('brand-industry')?.value || 'recruiting';
+  const nextState = cloneProfileMode(next, key);
+  // Preserve the parts that belong to the customer brand rather than the
+  // generated profile. This makes switching modes feel deliberate, not reset.
+  nextState._industry = key;
+  nextState.brandName = state.brandName || nextState.brandName;
+  nextState.appName = state.appName || nextState.appName;
+  nextState.logo = state.logo || '';
+  nextState.userAvatar = state.userAvatar || '';
+  nextState.userName = state.userName || '';
+  nextState.colors = Object.assign({}, nextState.colors, state.colors || {});
+  nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
+  nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
+  state = nextState;
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+}
+
 // Debounce the preview iframe refresh — every keystroke otherwise re-parses a big HTML doc.
 let previewTimer = null;
 function refreshPreview() {
@@ -2849,6 +3247,7 @@ window.addEventListener('resize', fitPreviewScale);
 // ─── STATE ↔ DOM binding ────────────────────────────────────
 
 function fillStaticFields() {
+  if (!state.profileType) state.profileType = 'b2c';
   document.getElementById('brand-name').value = state.brandName || '';
   document.getElementById('brand-industry').value = state._industry || 'recruiting';
   document.getElementById('app-name').value = state.appName || 'Data Cloud';
@@ -2914,6 +3313,34 @@ function fillStaticFields() {
   document.getElementById('recs-title').value = state.recommendations.title;
   document.getElementById('activity-title').value = state.activity.title;
   document.getElementById('tab-name').value = state.tabName;
+
+  const account = state.account || {};
+  const metrics = state.accountMetrics || {};
+  const fillAccount = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
+  fillAccount('account-name', account.name);
+  fillAccount('account-headquarters', account.headquarters);
+  fillAccount('account-id', account.accountId);
+  fillAccount('account-industry', account.industry);
+  fillAccount('account-type', account.type);
+  fillAccount('account-owner', account.owner);
+  fillAccount('account-website', account.website);
+  fillAccount('account-employees', account.employees);
+  fillAccount('account-tier', account.tier);
+  fillAccount('account-parent', account.parentAccount);
+  fillAccount('account-address', account.address);
+  fillAccount('metric-revenue', metrics.revenue);
+  fillAccount('metric-revenue-trend', metrics.revenueTrend);
+  fillAccount('metric-pipeline', metrics.pipeline);
+  fillAccount('metric-usage-score', metrics.usageScore);
+  fillAccount('metric-usage-trend', metrics.usageTrend);
+  fillAccount('metric-active-users', metrics.activeUsers);
+  fillAccount('metric-health-score', metrics.healthScore);
+  fillAccount('metric-health-trend', metrics.healthTrend);
+  fillAccount('metric-support-cases', metrics.supportCases);
+  fillAccount('metric-renewal-date', metrics.renewalDate);
+  const affinityToggle = document.getElementById('account-affinities-include');
+  if (affinityToggle) affinityToggle.checked = state.affinities.includeAggregate !== false;
+  updateProfileModeUI();
 }
 
 function readStaticFields() {
@@ -2959,6 +3386,35 @@ function readStaticFields() {
   state.recommendations.title = document.getElementById('recs-title').value;
   state.activity.title = document.getElementById('activity-title').value;
   state.tabName = document.getElementById('tab-name').value;
+
+  if (isB2B()) {
+    if (!state.account) state.account = {};
+    if (!state.accountMetrics) state.accountMetrics = {};
+    const readAccount = (id) => document.getElementById(id)?.value || '';
+    state.account.name = readAccount('account-name');
+    state.account.headquarters = readAccount('account-headquarters');
+    state.account.accountId = readAccount('account-id');
+    state.account.industry = readAccount('account-industry');
+    state.account.type = readAccount('account-type');
+    state.account.owner = readAccount('account-owner');
+    state.account.website = readAccount('account-website');
+    state.account.employees = readAccount('account-employees');
+    state.account.tier = readAccount('account-tier');
+    state.account.parentAccount = readAccount('account-parent');
+    state.account.address = readAccount('account-address');
+    state.accountMetrics.revenue = readAccount('metric-revenue');
+    state.accountMetrics.revenueTrend = readAccount('metric-revenue-trend');
+    state.accountMetrics.pipeline = readAccount('metric-pipeline');
+    state.accountMetrics.usageScore = readAccount('metric-usage-score');
+    state.accountMetrics.usageTrend = readAccount('metric-usage-trend');
+    state.accountMetrics.activeUsers = readAccount('metric-active-users');
+    state.accountMetrics.healthScore = readAccount('metric-health-score');
+    state.accountMetrics.healthTrend = readAccount('metric-health-trend');
+    state.accountMetrics.supportCases = readAccount('metric-support-cases');
+    state.accountMetrics.renewalDate = readAccount('metric-renewal-date');
+    state.affinities.includeAggregate = !!document.getElementById('account-affinities-include')?.checked;
+    state.tabName = state.account.name || state.tabName;
+  }
 }
 
 // Called by every input onchange. Read → re-render dynamic lists that
@@ -3005,7 +3461,7 @@ function onIndustryChange() {
     return;
   }
   const key = document.getElementById('brand-industry').value;
-  state = cloneIndustry(key);
+  state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
@@ -3088,17 +3544,18 @@ function removePreference(i) { state.preferences.items.splice(i, 1); renderPrefe
 
 function renderEvents() {
   const c = document.getElementById('events-container');
+  const b2b = isB2B();
   c.innerHTML = state.events.items.map((ev, i) => `
     <div class="row-card">
       <div class="grid grid-cols-12 gap-2 items-center">
-        <input type="text" value="${escAttr(ev.name)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Event name" oninput="state.events.items[${i}].name=this.value; refreshPreview()">
-        <input type="text" value="${escAttr(ev.date)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Date" oninput="state.events.items[${i}].date=this.value; refreshPreview()">
-        <input type="text" value="${escAttr(ev.confirmation)}" class="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Confirmation #" oninput="state.events.items[${i}].confirmation=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.name)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Stakeholder name' : 'Event name'}" oninput="state.events.items[${i}].name=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.date)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Role' : 'Date'}" oninput="state.events.items[${i}].date=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.confirmation)}" class="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Title' : 'Confirmation #'}" oninput="state.events.items[${i}].confirmation=this.value; refreshPreview()">
         <button class="col-span-1 icon-btn danger" onclick="removeEvent(${i})">×</button>
       </div>
     </div>`).join('');
 }
-function addEvent() { state.events.items.push({ name: 'New Event', date: '', confirmation: '' }); renderEvents(); refreshPreview(); }
+function addEvent() { state.events.items.push({ name: isB2B() ? 'New Stakeholder' : 'New Event', date: '', confirmation: '' }); renderEvents(); refreshPreview(); }
 function removeEvent(i) { state.events.items.splice(i, 1); renderEvents(); refreshPreview(); }
 
 function renderMembership() {
@@ -3334,7 +3791,7 @@ function onPhotoUrlChange() {
 function startOver() {
   if (!confirm('Reset everything back to industry defaults?')) return;
   const key = document.getElementById('brand-industry').value || 'recruiting';
-  state = cloneIndustry(key);
+  state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
@@ -3469,12 +3926,13 @@ function exportForCloudy() {
 function applyAIProfile(ai) {
   // Preserve current industry unless AI came back with something else.
   const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
-  const base = cloneIndustry(industry);
+  const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
   base.appName = ai.appName || base.appName;
-  base.tabName = ai.tabName || (ai.profile && ai.profile.name) || base.tabName;
+  base.tabName = ai.tabName || (profileType === 'b2b' ? ai.account?.name : ai.profile?.name) || base.tabName;
 
   if (ai.colors) {
     if (ai.colors.primary)   base.colors.primary = ai.colors.primary;
@@ -3487,6 +3945,12 @@ function applyAIProfile(ai) {
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
+  if (profileType === 'b2b') {
+    if (ai.account) base.account = Object.assign({}, base.account, ai.account);
+    if (ai.accountMetrics) base.accountMetrics = Object.assign({}, base.accountMetrics, ai.accountMetrics);
+    base.profileType = 'b2b';
+    base.tabName = ai.tabName || base.account.name || base.tabName;
+  }
   if (Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
   if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
   if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
@@ -3727,6 +4191,7 @@ async function onQuickStartAnalyze() {
   try {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
+      profileType: state.profileType || 'b2c',
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
@@ -3734,7 +4199,8 @@ async function onQuickStartAnalyze() {
       }
     });
     applyAIProfile(ai);
-    status.textContent = `✓ Applied ${INDUSTRY_DEFAULTS[state._industry].label} profile from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}`;
+    const kind = isB2B() ? 'account profile' : 'individual profile';
+    status.textContent = `✓ Applied ${INDUSTRY_DEFAULTS[state._industry].label} ${kind} from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}`;
   } catch (e) {
     errBox.style.display = 'block';
     errBox.textContent = friendlyError(e);

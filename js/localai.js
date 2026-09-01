@@ -247,13 +247,15 @@
 
   // Build image generation prompts from the parsed AI profile.
   // Returns an array of { slot, prompt } objects.
-  function buildImagePrompts(parsed) {
+  function buildImagePrompts(parsed, profileType) {
     const prompts = [];
     const brand = parsed.brandName || 'company';
     const industry = parsed.industry || 'generic';
 
-    // Profile photo — realistic headshot
-    if (!parsed.profile?.photo) {
+    // A person-level profile benefits from a headshot. Account profiles use a
+    // company monogram/logo treatment instead, so don't spend an image call on
+    // a misleading individual portrait in B2B mode.
+    if (profileType !== 'b2b' && !parsed.profile?.photo) {
       const name = parsed.profile?.name || 'person';
       const city = parsed.profile?.city || '';
       prompts.push({
@@ -304,9 +306,10 @@
     if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
 
     onStatus('analyzing');
+    const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
     const { text, model_used } = await callLLM({
-      prompt: shared.buildUserPrompt(scraped),
-      system: shared.SYSTEM_PROMPT,
+      prompt: shared.buildUserPrompt(scraped, { profileType: profileType }),
+      system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
       tier: tier,
       maxTokens: 8000
     });
@@ -325,7 +328,7 @@
 
     // Generate images for profile photo + recommendation cards
     // Only when using the default (Gemini) backend which has the image endpoint
-    const imagePrompts = buildImagePrompts(parsed);
+    const imagePrompts = buildImagePrompts(parsed, profileType);
     if (imagePrompts.length > 0 && provider === 'default') {
       onStatus('generating_images');
       try {

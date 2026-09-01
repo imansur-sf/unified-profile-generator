@@ -9,6 +9,67 @@ state.brandName = 'NCSA College Recruiting';
 state.logo = '';
 state.userAvatar = '';
 
+function isB2B() { return state.profileType === 'b2b'; }
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateProfileModeUI() {
+  const b2b = isB2B();
+  document.body.classList.toggle('profile-mode-b2b', b2b);
+  const b2cButton = document.getElementById('profile-type-b2c');
+  const b2bButton = document.getElementById('profile-type-b2b');
+  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); }
+  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); }
+
+  setText('quickstart-title', b2b ? 'Analyze customer URL for an account profile' : 'Analyze customer URL with AI');
+  setText('quickstart-sub', b2b
+    ? 'Paste the customer’s homepage — AI extracts brand context and images, then creates a plausible account-level Unified Profile with commercial, usage, and health signals.'
+    : 'Paste the customer’s homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.');
+  setText('step-2-title', b2b ? 'Account Profile' : 'Profile Card');
+  setText('step-2-sub', b2b ? 'Firmographics, ownership, hierarchy, and account identity shown in the left rail.' : 'The customer’s demographic, contact, and segment membership shown in the left panel.');
+  setText('step-3-title', b2b ? 'Account Metrics & Insights' : 'Insights');
+  setText('step-3-sub', b2b ? 'Configure commercial, product-usage, and customer-health scorecards alongside calculated insights.' : 'Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).');
+  setText('step-3-insights-heading', b2b ? 'Calculated Insights' : 'Vertical Insights');
+  setText('step-4-title', b2b ? 'Account Signals' : 'Affinities');
+  setText('step-4-sub', b2b ? 'Optionally aggregate contacts’ interests and intent with company-level engagement signals.' : 'The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).');
+  setText('step-5-title', b2b ? 'Account Details & Relationships' : 'Preferences, Events & Membership');
+  setText('step-5-sub', b2b ? 'Configure operational details, key stakeholders, products, contracts, and supporting account cards.' : 'The three stacked cards in the middle column.');
+  setText('step-5-preferences-heading', b2b ? 'Account Details' : 'Preferences');
+  setText('step-5-events-heading', b2b ? 'Key Stakeholders' : 'Events');
+  setText('step-5-membership-heading', b2b ? 'Products & Contracts' : 'Membership Details');
+  setText('step-6-title', b2b ? 'Next Best Actions & Account Activity' : 'Einstein Recommendations & Activity');
+  setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
+  setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
+  setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
+}
+
+function setProfileType(profileType) {
+  const next = profileType === 'b2b' ? 'b2b' : 'b2c';
+  if ((state.profileType || 'b2c') === next) return;
+  if (currentStep > 0 && !confirm(`Switching to a ${next === 'b2b' ? 'B2B account' : 'B2C individual'} profile replaces mode-specific fields. Brand styling and website analysis are retained. Continue?`)) return;
+
+  const key = state._industry || document.getElementById('brand-industry')?.value || 'recruiting';
+  const nextState = cloneProfileMode(next, key);
+  // Preserve the parts that belong to the customer brand rather than the
+  // generated profile. This makes switching modes feel deliberate, not reset.
+  nextState._industry = key;
+  nextState.brandName = state.brandName || nextState.brandName;
+  nextState.appName = state.appName || nextState.appName;
+  nextState.logo = state.logo || '';
+  nextState.userAvatar = state.userAvatar || '';
+  nextState.userName = state.userName || '';
+  nextState.colors = Object.assign({}, nextState.colors, state.colors || {});
+  nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
+  nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
+  state = nextState;
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+}
+
 // Debounce the preview iframe refresh — every keystroke otherwise re-parses a big HTML doc.
 let previewTimer = null;
 function refreshPreview() {
@@ -36,6 +97,7 @@ window.addEventListener('resize', fitPreviewScale);
 // ─── STATE ↔ DOM binding ────────────────────────────────────
 
 function fillStaticFields() {
+  if (!state.profileType) state.profileType = 'b2c';
   document.getElementById('brand-name').value = state.brandName || '';
   document.getElementById('brand-industry').value = state._industry || 'recruiting';
   document.getElementById('app-name').value = state.appName || 'Data Cloud';
@@ -101,6 +163,34 @@ function fillStaticFields() {
   document.getElementById('recs-title').value = state.recommendations.title;
   document.getElementById('activity-title').value = state.activity.title;
   document.getElementById('tab-name').value = state.tabName;
+
+  const account = state.account || {};
+  const metrics = state.accountMetrics || {};
+  const fillAccount = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
+  fillAccount('account-name', account.name);
+  fillAccount('account-headquarters', account.headquarters);
+  fillAccount('account-id', account.accountId);
+  fillAccount('account-industry', account.industry);
+  fillAccount('account-type', account.type);
+  fillAccount('account-owner', account.owner);
+  fillAccount('account-website', account.website);
+  fillAccount('account-employees', account.employees);
+  fillAccount('account-tier', account.tier);
+  fillAccount('account-parent', account.parentAccount);
+  fillAccount('account-address', account.address);
+  fillAccount('metric-revenue', metrics.revenue);
+  fillAccount('metric-revenue-trend', metrics.revenueTrend);
+  fillAccount('metric-pipeline', metrics.pipeline);
+  fillAccount('metric-usage-score', metrics.usageScore);
+  fillAccount('metric-usage-trend', metrics.usageTrend);
+  fillAccount('metric-active-users', metrics.activeUsers);
+  fillAccount('metric-health-score', metrics.healthScore);
+  fillAccount('metric-health-trend', metrics.healthTrend);
+  fillAccount('metric-support-cases', metrics.supportCases);
+  fillAccount('metric-renewal-date', metrics.renewalDate);
+  const affinityToggle = document.getElementById('account-affinities-include');
+  if (affinityToggle) affinityToggle.checked = state.affinities.includeAggregate !== false;
+  updateProfileModeUI();
 }
 
 function readStaticFields() {
@@ -146,6 +236,35 @@ function readStaticFields() {
   state.recommendations.title = document.getElementById('recs-title').value;
   state.activity.title = document.getElementById('activity-title').value;
   state.tabName = document.getElementById('tab-name').value;
+
+  if (isB2B()) {
+    if (!state.account) state.account = {};
+    if (!state.accountMetrics) state.accountMetrics = {};
+    const readAccount = (id) => document.getElementById(id)?.value || '';
+    state.account.name = readAccount('account-name');
+    state.account.headquarters = readAccount('account-headquarters');
+    state.account.accountId = readAccount('account-id');
+    state.account.industry = readAccount('account-industry');
+    state.account.type = readAccount('account-type');
+    state.account.owner = readAccount('account-owner');
+    state.account.website = readAccount('account-website');
+    state.account.employees = readAccount('account-employees');
+    state.account.tier = readAccount('account-tier');
+    state.account.parentAccount = readAccount('account-parent');
+    state.account.address = readAccount('account-address');
+    state.accountMetrics.revenue = readAccount('metric-revenue');
+    state.accountMetrics.revenueTrend = readAccount('metric-revenue-trend');
+    state.accountMetrics.pipeline = readAccount('metric-pipeline');
+    state.accountMetrics.usageScore = readAccount('metric-usage-score');
+    state.accountMetrics.usageTrend = readAccount('metric-usage-trend');
+    state.accountMetrics.activeUsers = readAccount('metric-active-users');
+    state.accountMetrics.healthScore = readAccount('metric-health-score');
+    state.accountMetrics.healthTrend = readAccount('metric-health-trend');
+    state.accountMetrics.supportCases = readAccount('metric-support-cases');
+    state.accountMetrics.renewalDate = readAccount('metric-renewal-date');
+    state.affinities.includeAggregate = !!document.getElementById('account-affinities-include')?.checked;
+    state.tabName = state.account.name || state.tabName;
+  }
 }
 
 // Called by every input onchange. Read → re-render dynamic lists that
@@ -192,7 +311,7 @@ function onIndustryChange() {
     return;
   }
   const key = document.getElementById('brand-industry').value;
-  state = cloneIndustry(key);
+  state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
@@ -275,17 +394,18 @@ function removePreference(i) { state.preferences.items.splice(i, 1); renderPrefe
 
 function renderEvents() {
   const c = document.getElementById('events-container');
+  const b2b = isB2B();
   c.innerHTML = state.events.items.map((ev, i) => `
     <div class="row-card">
       <div class="grid grid-cols-12 gap-2 items-center">
-        <input type="text" value="${escAttr(ev.name)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Event name" oninput="state.events.items[${i}].name=this.value; refreshPreview()">
-        <input type="text" value="${escAttr(ev.date)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Date" oninput="state.events.items[${i}].date=this.value; refreshPreview()">
-        <input type="text" value="${escAttr(ev.confirmation)}" class="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Confirmation #" oninput="state.events.items[${i}].confirmation=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.name)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Stakeholder name' : 'Event name'}" oninput="state.events.items[${i}].name=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.date)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Role' : 'Date'}" oninput="state.events.items[${i}].date=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.confirmation)}" class="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Title' : 'Confirmation #'}" oninput="state.events.items[${i}].confirmation=this.value; refreshPreview()">
         <button class="col-span-1 icon-btn danger" onclick="removeEvent(${i})">×</button>
       </div>
     </div>`).join('');
 }
-function addEvent() { state.events.items.push({ name: 'New Event', date: '', confirmation: '' }); renderEvents(); refreshPreview(); }
+function addEvent() { state.events.items.push({ name: isB2B() ? 'New Stakeholder' : 'New Event', date: '', confirmation: '' }); renderEvents(); refreshPreview(); }
 function removeEvent(i) { state.events.items.splice(i, 1); renderEvents(); refreshPreview(); }
 
 function renderMembership() {
@@ -521,7 +641,7 @@ function onPhotoUrlChange() {
 function startOver() {
   if (!confirm('Reset everything back to industry defaults?')) return;
   const key = document.getElementById('brand-industry').value || 'recruiting';
-  state = cloneIndustry(key);
+  state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
@@ -656,12 +776,13 @@ function exportForCloudy() {
 function applyAIProfile(ai) {
   // Preserve current industry unless AI came back with something else.
   const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
-  const base = cloneIndustry(industry);
+  const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
   base.appName = ai.appName || base.appName;
-  base.tabName = ai.tabName || (ai.profile && ai.profile.name) || base.tabName;
+  base.tabName = ai.tabName || (profileType === 'b2b' ? ai.account?.name : ai.profile?.name) || base.tabName;
 
   if (ai.colors) {
     if (ai.colors.primary)   base.colors.primary = ai.colors.primary;
@@ -674,6 +795,12 @@ function applyAIProfile(ai) {
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
+  if (profileType === 'b2b') {
+    if (ai.account) base.account = Object.assign({}, base.account, ai.account);
+    if (ai.accountMetrics) base.accountMetrics = Object.assign({}, base.accountMetrics, ai.accountMetrics);
+    base.profileType = 'b2b';
+    base.tabName = ai.tabName || base.account.name || base.tabName;
+  }
   if (Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
   if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
   if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
@@ -914,6 +1041,7 @@ async function onQuickStartAnalyze() {
   try {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
+      profileType: state.profileType || 'b2c',
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
@@ -921,7 +1049,8 @@ async function onQuickStartAnalyze() {
       }
     });
     applyAIProfile(ai);
-    status.textContent = `✓ Applied ${INDUSTRY_DEFAULTS[state._industry].label} profile from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}`;
+    const kind = isB2B() ? 'account profile' : 'individual profile';
+    status.textContent = `✓ Applied ${INDUSTRY_DEFAULTS[state._industry].label} ${kind} from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}`;
   } catch (e) {
     errBox.style.display = 'block';
     errBox.textContent = friendlyError(e);

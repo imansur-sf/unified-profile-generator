@@ -585,9 +585,111 @@ const INDUSTRY_DEFAULTS = {
 function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
+  clone.profileType = 'b2c';
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
   if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
   if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
   if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
+}
+
+// B2B accounts share the brand, navigation, recommendations, and activity
+// primitives with B2C profiles, but have a purpose-built account schema and
+// a distinctly different rendered dashboard. Keeping this in defaults.js
+// makes mode switching and AI ingestion use the same predictable state shape.
+function cloneAccountIndustry(key) {
+  const accountSeeds = {
+    recruiting: { name: 'Westfield Athletics', industry: 'Education Services', type: 'Enterprise', headquarters: 'Chicago, IL' },
+    retail: { name: 'Northstar Retail Group', industry: 'Retail', type: 'Enterprise', headquarters: 'San Francisco, CA' },
+    healthcare: { name: 'Meridian Health Systems', industry: 'Healthcare', type: 'Enterprise', headquarters: 'Austin, TX' },
+    financial: { name: 'Harborline Capital', industry: 'Financial Services', type: 'Strategic', headquarters: 'New York, NY' },
+    generic: { name: 'Northstar Group', industry: 'Technology', type: 'Enterprise', headquarters: 'San Francisco, CA' }
+  };
+  const base = cloneIndustry(key);
+  const seed = accountSeeds[key] || accountSeeds.generic;
+  base.profileType = 'b2b';
+  base.tabName = seed.name;
+  base.account = {
+    name: seed.name,
+    headquarters: seed.headquarters,
+    accountId: '0017A00000B2B01',
+    industry: seed.industry,
+    type: seed.type,
+    owner: 'Morgan Lee',
+    website: 'www.northstargroup.example',
+    employees: '2,500',
+    address: `100 Market Street\n${seed.headquarters}`,
+    tier: 'Growth Account',
+    parentAccount: '—',
+    logo: ''
+  };
+  base.accountMetrics = {
+    revenue: '$1.28M',
+    revenueTrend: '↑ 12% MoM',
+    pipeline: '$428K',
+    usageScore: '74%',
+    usageTrend: '↑ 7% MoM',
+    activeUsers: '328 active users',
+    healthScore: '82%',
+    healthTrend: '↑ 6% MoM',
+    supportCases: '3 open cases',
+    renewalDate: 'Nov 30, 2026',
+    utilization: '81% utilization'
+  };
+  base.profile = {
+    name: seed.name,
+    city: seed.headquarters,
+    customerId: '0017A00000B2B01',
+    email: '', secondaryEmail: '', secondaryEmailLabel: '', secondaryEmailInclude: false,
+    phone: '', address: `100 Market Street\n${seed.headquarters}`, segment: 'Growth Account', photo: ''
+  };
+  base.loyalty = { title: 'Commercial Overview', memberId: '$1.28M', tier: 'Growth Account', points: '$428K', redeemedPoints: 'Nov 30, 2026' };
+  base.insights = {
+    title: 'Calculated Insights',
+    items: [
+      { icon: '💚', label: 'Account Health', value: '82% · Healthy' },
+      { icon: '↗', label: 'Expansion Propensity', value: '71% · High' },
+      { icon: '⚠', label: 'Renewal Risk', value: 'Low · 4 months out' },
+      { icon: '◉', label: 'Stakeholder Coverage', value: '8 of 10 roles mapped' },
+      { icon: '▦', label: 'Product Adoption', value: '74% · Trending up' },
+      { icon: '✦', label: 'Engagement Score', value: '84% · Highly engaged' }
+    ]
+  };
+  base.affinities = {
+    title: 'Account Interests & Signals',
+    includeAggregate: true,
+    seriesA: { label: 'People signals', color: base.colors.primary },
+    seriesB: { label: 'Account engagement', color: base.colors.accent },
+    groups: [
+      { name: 'Solution Interest', items: [{ label: 'Analytics', a: 82, b: 76 }, { label: 'Automation', a: 68, b: 72 }, { label: 'AI', a: 61, b: 67 }] },
+      { name: 'Intent Signals', items: [{ label: 'Expansion', a: 74, b: 81 }, { label: 'Renewal', a: 58, b: 66 }, { label: 'Integration', a: 63, b: 59 }] }
+    ]
+  };
+  base.preferences = {
+    title: 'Account Details', icon: '🏢',
+    items: [{ label: 'Account Tier', value: 'Growth Account' }, { label: 'Account Owner', value: 'Morgan Lee' }, { label: 'Employees', value: '2,500' }, { label: 'Parent Account', value: '—' }]
+  };
+  base.events = {
+    title: 'Key Stakeholders', icon: '👥',
+    items: [{ name: 'Avery Johnson', date: 'Executive Sponsor', confirmation: 'VP, Operations' }, { name: 'Priya Shah', date: 'Champion', confirmation: 'Director, Platform' }, { name: 'Jordan Kim', date: 'Economic Buyer', confirmation: 'CFO' }]
+  };
+  base.membership = {
+    title: 'Products & Contracts', icon: '📦',
+    items: [{ label: 'Core Platform', value: 'Enterprise · 250 seats' }, { label: 'Analytics', value: 'Growth add-on' }, { label: 'Renewal', value: 'Nov 30, 2026' }]
+  };
+  base.recommendations = {
+    title: 'Next Best Actions',
+    items: [{ eyebrow: 'Recommended:', title: 'Schedule an adoption review with the champion', cta: 'Activate', image: '' }, { eyebrow: 'Opportunity:', title: 'Introduce Analytics expansion for the renewal', cta: 'Suggest', image: '' }]
+  };
+  base.activity = {
+    title: 'Account Activity',
+    items: [{ icon: '↗', title: 'Usage increased', body: '<b>7%</b> month over month across active teams', time: '2 days ago' }, { icon: '◉', title: 'Executive sponsor engaged', body: 'Avery Johnson reviewed the <b>Q3 value summary</b>', time: '5 days ago' }, { icon: '⚠', title: 'Renewal planning started', body: 'Renewal is due in <b>120 days</b>', time: '1 week ago' }, { icon: '✦', title: 'Expansion signal detected', body: 'High interest in <b>Analytics</b> from 14 contacts', time: '2 weeks ago' }]
+  };
+  base.extraCards = [{ title: 'Billing & Renewal', icon: '📄', items: [{ label: 'Current ARR', value: '$1.28M' }, { label: 'Open Pipeline', value: '$428K' }, { label: 'Renewal Date', value: 'Nov 30, 2026' }] }];
+  base.rightExtraCards = [];
+  return base;
+}
+
+function cloneProfileMode(profileType, key) {
+  return profileType === 'b2b' ? cloneAccountIndustry(key) : cloneIndustry(key);
 }

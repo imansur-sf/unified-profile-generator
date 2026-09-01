@@ -34,6 +34,7 @@ function renderSectionIcon(icon, emojiFallback, bgColor) {
 
 function generateProfileHTML(state) {
   const s = state;
+  if (s.profileType === 'b2b') return generateAccountProfileHTML(s);
   const primary = s.colors.primary || '#001E5B';
   const accent = s.colors.accent || '#066AFE';
   const secondary = s.colors.secondary || '#EAF5FE';
@@ -766,6 +767,115 @@ body {
 
 </div>
 
+</body>
+</html>`;
+}
+
+// B2B account template. It intentionally has a different information
+// hierarchy from the person-level profile above: account identity and value
+// stay persistent, while commercial, adoption, relationship, and action
+// signals become the primary working surface.
+function generateAccountProfileHTML(state) {
+  const s = state;
+  const primary = s.colors?.primary || '#001E5B';
+  const accent = s.colors?.accent || '#066AFE';
+  const secondary = s.colors?.secondary || '#EAF5FE';
+  const menuBg = s.colors?.menu || '#FFFFFF';
+  const menuText = s.colors?.menuText || '#3E3E3C';
+  const pageBg = s.colors?.pageBg || '#F4F8FC';
+  const a = Object.assign({ name: 'Account', headquarters: '', accountId: '', industry: '', type: '', owner: '', website: '', employees: '', address: '', tier: '', parentAccount: '', logo: '' }, s.account || {});
+  const m = Object.assign({ revenue: '—', revenueTrend: '', pipeline: '—', usageScore: '—', usageTrend: '', activeUsers: '', healthScore: '—', healthTrend: '', supportCases: '', renewalDate: '—', utilization: '' }, s.accountMetrics || {});
+  const navLinks = Array.isArray(s.navLinks) ? s.navLinks : [];
+  const insights = Array.isArray(s.insights?.items) ? s.insights.items : [];
+  const affinities = s.affinities || { title: 'Account Interests & Signals', seriesA: {}, seriesB: {}, groups: [] };
+  const affinityGroups = Array.isArray(affinities.groups) ? affinities.groups : [];
+  const details = Array.isArray(s.preferences?.items) ? s.preferences.items : [];
+  const stakeholders = Array.isArray(s.events?.items) ? s.events.items : [];
+  const products = Array.isArray(s.membership?.items) ? s.membership.items : [];
+  const recommendations = Array.isArray(s.recommendations?.items) ? s.recommendations.items.slice(0, 2) : [];
+  const activity = Array.isArray(s.activity?.items) ? s.activity.items.slice(0, 5) : [];
+  const extraCards = Array.isArray(s.extraCards) ? s.extraCards.slice(0, 1) : [];
+  const initials = a.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'A';
+  const numberWidth = (value, fallback) => {
+    const number = Number.parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
+    return `${Math.max(8, Math.min(100, Number.isFinite(number) ? number : fallback))}%`;
+  };
+  const accountMark = a.logo ? `<img src="${esc(a.logo)}" alt="">` : initials;
+  const affinityPanel = affinities.includeAggregate === false ? '' : `
+    <section class="b2b-card b2b-signals-card">
+      <div class="b2b-section-head">
+        <div><span class="b2b-overline">Aggregate intelligence</span><h2>${esc(affinities.title || 'Account Interests & Signals')}</h2></div>
+        <div class="b2b-legend"><span><i style="background:${esc(affinities.seriesA?.color || primary)}"></i>${esc(affinities.seriesA?.label || 'People signals')}</span><span><i style="background:${esc(affinities.seriesB?.color || accent)}"></i>${esc(affinities.seriesB?.label || 'Account engagement')}</span></div>
+      </div>
+      <div class="b2b-signal-grid">
+        ${affinityGroups.slice(0, 2).map(group => `
+          <div class="b2b-signal-group"><h3>${esc(group.name)}</h3>
+          ${(group.items || []).slice(0, 4).map(item => `
+            <div class="b2b-signal-row"><span>${esc(item.label)}</span><div class="b2b-signal-bars"><b style="width:${Math.max(0, Math.min(100, Number(item.a) || 0))}%;background:${esc(affinities.seriesA?.color || primary)}"></b><em style="width:${Math.max(0, Math.min(100, Number(item.b) || 0))}%;background:${esc(affinities.seriesB?.color || accent)}"></em></div></div>`).join('')}
+          </div>`).join('')}
+      </div>
+    </section>`;
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>${esc(a.name)} — Account Unified Profile</title>
+<style>
+:root{--primary:${primary};--accent:${accent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--ink:#13213a;--muted:#60708a;--line:#dbe5f0;--card:#fff;}
+*{box-sizing:border-box}body{margin:0;min-width:1160px;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.35}.b2b-topbar{height:48px;padding:0 22px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f5f7fa);border-bottom:1px solid var(--line)}.b2b-brand{display:flex;align-items:center;gap:9px;font-weight:700;color:var(--primary)}.b2b-brand-mark{width:28px;height:28px;border-radius:5px;background:var(--primary);color:#fff;display:grid;place-items:center;overflow:hidden;font-size:12px}.b2b-brand-mark img{width:100%;height:100%;object-fit:contain}.b2b-search{margin:auto;max-width:500px;flex:1;background:#fff;border:1px solid #cdd8e5;border-radius:5px;color:#8b98aa;padding:7px 12px}.b2b-actions{color:#6b7890;font-size:18px;letter-spacing:8px}.b2b-nav{height:45px;padding:0 22px;display:flex;align-items:stretch;gap:24px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.b2b-nav-app{display:flex;align-items:center;gap:8px;padding-right:18px;border-right:1px solid var(--line);font-size:15px;font-weight:700;color:var(--menu-text)}.b2b-waffle{font-size:17px;color:var(--accent)}.b2b-nav a{display:flex;align-items:center;text-decoration:none;color:var(--menu-text);white-space:nowrap;font-size:12px}.b2b-nav a:first-of-type{font-weight:700;color:var(--primary);border-bottom:3px solid var(--accent)}.b2b-nav-tab{margin-left:auto;display:flex;align-items:center;padding:0 14px;background:#fff;border:1px solid var(--line);border-bottom:none;border-radius:5px 5px 0 0;font-weight:600;white-space:nowrap}.b2b-shell{padding:14px;display:grid;grid-template-columns:278px minmax(540px,1fr) 276px;gap:14px;align-items:start}.b2b-card{background:var(--card);border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(16,35,68,.04)}.b2b-account-rail{background:linear-gradient(160deg,var(--primary),#111c3b);color:#fff;border:none;padding:20px 18px;min-height:692px}.b2b-account-head{display:flex;align-items:center;gap:12px;padding-bottom:18px;border-bottom:1px solid rgba(255,255,255,.2)}.b2b-account-mark{width:58px;height:58px;border-radius:50%;display:grid;place-items:center;background:var(--accent);border:2px solid rgba(255,255,255,.4);font-weight:700;font-size:18px;overflow:hidden}.b2b-account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.b2b-account-name{font-size:20px;font-weight:700;line-height:1.1}.b2b-account-location{margin-top:4px;color:rgba(255,255,255,.75);font-size:13px}.b2b-rail-fields{margin:18px 0 14px}.b2b-rail-field{display:grid;grid-template-columns:18px 86px 1fr;gap:6px;align-items:start;margin:10px 0;font-size:11.5px}.b2b-rail-icon{color:#b9d8ff}.b2b-rail-label{color:rgba(255,255,255,.68)}.b2b-rail-value{font-weight:600;overflow-wrap:anywhere}.b2b-rail-rule{height:1px;background:rgba(255,255,255,.19);margin:15px 0}.b2b-rail-stat{padding:11px 0;border-bottom:1px solid rgba(255,255,255,.16)}.b2b-rail-stat:last-of-type{border-bottom:0}.b2b-rail-stat span{display:block;color:rgba(255,255,255,.69);font-size:11px}.b2b-rail-stat strong{display:block;margin-top:3px;font-size:15px}.b2b-health-meter{display:flex;align-items:center;gap:9px;margin-top:16px;padding:10px;background:rgba(255,255,255,.08);border-radius:6px}.b2b-meter{width:39px;height:39px;border-radius:50%;border:5px solid rgba(255,255,255,.22);border-top-color:#56e0b2;border-right-color:#56e0b2}.b2b-health-meter b{font-size:12px}.b2b-health-meter small{display:block;color:rgba(255,255,255,.7);margin-top:2px}.b2b-powered{position:relative;margin-top:24px;padding-top:14px;border-top:1px solid rgba(255,255,255,.2);color:rgba(255,255,255,.72);font-size:10px}.b2b-core{display:flex;flex-direction:column;gap:12px}.b2b-tabs{padding:0 16px;display:flex;gap:27px;height:47px;align-items:flex-end}.b2b-tabs span{padding:0 1px 11px;font-size:13px;color:#63718a;font-weight:600}.b2b-tabs span.active{color:var(--primary);border-bottom:3px solid var(--accent)}.b2b-overview{padding:13px}.b2b-section-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:12px}.b2b-section-head h2{margin:2px 0 0;font-size:16px;letter-spacing:-.01em}.b2b-overline{font-size:9px;text-transform:uppercase;letter-spacing:.12em;color:var(--accent);font-weight:800}.b2b-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.b2b-metric{min-height:188px;padding:13px;border:1px solid #d9e7ff;background:linear-gradient(180deg,#fff,#f7fbff)}.b2b-metric h3{margin:0;color:#263a58;font-size:14px}.b2b-metric-primary{display:flex;align-items:flex-end;gap:7px;margin-top:12px}.b2b-metric-primary strong{font-size:25px;line-height:1}.b2b-trend{padding:3px 7px;border-radius:99px;background:#e9f8ee;color:#247342;font-size:10px;font-weight:700}.b2b-spark{height:34px;margin:14px 0 12px;background:linear-gradient(172deg,transparent 43%,rgba(6,106,254,.16) 44%,rgba(6,106,254,.16) 75%,transparent 76%);border-bottom:2px solid var(--accent);clip-path:polygon(0 68%,12% 38%,24% 45%,36% 65%,48% 39%,60% 56%,72% 29%,84% 47%,100% 62%,100% 100%,0 100%)}.b2b-metric-row{display:flex;justify-content:space-between;gap:8px;border-top:1px solid #dce7f5;padding-top:8px;margin-top:8px;color:var(--muted);font-size:10.5px}.b2b-metric-row b{color:var(--ink);font-size:11px}.b2b-progress{height:7px;background:#dfe9f4;border-radius:99px;overflow:hidden;margin-top:10px}.b2b-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#6d8eff);border-radius:inherit}.b2b-details{padding:14px 16px}.b2b-details h2{font-size:15px;margin:0 0 12px}.b2b-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:36px}.b2b-detail{padding:8px 0;border-bottom:1px solid var(--line)}.b2b-detail label{display:block;color:var(--muted);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.04em}.b2b-detail div{margin-top:4px;font-size:12px;font-weight:600}.b2b-signals-card{padding:14px 16px}.b2b-legend{display:flex;gap:10px;color:var(--muted);font-size:10px}.b2b-legend span{display:flex;align-items:center;gap:4px}.b2b-legend i{width:8px;height:8px;border-radius:50%;display:inline-block}.b2b-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}.b2b-signal-group h3{font-size:11px;margin:0 0 7px}.b2b-signal-row{display:grid;grid-template-columns:92px 1fr;gap:7px;align-items:center;margin:7px 0;font-size:10.5px}.b2b-signal-row>span{text-align:right;color:#384a64}.b2b-signal-bars{height:14px;display:flex;flex-direction:column;justify-content:center;gap:2px}.b2b-signal-bars b,.b2b-signal-bars em{display:block;height:5px;border-radius:2px}.b2b-side{display:flex;flex-direction:column;gap:12px}.b2b-side-card{padding:14px 15px}.b2b-side-head{display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:15px;font-weight:700}.b2b-side-icon{display:grid;place-items:center;width:23px;height:23px;color:#fff;background:var(--primary);border-radius:4px;font-size:12px}.b2b-alert{padding:10px 0;border-top:1px solid var(--line)}.b2b-alert:first-of-type{border-top:0;padding-top:0}.b2b-alert b{display:block;font-size:12px}.b2b-alert span{display:block;color:var(--muted);font-size:11px;margin-top:3px}.b2b-alert .risk{color:#c23934}.b2b-action{border-top:1px solid var(--line);padding:12px 0}.b2b-action:first-of-type{border-top:0;padding-top:0}.b2b-action-eyebrow{color:var(--accent);font-weight:700;font-size:10px;text-transform:uppercase;letter-spacing:.05em}.b2b-action-title{font-weight:700;margin:4px 0 9px;font-size:12px;line-height:1.3}.b2b-action button{border:1px solid var(--accent);color:var(--accent);background:#fff;border-radius:4px;padding:5px 12px;font-weight:700;font-size:11px}.b2b-insight{display:grid;grid-template-columns:22px 1fr auto;gap:7px;align-items:center;padding:8px 0;border-top:1px solid var(--line);font-size:11px}.b2b-insight:first-of-type{border-top:0;padding-top:0}.b2b-insight-icon{color:var(--accent);font-weight:800}.b2b-insight-value{font-weight:700;text-align:right;max-width:94px}.b2b-table{width:100%;border-collapse:collapse;font-size:11px}.b2b-table th{text-align:left;color:var(--muted);font-size:9px;text-transform:uppercase;letter-spacing:.05em;padding:0 0 7px}.b2b-table td{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.b2b-table td:first-child{font-weight:700;color:#235da5}.b2b-table td small{display:block;color:var(--muted);margin-top:2px}.b2b-activity{padding:0;overflow:hidden}.b2b-activity .b2b-side-head{padding:14px 15px;margin:0;border-bottom:1px solid var(--line)}.b2b-activity-item{display:flex;gap:8px;padding:10px 14px;border-top:1px solid #eef3f8}.b2b-activity-item:first-of-type{border-top:0}.b2b-activity-bullet{width:20px;height:20px;display:grid;place-items:center;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:11px;flex:0 0 auto}.b2b-activity-item b{display:block;font-size:11px}.b2b-activity-item p{margin:2px 0 0;color:var(--muted);font-size:10px}.b2b-activity-item time{display:block;color:#8794a7;font-size:9px;margin-top:2px}.b2b-empty{color:var(--muted);font-size:11px;padding:8px 0}
+</style>
+</head>
+<body>
+  <header class="b2b-topbar"><div class="b2b-brand"><span class="b2b-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Data Cloud')}</span></div><div class="b2b-search">⌕&nbsp;&nbsp;Search this account, contacts, opportunities…</div><div class="b2b-actions">☆ ＋ ? ⚙ ●</div></header>
+  <nav class="b2b-nav"><div class="b2b-nav-app"><span class="b2b-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${navLinks.map(link => `<a href="#">${esc(link)}</a>`).join('')}<div class="b2b-nav-tab">▣&nbsp; ${esc(s.tabName || a.name)}</div></nav>
+  <main class="b2b-shell">
+    <aside class="b2b-card b2b-account-rail">
+      <div class="b2b-account-head"><div class="b2b-account-mark">${accountMark}</div><div><div class="b2b-account-name">${esc(a.name)}</div><div class="b2b-account-location">${esc(a.headquarters)}</div></div></div>
+      <div class="b2b-rail-fields">
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▣</span><span class="b2b-rail-label">Account ID</span><span class="b2b-rail-value">${esc(a.accountId)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▥</span><span class="b2b-rail-label">Industry</span><span class="b2b-rail-value">${esc(a.industry)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">▰</span><span class="b2b-rail-label">Type</span><span class="b2b-rail-value">${esc(a.type)}</span></div>
+        <div class="b2b-rail-field"><span class="b2b-rail-icon">⌖</span><span class="b2b-rail-label">Employees</span><span class="b2b-rail-value">${esc(a.employees)}</span></div>
+      </div>
+      <div class="b2b-rail-rule"></div>
+      <div class="b2b-rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div>
+      <div class="b2b-rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div>
+      <div class="b2b-rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div>
+      <div class="b2b-rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div>
+      <div class="b2b-health-meter"><div class="b2b-meter"></div><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Calculated from adoption, engagement & support')}</small></div></div>
+      <div class="b2b-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div>
+    </aside>
+
+    <section class="b2b-core">
+      <div class="b2b-card b2b-tabs"><span class="active">Overview</span><span>People</span><span>Sales</span><span>Success</span><span>Related</span></div>
+      <section class="b2b-card b2b-overview">
+        <div class="b2b-section-head"><div><span class="b2b-overline">Account 360</span><h2>Commercial, usage & customer experience</h2></div><span class="b2b-overline">Modeled demo data</span></div>
+        <div class="b2b-metric-grid">
+          <article class="b2b-metric"><h3>Commercial</h3><div class="b2b-metric-primary"><strong>${esc(m.revenue)}</strong><span class="b2b-trend">${esc(m.revenueTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Open pipeline</span><b>${esc(m.pipeline)}</b></div><div class="b2b-metric-row"><span>Renewal</span><b>${esc(m.renewalDate)}</b></div></article>
+          <article class="b2b-metric"><h3>Product Usage</h3><div class="b2b-metric-primary"><strong>${esc(m.usageScore)}</strong><span class="b2b-trend">${esc(m.usageTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Adoption</span><b>${esc(m.activeUsers)}</b></div><div class="b2b-progress"><i style="width:${numberWidth(m.usageScore, 65)}"></i></div><div class="b2b-metric-row"><span>Utilization</span><b>${esc(m.utilization || m.usageScore)}</b></div></article>
+          <article class="b2b-metric"><h3>Customer Experience</h3><div class="b2b-metric-primary"><strong>${esc(m.healthScore)}</strong><span class="b2b-trend">${esc(m.healthTrend)}</span></div><div class="b2b-spark"></div><div class="b2b-metric-row"><span>Support</span><b>${esc(m.supportCases)}</b></div><div class="b2b-progress"><i style="width:${numberWidth(m.healthScore, 72)}"></i></div><div class="b2b-metric-row"><span>Relationship</span><b>${esc(insights.find(item => /stakeholder/i.test(item.label))?.value || 'Mapped')}</b></div></article>
+        </div>
+      </section>
+      <section class="b2b-card b2b-details"><h2>Account details</h2><div class="b2b-detail-grid">
+        <div class="b2b-detail"><label>Account owner</label><div>${esc(a.owner)}</div></div><div class="b2b-detail"><label>Website</label><div>${esc(a.website)}</div></div>
+        <div class="b2b-detail"><label>Account type</label><div>${esc(a.type)}</div></div><div class="b2b-detail"><label>Parent account</label><div>${esc(a.parentAccount)}</div></div>
+        ${details.slice(0, 4).map(item => `<div class="b2b-detail"><label>${esc(item.label)}</label><div>${esc(item.value)}</div></div>`).join('')}
+      </div></section>
+      ${affinityPanel}
+    </section>
+
+    <aside class="b2b-side">
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">▤</span>Notification Center</div><div class="b2b-alert"><b class="risk">Renewal planning window</b><span>Renewal ${esc(m.renewalDate)} · review coverage and adoption now.</span></div><div class="b2b-alert"><b>Account engagement ${esc(m.usageTrend || 'trending')}</b><span>${esc(m.activeUsers || 'Usage signal')} with monitored stakeholder activity.</span></div></section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">✦</span>${esc(s.recommendations?.title || 'Next Best Actions')}</div>${recommendations.length ? recommendations.map(rec => `<div class="b2b-action"><div class="b2b-action-eyebrow">${esc(rec.eyebrow)}</div><div class="b2b-action-title">${esc(rec.title)}</div><button>${esc(rec.cta || 'Activate')}</button></div>`).join('') : '<div class="b2b-empty">No actions configured.</div>'}</section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">◎</span>${esc(s.insights?.title || 'Calculated Insights')}</div>${insights.slice(0, 6).map(item => `<div class="b2b-insight"><span class="b2b-insight-icon">${raw(item.icon || '•')}</span><span>${esc(item.label)}</span><span class="b2b-insight-value">${esc(item.value)}</span></div>`).join('')}</section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">♙</span>${esc(s.events?.title || 'Key Stakeholders')}</div><table class="b2b-table"><thead><tr><th>Person</th><th>Role</th></tr></thead><tbody>${stakeholders.slice(0, 4).map(item => `<tr><td>${esc(item.name)}<small>${esc(item.confirmation)}</small></td><td>${esc(item.date)}</td></tr>`).join('')}</tbody></table></section>
+      <section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">▣</span>${esc(s.membership?.title || 'Products & Contracts')}</div><table class="b2b-table"><tbody>${products.slice(0, 4).map(item => `<tr><td>${esc(item.label)}</td><td>${esc(item.value)}</td></tr>`).join('')}</tbody></table></section>
+      ${extraCards.map(card => `<section class="b2b-card b2b-side-card"><div class="b2b-side-head"><span class="b2b-side-icon">${raw(card.icon || '▤')}</span>${esc(card.title)}</div><table class="b2b-table"><tbody>${(card.items || []).slice(0, 4).map(item => `<tr><td>${esc(item.label)}</td><td>${esc(item.value)}</td></tr>`).join('')}</tbody></table></section>`).join('')}
+      <section class="b2b-card b2b-activity"><div class="b2b-side-head"><span class="b2b-side-icon">≡</span>${esc(s.activity?.title || 'Account Activity')}</div>${activity.map(item => `<div class="b2b-activity-item"><span class="b2b-activity-bullet">${raw(item.icon || '•')}</span><div><b>${esc(item.title)}</b><p>${raw(item.body)}</p><time>${esc(item.time)}</time></div></div>`).join('')}</section>
+    </aside>
+  </main>
 </body>
 </html>`;
 }
