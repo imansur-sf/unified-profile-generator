@@ -395,19 +395,19 @@
               </div>
 
               <div class="border-t border-gray-100 pt-4">
-                <h3 class="text-sm font-700 text-gray-800 mb-3">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
-                <p class="text-xs text-gray-500 mb-3">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
+                <h3 class="text-sm font-700 text-gray-800 mb-3" id="layout-title">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
+                <p class="text-xs text-gray-500 mb-3" id="layout-sub">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600">Left Column (Profile)</label>
+                      <label class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
                       <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
                     </div>
                     <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600">Middle Column</label>
+                      <label class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
                       <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
                     </div>
                     <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
@@ -629,6 +629,21 @@
               </div>
               <div id="membership-container" class="space-y-2"></div>
               <button onclick="addMembership()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+            </div>
+
+            <div class="mode-b2b border-t border-gray-100 pt-4">
+              <h3 class="text-sm font-700 text-gray-800 mb-1">Account workspace modules</h3>
+              <p class="text-xs text-gray-500 mb-3">Choose which modules appear in each clickable B2B workspace tab. Hidden modules stay in your setup and can be restored at any time.</p>
+              <div class="grid grid-cols-2 gap-2 text-xs text-gray-600">
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-overview-metrics" onchange="onFieldChange()"> Overview scorecards</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-overview-details" onchange="onFieldChange()"> Account details</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-overview-signals" onchange="onFieldChange()"> Aggregate signals</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-people-stakeholders" onchange="onFieldChange()"> Stakeholders</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-sales-products" onchange="onFieldChange()"> Products & contracts</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-sales-actions" onchange="onFieldChange()"> Next best actions</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-success-insights" onchange="onFieldChange()"> Calculated insights</label>
+                <label class="flex items-center gap-2 p-2 rounded border border-gray-100"><input type="checkbox" id="b2b-section-related-activity" onchange="onFieldChange()"> Account activity</label>
+              </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4">

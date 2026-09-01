@@ -608,7 +608,21 @@ function cloneAccountIndustry(key) {
   const base = cloneIndustry(key);
   const seed = accountSeeds[key] || accountSeeds.generic;
   base.profileType = 'b2b';
+  // The generated account sits inside Salesforce Data Cloud. Keep the chrome
+  // canonical instead of allowing website analysis to invent a product nav.
+  base.appName = 'Data Cloud';
+  base.navLinks = ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Lake Objects', 'Data Model', 'Identity Resolutions', 'Calculated Insights'];
   base.tabName = seed.name;
+  base.b2bSections = {
+    overviewMetrics: true,
+    overviewDetails: true,
+    overviewSignals: true,
+    peopleStakeholders: true,
+    salesProducts: true,
+    salesActions: true,
+    successInsights: true,
+    relatedActivity: true
+  };
   base.account = {
     name: seed.name,
     headquarters: seed.headquarters,

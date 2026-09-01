@@ -9,6 +9,17 @@ state.brandName = 'NCSA College Recruiting';
 state.logo = '';
 state.userAvatar = '';
 
+const B2B_SECTION_DEFAULTS = {
+  overviewMetrics: true, overviewDetails: true, overviewSignals: true,
+  peopleStakeholders: true, salesProducts: true, salesActions: true,
+  successInsights: true, relatedActivity: true
+};
+
+function getB2BSections() {
+  state.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, state.b2bSections || {});
+  return state.b2bSections;
+}
+
 function isB2B() { return state.profileType === 'b2b'; }
 
 function setText(id, value) {
@@ -44,6 +55,10 @@ function updateProfileModeUI() {
   setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
   setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
   setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
+  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Layout Widths (pixels)');
+  setText('layout-sub', b2b ? 'Adjust the persistent account rail and the contextual action rail. The selected workspace tab fills the remaining fixed export canvas.' : 'Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.');
+  setText('left-col-w-label', b2b ? 'Account Rail' : 'Left Column (Profile)');
+  setText('middle-col-w-label', b2b ? 'Action Rail' : 'Middle Column');
 }
 
 function setProfileType(profileType) {
@@ -190,6 +205,13 @@ function fillStaticFields() {
   fillAccount('metric-renewal-date', metrics.renewalDate);
   const affinityToggle = document.getElementById('account-affinities-include');
   if (affinityToggle) affinityToggle.checked = state.affinities.includeAggregate !== false;
+  if (isB2B()) {
+    const sections = getB2BSections();
+    Object.keys(B2B_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2b-section-${key.replace(/[A-Z]/g, match => '-' + match.toLowerCase())}`);
+      if (toggle) toggle.checked = sections[key] !== false;
+    });
+  }
   updateProfileModeUI();
 }
 
@@ -263,6 +285,11 @@ function readStaticFields() {
     state.accountMetrics.supportCases = readAccount('metric-support-cases');
     state.accountMetrics.renewalDate = readAccount('metric-renewal-date');
     state.affinities.includeAggregate = !!document.getElementById('account-affinities-include')?.checked;
+    const sections = getB2BSections();
+    Object.keys(B2B_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2b-section-${key.replace(/[A-Z]/g, match => '-' + match.toLowerCase())}`);
+      if (toggle) sections[key] = toggle.checked;
+    });
     state.tabName = state.account.name || state.tabName;
   }
 }
@@ -781,7 +808,7 @@ function applyAIProfile(ai) {
   base._industry = industry;
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
-  base.appName = ai.appName || base.appName;
+  base.appName = profileType === 'b2b' ? 'Data Cloud' : (ai.appName || base.appName);
   base.tabName = ai.tabName || (profileType === 'b2b' ? ai.account?.name : ai.profile?.name) || base.tabName;
 
   if (ai.colors) {
@@ -801,7 +828,7 @@ function applyAIProfile(ai) {
     base.profileType = 'b2b';
     base.tabName = ai.tabName || base.account.name || base.tabName;
   }
-  if (Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
+  if (profileType !== 'b2b' && Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
   if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
   if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
 
