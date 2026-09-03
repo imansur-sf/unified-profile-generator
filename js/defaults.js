@@ -586,6 +586,7 @@ function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
   clone.profileType = 'b2c';
+  clone.profileStrategy = { lens: 'sales', objective: 'convert', brief: '', customRole: '' };
   // Salesforce chrome should begin neutral and readable. These remain editable
   // in the wizard, but website analysis never changes these starting values.
   clone.colors = Object.assign({}, clone.colors, { accent: '#FFFFFF', menu: '#FFFFFF', menuText: '#000000' });

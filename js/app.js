@@ -20,6 +20,187 @@ const B2C_SECTION_DEFAULTS = {
   membership: true, recommendations: true, activity: true
 };
 
+// The profile entity (B2C/B2B) and the viewer's job are separate choices.
+// These presets are the first module registry: a persona chooses a focused
+// one-screen composition while the user can still toggle individual modules.
+const PERSONA_PRESETS = {
+  sales: {
+    label: 'Sales', objective: 'convert',
+    blueprint: 'Prioritizes commercial fit, purchase signals, and the next action that moves an opportunity forward.',
+    b2c: { insights: 'Revenue & Propensity Insights', affinities: 'Purchase & Engagement Signals', preferences: 'Buying Preferences', events: 'Recent Commercial Touchpoints', membership: 'Products & Offers', recommendations: 'Einstein Sales Recommendations', activity: 'Sales & Engagement Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Sales & Growth Insights', affinities: 'Buying & Expansion Signals', preferences: 'Account Buying Context', events: 'Buying Committee', membership: 'Products & Commercials', recommendations: 'Next Best Sales Actions', activity: 'Commercial Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  service: {
+    label: 'Service', objective: 'resolve',
+    blueprint: 'Elevates churn risk, support context, product entitlements, and retention-oriented service actions.',
+    b2c: { insights: 'Retention & Service Insights', affinities: 'Churn Risk Indicators', preferences: 'Service Preferences', events: 'Case & Service Timeline', membership: 'Entitlements & Coverage', recommendations: 'Einstein Service Recommendations', activity: 'Service & Support Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Health & Churn Risk Insights', affinities: 'Account Risk Indicators', preferences: 'Service Coverage', events: 'Support Stakeholders', membership: 'Entitlements & Contracts', recommendations: 'Next Best Service Actions', activity: 'Service & Support Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  marketing: {
+    label: 'Marketing', objective: 'engage',
+    blueprint: 'Emphasizes journey stage, content and channel signals, and the best next engagement motion.',
+    b2c: { insights: 'Marketing Propensity Insights', affinities: 'Content & Channel Affinities', preferences: 'Channel & Consent Preferences', events: 'Journey & Campaign Timeline', membership: 'Program Enrollment', recommendations: 'Next Best Content', activity: 'Journey Engagement Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Account Engagement Insights', affinities: 'Content & Intent Signals', preferences: 'Account Channel Preferences', events: 'Campaign & Journey Stakeholders', membership: 'Programs & Subscriptions', recommendations: 'Next Best Marketing Actions', activity: 'Journey & Campaign Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  success: {
+    label: 'Customer Success', objective: 'retain',
+    blueprint: 'Centers account health, adoption, renewal readiness, and actions that protect and expand value.',
+    b2c: { insights: 'Customer Health Insights', affinities: 'Adoption & Health Signals', preferences: 'Success Preferences', events: 'Milestones & Touchpoints', membership: 'Products & Adoption', recommendations: 'Next Best Success Actions', activity: 'Success & Adoption Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Customer Health Insights', affinities: 'Adoption & Renewal Signals', preferences: 'Success Plan Details', events: 'Success Stakeholders', membership: 'Products & Adoption', recommendations: 'Next Best Success Actions', activity: 'Success & Adoption Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  custom: {
+    label: 'Custom profile', objective: 'engage',
+    blueprint: 'Uses the role and decision request you provide to focus the profile on the most useful signals and actions.',
+    b2c: { insights: 'Decision-Ready Insights', affinities: 'Behavior & Context Signals', preferences: 'Relevant Preferences', events: 'Recent Touchpoints', membership: 'Programs & Relationships', recommendations: 'Recommended Actions', activity: 'Relevant Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Account Decision Insights', affinities: 'Account Signals', preferences: 'Account Context', events: 'Key Relationships', membership: 'Products & Agreements', recommendations: 'Recommended Actions', activity: 'Account Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  }
+};
+
+function getProfileStrategy(target = state) {
+  target.profileStrategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, target.profileStrategy || {});
+  if (!PERSONA_PRESETS[target.profileStrategy.lens]) target.profileStrategy.lens = 'sales';
+  return target.profileStrategy;
+}
+
+function getProfileStrategyLabel(strategy = getProfileStrategy()) {
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
+  if (strategy.lens !== 'custom') return preset.label;
+  return String(strategy.customRole || '').trim().slice(0, 64) || preset.label;
+}
+
+function applyPersonaPreset(target = state) {
+  const strategy = getProfileStrategy(target);
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
+  const content = target.profileType === 'b2b' ? preset.b2b : preset.b2c;
+  target.insights.title = content.insights;
+  target.affinities.title = content.affinities;
+  target.preferences.title = content.preferences;
+  target.events.title = content.events;
+  target.membership.title = content.membership;
+  target.recommendations.title = content.recommendations;
+  target.activity.title = content.activity;
+  if (target.profileType === 'b2b') {
+    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, target.b2bSections || {}, content.sections);
+  } else {
+    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, target.b2cSections || {}, content.sections);
+  }
+}
+
+const PERSONA_VIEW_FIELDS = [
+  'insights', 'affinities', 'preferences', 'events', 'membership',
+  'recommendations', 'activity', 'extraCards', 'rightExtraCards',
+  'b2cSections', 'b2bSections'
+];
+
+function cloneViewData(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+// Brand identity and the unified customer/account remain shared. Everything
+// that describes how a particular team consumes that information is retained
+// as its own editable working view.
+function snapshotPersonaView(target = state, lens = getProfileStrategy(target).lens) {
+  if (!PERSONA_PRESETS[lens]) return;
+  if (!target.personaVariants || typeof target.personaVariants !== 'object') target.personaVariants = {};
+  const variant = {
+    strategy: Object.assign({}, getProfileStrategy(target), { lens })
+  };
+  PERSONA_VIEW_FIELDS.forEach(key => { variant[key] = cloneViewData(target[key]); });
+  target.personaVariants[lens] = variant;
+}
+
+function restorePersonaView(target = state, lens) {
+  const currentStrategy = getProfileStrategy(target);
+  const saved = target.personaVariants?.[lens];
+  if (saved) {
+    PERSONA_VIEW_FIELDS.forEach(key => {
+      if (saved[key] !== undefined) target[key] = cloneViewData(saved[key]);
+    });
+    target.profileStrategy = Object.assign(
+      { lens, objective: PERSONA_PRESETS[lens].objective, brief: '', customRole: '' },
+      cloneViewData(saved.strategy) || {},
+      { lens }
+    );
+    return true;
+  }
+
+  target.profileStrategy = {
+    lens,
+    objective: PERSONA_PRESETS[lens].objective,
+    // Keep broadly useful scenario context when this is the first view, but
+    // give each persona its own objective and later-editable brief.
+    brief: currentStrategy.brief || '',
+    customRole: lens === 'custom' ? '' : currentStrategy.customRole || ''
+  };
+  applyPersonaPreset(target);
+  return false;
+}
+
+function updateProfileStrategyUI() {
+  const strategy = getProfileStrategy();
+  Object.keys(PERSONA_PRESETS).forEach(lens => {
+    const button = document.getElementById(`persona-${lens}`);
+    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); }
+  });
+  const objective = document.getElementById('strategy-objective');
+  const brief = document.getElementById('strategy-brief');
+  const customRole = document.getElementById('strategy-custom-role');
+  const customRoleField = document.getElementById('custom-role-field');
+  if (objective) objective.value = strategy.objective;
+  if (brief) brief.value = strategy.brief;
+  if (customRole) customRole.value = strategy.customRole || '';
+  if (customRoleField) customRoleField.hidden = strategy.lens !== 'custom';
+  const blueprint = document.getElementById('strategy-blueprint');
+  if (blueprint) {
+    const preset = PERSONA_PRESETS[strategy.lens];
+    const profileLabel = getProfileStrategyLabel(strategy);
+    const customReminder = strategy.lens === 'custom' && !String(strategy.customRole || '').trim()
+      ? '<br><em>Add the profile role above to tailor the generated view.</em>' : '';
+    blueprint.innerHTML = `<span>✦</span><span><strong>${escHTML(profileLabel)} view · ${strategy.objective}</strong><br>${preset.blueprint}${customReminder}<br><em>This view saves its own module choices and brief.</em></span>`;
+  }
+
+  // Keep the seven-step editor oriented around the selected team’s decision,
+  // rather than making people translate generic module names as they work.
+  const content = isB2B() ? preset.b2b : preset.b2c;
+  const entity = isB2B() ? 'account' : 'customer';
+  const profileLabel = getProfileStrategyLabel(strategy);
+  setText('step-3-title', `${profileLabel} ${isB2B() ? 'Account' : ''} Insights`.trim());
+  setText('step-3-sub', `Configure the modeled ${entity} signals and calculated insights that help ${profileLabel.toLowerCase()} achieve the ${strategy.objective} objective.`);
+  setText('step-3-insights-heading', content.insights);
+  setText('step-4-title', content.affinities);
+  setText('step-4-sub', `Tune the aggregate signals and evidence ${profileLabel.toLowerCase()} should use to make the next decision.`);
+  setText('step-5-title', `${content.preferences}, ${content.events} & ${content.membership}`);
+  setText('step-5-sub', `Edit the context, relationships, and programs that make this ${entity} story actionable.`);
+  setText('step-5-preferences-heading', content.preferences);
+  setText('step-5-events-heading', content.events);
+  setText('step-5-membership-heading', content.membership);
+  setText('step-6-title', `${content.recommendations} & ${content.activity}`);
+  setText('step-6-sub', `Prioritize concise next-best actions and the activity evidence ${profileLabel.toLowerCase()} needs to act with confidence.`);
+  setText('step-6-recs-heading', content.recommendations);
+  setText('step-6-activity-heading', content.activity);
+}
+
+function setViewerLens(lens) {
+  if (!PERSONA_PRESETS[lens]) return;
+  readStaticFields();
+  const currentLens = getProfileStrategy().lens;
+  snapshotPersonaView(state, currentLens);
+  restorePersonaView(state, lens);
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+  if (lens === 'custom' && !getProfileStrategy().customRole) document.getElementById('strategy-custom-role')?.focus();
+}
+
+function onProfileStrategyChange() {
+  const strategy = getProfileStrategy();
+  strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
+  strategy.brief = document.getElementById('strategy-brief')?.value || '';
+  strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
+  updateProfileStrategyUI();
+  refreshPreview();
+}
+
 function getB2CSections() {
   state.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, state.b2cSections || {});
   return state.b2cSections;
@@ -89,6 +270,12 @@ function setProfileType(profileType) {
   nextState.colors = Object.assign({}, nextState.colors, state.colors || {});
   nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
   nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
+  nextState.profileStrategy = Object.assign({}, getProfileStrategy());
+  // B2C and B2B have different data contracts, so their working views begin
+  // fresh after a mode change while retaining the current persona choice.
+  nextState.personaVariants = {};
+  applyPersonaPreset(nextState);
+  snapshotPersonaView(nextState);
   state = nextState;
   fillStaticFields();
   renderAll();
@@ -123,6 +310,7 @@ window.addEventListener('resize', fitPreviewScale);
 
 function fillStaticFields() {
   if (!state.profileType) state.profileType = 'b2c';
+  getProfileStrategy();
   document.getElementById('brand-name').value = state.brandName || '';
   document.getElementById('brand-industry').value = state._industry || 'recruiting';
   document.getElementById('app-name').value = state.appName || 'Data Cloud';
@@ -229,9 +417,14 @@ function fillStaticFields() {
     });
   }
   updateProfileModeUI();
+  updateProfileStrategyUI();
 }
 
 function readStaticFields() {
+  const strategy = getProfileStrategy();
+  strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
+  strategy.brief = document.getElementById('strategy-brief')?.value || '';
+  strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
   state.brandName = document.getElementById('brand-name').value;
   state.appName = document.getElementById('app-name').value;
   state.colors.primary = document.getElementById('hex-primary').value;
@@ -360,11 +553,16 @@ function onIndustryChange() {
     return;
   }
   const key = document.getElementById('brand-industry').value;
+  const strategy = Object.assign({}, getProfileStrategy());
   state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
   state.userAvatar = '';
+  state.profileStrategy = strategy;
+  state.personaVariants = {};
+  applyPersonaPreset();
+  snapshotPersonaView();
   fillStaticFields();
   renderInsights();
   renderAffinityGroups();
@@ -695,6 +893,8 @@ function startOver() {
   state.brandName = INDUSTRY_DEFAULTS[key].label;
   state.logo = '';
   state.userAvatar = '';
+  applyPersonaPreset();
+  snapshotPersonaView();
   fillStaticFields();
   renderAll();
   goToStep(0);
@@ -874,6 +1074,7 @@ function applyAIProfile(ai) {
   const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
   const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
+  base.profileStrategy = Object.assign({}, getProfileStrategy());
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
   base.appName = profileType === 'b2b' ? 'Data Cloud' : (ai.appName || base.appName);
@@ -904,6 +1105,13 @@ function applyAIProfile(ai) {
   if (profileType !== 'b2b' && Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
   if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
   if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
+  // The AI supplies the content, while the selected viewer lens owns the
+  // information hierarchy and section names shown to the presenter.
+  applyPersonaPreset(base);
+  // New website analysis replaces modeled profile content, so previously
+  // saved working views are no longer a safe match for this customer.
+  base.personaVariants = {};
+  snapshotPersonaView(base);
 
   // Prefer favicon as logo if AI didn't give us anything.
   if (ai._meta && ai._meta.favicon && !base.logo) base.logo = ai._meta.favicon;
@@ -987,6 +1195,8 @@ function closeSaveProjectModal() {
 }
 
 async function confirmSaveProject(asNew) {
+  readStaticFields();
+  snapshotPersonaView();
   const input = document.getElementById('save-project-name-input');
   const name = input.value.trim() || state.brandName || 'Untitled Profile';
   const id = asNew ? null : currentProjectId;
@@ -1127,10 +1337,18 @@ function nudgeToAdvancedIfDefaultFailed(code) {
 
 async function onQuickStartAnalyze() {
   const url = document.getElementById('quickstart-url').value.trim();
+  readStaticFields();
+  const strategy = getProfileStrategy();
+  const errBox = document.getElementById('quickstart-error');
+  if (strategy.lens === 'custom' && !strategy.customRole) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add who will use this custom profile before analyzing.';
+    document.getElementById('strategy-custom-role')?.focus();
+    return;
+  }
   if (!url) return;
   const btn = document.getElementById('quickstart-btn');
   const status = document.getElementById('quickstart-status');
-  const errBox = document.getElementById('quickstart-error');
   errBox.style.display = 'none';
   errBox.textContent = '';
   btn.disabled = true;
@@ -1142,6 +1360,7 @@ async function onQuickStartAnalyze() {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
       profileType: state.profileType || 'b2c',
+      strategy: Object.assign({}, getProfileStrategy()),
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
@@ -1204,6 +1423,8 @@ function onScraperEndpointChange() {
 // ─── INIT ───────────────────────────────────────────────────
 function bootstrap() {
   state._industry = 'recruiting';
+  applyPersonaPreset();
+  snapshotPersonaView();
   fillStaticFields();
   renderAll();
 

@@ -173,6 +173,25 @@
     .profile-type-option.active { background: #fff; color: var(--sf-navy); border-color: #fff; box-shadow: 0 4px 12px rgba(0,0,0,.12); }
     .profile-type-option strong { display: block; font-size: 12px; font-weight: 700; }
     .profile-type-option span { display: block; font-size: 10.5px; margin-top: 3px; line-height: 1.35; opacity: .82; }
+    .strategy-panel { margin-top: 14px; padding: 13px; border-radius: 12px; background: rgba(0,0,0,0.13); border: 1px solid rgba(255,255,255,0.16); }
+    .strategy-label { display: block; color: rgba(255,255,255,0.85); font-size: 10px; font-weight: 700; letter-spacing: .12em; text-transform: uppercase; margin-bottom: 8px; }
+    .persona-switch { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; }
+    .persona-option { padding: 8px 5px; border: 1px solid rgba(255,255,255,.20); background: rgba(255,255,255,.06); border-radius: 8px; color: rgba(255,255,255,.72); font: 700 10px var(--font-body); cursor: pointer; transition: .18s ease; }
+    .persona-option:hover { border-color: rgba(255,255,255,.48); color: #fff; }
+    .persona-option.active { background: #fff; border-color: #fff; color: var(--sf-navy); box-shadow: 0 3px 10px rgba(0,0,0,.14); }
+    .strategy-fields { display: grid; grid-template-columns: 155px 1fr; gap: 8px; margin-top: 10px; }
+    .strategy-fields select, .strategy-fields textarea { width: 100%; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(0,0,0,.14); color: #fff; font: 11px var(--font-body); padding: 8px 9px; outline: none; }
+    .strategy-fields select option { color: #172033; background: #fff; }
+    .strategy-fields textarea { resize: vertical; min-height: 52px; }
+    .strategy-fields textarea::placeholder { color: rgba(255,255,255,.52); }
+    .custom-role-field { margin-top: 10px; }
+    .custom-role-field label { display: block; margin: 0 0 5px; color: rgba(255,255,255,.82); font-size: 10.5px; font-weight: 700; }
+    .custom-role-field input { width: 100%; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; background: rgba(0,0,0,.14); color: #fff; font: 11px var(--font-body); padding: 8px 9px; outline: none; }
+    .custom-role-field input::placeholder { color: rgba(255,255,255,.52); }
+    .custom-role-field input:focus { border-color: rgba(255,255,255,.65); }
+    .strategy-blueprint { display: flex; gap: 7px; align-items: flex-start; margin-top: 9px; color: rgba(255,255,255,.78); font-size: 10.5px; line-height: 1.4; }
+    .strategy-blueprint strong { color: #fff; }
+    .strategy-blueprint em { color: rgba(255,255,255,.58); font-style: normal; }
     .mode-b2b { display: none; }
     body.profile-mode-b2b .mode-b2b { display: block; }
     body.profile-mode-b2b label.mode-b2b { display: flex; }
@@ -268,6 +287,32 @@
                 <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false">
                   <strong>Account · B2B</strong><span>Generate a company-level account profile.</span>
                 </button>
+              </div>
+              <div class="strategy-panel">
+                <label class="strategy-label">Profile strategy</label>
+                <div class="persona-switch" role="radiogroup" aria-label="Viewer persona">
+                  <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true">Sales</button>
+                  <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false">Service</button>
+                  <button type="button" id="persona-marketing" class="persona-option" onclick="setViewerLens('marketing')" role="radio" aria-checked="false">Marketing</button>
+                  <button type="button" id="persona-success" class="persona-option" onclick="setViewerLens('success')" role="radio" aria-checked="false">Success</button>
+                  <button type="button" id="persona-custom" class="persona-option" onclick="setViewerLens('custom')" role="radio" aria-checked="false">Custom</button>
+                </div>
+                <div class="custom-role-field" id="custom-role-field" hidden>
+                  <label for="strategy-custom-role">Who will use this profile? <span aria-hidden="true">*</span></label>
+                  <input id="strategy-custom-role" type="text" maxlength="64" placeholder="e.g. Regional franchise manager" oninput="onProfileStrategyChange()" aria-describedby="custom-role-help">
+                  <span id="custom-role-help" class="sr-only">Describe the role that will use this unified profile.</span>
+                </div>
+                <div class="strategy-fields">
+                  <select id="strategy-objective" aria-label="Primary objective" onchange="onProfileStrategyChange()">
+                    <option value="convert">Convert</option>
+                    <option value="retain">Retain</option>
+                    <option value="expand">Expand</option>
+                    <option value="resolve">Resolve</option>
+                    <option value="engage">Engage</option>
+                  </select>
+                  <textarea id="strategy-brief" aria-label="What should this person be able to decide or do?" placeholder="What should this person be able to decide or do?" oninput="onProfileStrategyChange()"></textarea>
+                </div>
+                <div class="strategy-blueprint" id="strategy-blueprint"></div>
               </div>
               <div class="quickstart-row">
                 <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">

@@ -171,6 +171,7 @@ Rules:
 - Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
 - **COMPOSITION MATTERS** — SEs screenshot one 1300×860 profile canvas onto slides. Populate it with meaningful, varied content, but do not overfill it: use 2-3 affinity groups with 2-3 items each, 1 focused extraCard, up to 1 rightExtraCard, 2 recommendations, and 4-6 concise activity items. Keep labels short and messages scannable. Choose modules that tell a coherent customer story; users can add or remove sections later.
 - Keep all recommendation copy and standard labels suitable for dark text on white cards. Do not use white text or inline styles that reduce contrast.
+- A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs purchase/expansion signals and commercial actions; Service needs churn, case, sentiment, and save actions; Marketing needs journey, channel, content, and campaign engagement; Customer Success needs health, adoption, renewal, and value-realization actions. For Custom, the supplied role and decision request override these default patterns. Adapt every supporting module to that lens while keeping the customer internally consistent.
 - Return ONLY the JSON. No explanation.`;
 
   const B2B_SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Salesforce Data Cloud unified ACCOUNT profile for a specific customer.
@@ -225,6 +226,7 @@ Rules:
 - Populate Products & Contracts, the Billing/Renewal extra card, 2 next-best actions, and 4-6 account activity items. The output should be dense enough to screenshot cleanly.
 - Keep the workspace screenshot-ready: use concise labels, short action titles, and only the most decision-useful details. Do not use white text or inline styling that could reduce contrast on white cards.
 - Keep actual brand colors discernible from the page when possible, but specify a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
+- A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs opportunity, buying-committee, expansion, and commercial actions; Service needs account risk, support, entitlement, and save actions; Marketing needs account intent, campaign, content, and journey engagement; Customer Success needs adoption, renewal, stakeholder, and health actions. For Custom, the supplied role and decision request override these default patterns.
 - Return ONLY the JSON. No explanation.`;
 
   function getSystemPrompt(profileType) {
@@ -233,6 +235,7 @@ Rules:
 
   function buildUserPrompt(scraped, opts = {}) {
     const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
+    const strategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, opts.strategy || {});
     return `Customer URL: ${scraped.url}
 Site title: ${scraped.title || '(not extracted)'}
 Description: ${scraped.description || '(not extracted)'}
@@ -245,6 +248,13 @@ Nav links seen: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
 
 Body text (truncated):
 ${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from URL/domain alone)'}
+
+Profile strategy (this controls the generated working view):
+- Viewer persona: ${strategy.lens}
+- Custom profile role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not supplied)') : '(not applicable)'}
+- Primary objective: ${strategy.objective}
+- Additional context from the presenter: ${strategy.brief || '(none)'}
+- Prioritize signals, supporting modules, and next-best actions that help this persona achieve the objective. Keep the same fictional person/account internally consistent. Website facts establish brand context; operational signals and scores are modeled demo data.
 
 Generate the ${profileType} Unified Profile JSON per the schema.`;
   }

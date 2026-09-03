@@ -308,7 +308,7 @@
     onStatus('analyzing');
     const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
     const { text, model_used } = await callLLM({
-      prompt: shared.buildUserPrompt(scraped, { profileType: profileType }),
+      prompt: shared.buildUserPrompt(scraped, { profileType: profileType, strategy: opts.strategy || {} }),
       system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
       tier: tier,
       maxTokens: 8000
