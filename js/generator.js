@@ -514,6 +514,11 @@ body {
 .right-bottom-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: visible; }
 .activity-card { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
 .activity-card .activity-list { flex: 1; min-height: 0; }
+/* The default canvas clips only the activity area to preserve a clean first
+   screenshot. Once a user intentionally adds cards on the right, that column
+   becomes part of the normal page flow so no added card is lost below it. */
+.right-bottom-expanded { flex: 0 0 auto; overflow: visible; }
+.right-bottom-expanded > .activity-card { align-self: start; max-height: 340px; }
 
 @media (max-width: 1100px) {
   .up-shell { grid-template-columns: ${leftW}px 1fr; }
@@ -568,7 +573,7 @@ body {
     <span class="waffle"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></span>
     <span>${esc(s.appName || 'Data Cloud')}</span>
   </div>
-  ${s.navLinks.map((l, i) => `<a class="app-nav-link${i === 0 ? ' active' : ''}" href="#">${esc(l)}</a>`).join('')}
+  ${s.navLinks.map((l, i) => `<span class="app-nav-link${i === 0 ? ' active' : ''}">${esc(l)}</span>`).join('')}
   <div class="app-nav-tab">
     ${esc(s.tabName || s.profile.name)}
     <span class="tab-close">×</span>
@@ -713,7 +718,7 @@ body {
       <div class="rec-view-all">View All</div>
     </div>` : ''}
 
-    <div class="right-bottom">
+    <div class="right-bottom${rightExtraCards.length ? ' right-bottom-expanded' : ''}">
       <div class="right-bottom-col">
         ${visible.events ? `<div class="card">
           <div class="section-head">
@@ -857,7 +862,7 @@ function generateAccountProfileHTML(state) {
 </head>
 <body>
   <header class="b2b-topbar"><div class="b2b-brand"><span class="b2b-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Data Cloud')}</span></div><div class="b2b-search">⌕&nbsp;&nbsp;Search this account, contacts, opportunities…</div><div class="b2b-actions">☆ ＋ ? ⚙ ●</div></header>
-  <nav class="b2b-nav"><div class="b2b-nav-app"><span class="b2b-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${navLinks.map(link => `<a href="#">${esc(link)}</a>`).join('')}<div class="b2b-nav-tab">▣&nbsp; ${esc(s.tabName || a.name)}</div></nav>
+  <nav class="b2b-nav"><div class="b2b-nav-app"><span class="b2b-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${navLinks.map((link, index) => `<span class="b2b-nav-link" style="display:flex;align-items:center;color:${index === 0 ? 'var(--primary)' : 'var(--menu-text)'};font-size:12px;white-space:nowrap;cursor:default;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="b2b-nav-tab">▣&nbsp; ${esc(s.tabName || a.name)}</div></nav>
   <main class="b2b-shell">
     <aside class="b2b-card b2b-account-rail">
       <div class="b2b-account-head"><div class="b2b-account-mark">${accountMark}</div><div><div class="b2b-account-name">${esc(a.name)}</div><div class="b2b-account-location">${esc(a.headquarters)}</div></div></div>
@@ -983,7 +988,7 @@ function generateTabbedAccountProfileHTML(state) {
 </style><style>:root{--accent:${accent}}.sf-profile-tab{margin-left:0}.account-view-context{display:none!important}</style><style>html{width:1300px;min-height:860px}body{min-width:1300px;min-height:860px;overflow-x:hidden;overflow-y:auto}.sf-app-name{white-space:nowrap;flex:0 0 auto}.account-shell{min-height:774px;height:auto;align-items:stretch}.account-rail{min-height:750px;height:auto}.account-workspace{min-height:750px;height:auto;overflow:visible}.account-views{min-height:707px;height:auto}.account-view{min-height:687px;height:auto}.account-pane{overflow:visible}.account-card.account-activity{max-height:300px;overflow:hidden;display:flex;flex-direction:column}.account-card.account-activity>.account-activity{overflow-y:auto;scrollbar-width:none}.account-card.account-activity>.account-activity::-webkit-scrollbar{display:none}</style></head>
 <body>
 <header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
-<nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>Data Cloud</div>${canonicalNav.map(link => `<a href="#">${esc(link)}</a>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(a.name)} &nbsp;×</div></nav>
+<nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>Data Cloud</div>${canonicalNav.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? 'var(--primary)' : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(a.name)} &nbsp;×</div></nav>
 <main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div></div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div class="rail-gauge"></div><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Calculated from account signals')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
 <section class="account-workspace"><div class="account-tabs" role="tablist" aria-label="Account views"><button class="account-tab" type="button" role="tab" aria-selected="true" aria-controls="account-overview" data-account-tab="overview">Overview</button><button class="account-tab" type="button" role="tab" aria-selected="false" aria-controls="account-people" data-account-tab="people">People</button><button class="account-tab" type="button" role="tab" aria-selected="false" aria-controls="account-sales" data-account-tab="sales">Sales</button><button class="account-tab" type="button" role="tab" aria-selected="false" aria-controls="account-success" data-account-tab="success">Success</button><button class="account-tab" type="button" role="tab" aria-selected="false" aria-controls="account-related" data-account-tab="related">Related</button><span class="account-view-context">${esc(viewerLensLabel(strategy))} view · ${esc(strategy.objective)}</span></div><div class="account-views">
 <div class="account-view active" id="account-overview" role="tabpanel"><div class="account-pane">${overviewMain || noModules}</div><div class="account-pane">${overviewSide}</div></div>
