@@ -87,6 +87,22 @@
     .preview-shell { background: #fff; border-radius: var(--radius-xl); border: 1px solid rgba(0,30,91,0.08); box-shadow: var(--shadow-card); overflow: hidden; }
     .preview-chrome { background: linear-gradient(180deg, #FAFCFF 0%, #F3F7FD 100%); border-bottom: 1px solid rgba(0,30,91,0.08); }
 
+    /* Additional insight-card layout composer. The identity card is fixed in
+       the generated profile; these non-profile modules can be staged, moved,
+       or kept as optional suggestions without changing their content. */
+    .module-composer { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .module-composer-zone { min-height: 122px; padding: 11px; border: 1px dashed #C7D2E2; border-radius: 10px; background: #F8FBFF; transition: border-color 0.16s ease, background 0.16s ease; }
+    .module-composer-zone.module-composer-drop-active { border-color: var(--sf-blue-m); background: var(--cloud-95); }
+    .module-composer-zone-title { color: var(--text); font-size: 12px; font-weight: 700; }
+    .module-composer-zone p { margin: 2px 0 8px; color: #6B7280; font-size: 10.5px; line-height: 1.35; }
+    .module-composer-card { display: flex; align-items: center; gap: 6px; margin-top: 6px; padding: 7px; border: 1px solid #DCE6F2; border-radius: 7px; background: #fff; color: #24344D; cursor: grab; font-size: 11px; line-height: 1.2; }
+    .module-composer-card:active { cursor: grabbing; }
+    .module-composer-card strong { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .module-composer-card button { padding: 2px 5px; border: 0; border-radius: 4px; background: #EAF2FD; color: #0B5CAB; font-size: 10px; font-weight: 700; cursor: pointer; }
+    .module-composer-grip { color: #8A9AAD; font-size: 14px; line-height: 1; }
+    .module-composer-empty { padding: 20px 4px 8px; color: #98A5B5; font-size: 11px; text-align: center; }
+    @media (max-width: 720px) { .module-composer { grid-template-columns: 1fr; } }
+
     /* Preview stage — renders iframe at 1300×860 (desktop-shaped) and
        scales it down to fit the preview pane so the SE sees a miniature
        of the actual export, not the narrow mobile-stack layout. */
@@ -692,10 +708,18 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
+              <div class="mode-b2c rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-1">Additional insight-card layout</h3>
+                <p class="text-xs text-gray-500 mb-3">The profile card stays fixed on the left. Drag non-profile cards between the middle and right columns, or keep them in the suggested library so the first screen remains presentation-ready.</p>
+                <div id="module-composer" class="module-composer"></div>
+              </div>
+            </div>
+
+            <div class="border-t border-gray-100 pt-4">
               <div class="flex items-center justify-between mb-1">
                 <h3 class="text-sm font-700 text-gray-800">Custom Middle-Column Cards</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Add extra cards to fill empty space in the middle column so the profile looks balanced for screenshotting. Each card renders below Preferences with your own title, icon, and rows.</p>
+              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Preferences. Use the layout above to move a card or keep it as a suggestion; every card remains available for a longer, scrollable profile when needed.</p>
               <div id="extra-cards-container" class="space-y-4"></div>
               <button onclick="addExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Custom Card</button>
             </div>
@@ -704,7 +728,7 @@
               <div class="flex items-center justify-between mb-1">
                 <h3 class="text-sm font-700 text-gray-800">Custom Right-Column Cards</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Add cards <b>below Membership Details</b> in the right column (opposite Engagement Activity). Use these to fill vertical space when the activity timeline is taller than Events + Membership.</p>
+              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Products &amp; Offers in the right column. Cards can be moved, stashed, or restored in the layout above.</p>
               <div id="right-extra-cards-container" class="space-y-4"></div>
               <button onclick="addRightExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Right-Column Card</button>
             </div>

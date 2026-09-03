@@ -52,6 +52,10 @@ function generateProfileHTML(state) {
   const leftW = Math.max(220, Math.min(500, Number(s.layout?.leftColWidth) || 290));
   const middleMin = Math.max(220, Math.min(500, Number(s.layout?.middleColWidth) || 320));
   const visible = Object.assign({ affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true }, s.b2cSections || {});
+  const customCards = [...(Array.isArray(s.extraCards) ? s.extraCards : []), ...(Array.isArray(s.rightExtraCards) ? s.rightExtraCards : [])];
+  const isVisibleCustomCard = (card) => (card?.visibility || 'visible') === 'visible';
+  const middleExtraCards = customCards.filter(card => isVisibleCustomCard(card) && (card.placement || 'middle') !== 'right');
+  const rightExtraCards = customCards.filter(card => isVisibleCustomCard(card) && card.placement === 'right');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -260,6 +264,7 @@ body {
   grid-template-columns: ${leftW}px minmax(${middleMin}px, ${middleMin + 40}px) 1fr;
   gap: 12px;
   /* The two Salesforce chrome rows occupy ~102px at their rendered size. */
+  height: calc(860px - 102px);
   min-height: calc(860px - 102px);
   align-items: stretch;
   overflow: visible;
@@ -274,7 +279,7 @@ body {
 }
 
 /* ── Profile card ─────────────────────────────────────────── */
-.profile-card { display: flex; flex-direction: column; gap: 14px; }
+.profile-card { display: flex; flex-direction: column; gap: 14px; align-self: start; }
 .profile-head { display: flex; gap: 12px; align-items: center; }
 .profile-photo {
   width: 62px; height: 62px; border-radius: 50%;
@@ -505,10 +510,10 @@ body {
 .middle-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: visible; }
 
 /* Right column: Einstein Recs on top, then Events+Membership on left + Activity on right */
-.right-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; flex: 1 0 auto; min-height: 0; overflow: visible; }
+.right-bottom { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; align-items: stretch; flex: 1 1 auto; min-height: 0; overflow: hidden; }
 .right-bottom-col { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: visible; }
-.right-bottom > .card:last-child { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
-.right-bottom > .card:last-child .activity-list { flex: 1; min-height: 0; }
+.activity-card { min-height: 0; overflow: hidden; display: flex; flex-direction: column; }
+.activity-card .activity-list { flex: 1; min-height: 0; }
 
 @media (max-width: 1100px) {
   .up-shell { grid-template-columns: ${leftW}px 1fr; }
@@ -664,7 +669,7 @@ body {
       </div>
     </div>` : ''}
 
-    ${(s.extraCards || []).map(card => `
+    ${middleExtraCards.map(card => `
       <div class="card">
         <div class="section-head">
           <div class="section-icon-title">
@@ -747,7 +752,7 @@ body {
           </div>
         </div>` : ''}
 
-        ${(s.rightExtraCards || []).map(card => `
+        ${rightExtraCards.map(card => `
           <div class="card">
             <div class="section-head">
               <div class="section-icon-title">
@@ -763,7 +768,7 @@ body {
           </div>`).join('')}
       </div>
 
-      ${visible.activity ? `<div class="card">
+      ${visible.activity ? `<div class="card activity-card">
         <div class="section-head">
           <div class="section-icon-title">
             <span class="section-icon" style="background:#4E4E4E;">≡</span>
@@ -815,7 +820,9 @@ function generateAccountProfileHTML(state) {
   const products = Array.isArray(s.membership?.items) ? s.membership.items : [];
   const recommendations = Array.isArray(s.recommendations?.items) ? s.recommendations.items.slice(0, 2) : [];
   const activity = Array.isArray(s.activity?.items) ? s.activity.items.slice(0, 5) : [];
-  const extraCards = Array.isArray(s.extraCards) ? s.extraCards.slice(0, 1) : [];
+  const extraCards = [...(Array.isArray(s.extraCards) ? s.extraCards : []), ...(Array.isArray(s.rightExtraCards) ? s.rightExtraCards : [])]
+    .filter(card => (card?.visibility || 'visible') === 'visible')
+    .slice(0, 1);
   const initials = a.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'A';
   const numberWidth = (value, fallback) => {
     const number = Number.parseFloat(String(value || '').replace(/[^0-9.]/g, ''));
@@ -928,7 +935,8 @@ function generateTabbedAccountProfileHTML(state) {
   const products = Array.isArray(s.membership?.items) ? s.membership.items : [];
   const recommendations = Array.isArray(s.recommendations?.items) ? s.recommendations.items.slice(0, 2) : [];
   const activity = Array.isArray(s.activity?.items) ? s.activity.items.slice(0, 4) : [];
-  const extraCard = Array.isArray(s.extraCards) ? s.extraCards[0] : null;
+  const extraCard = [...(Array.isArray(s.extraCards) ? s.extraCards : []), ...(Array.isArray(s.rightExtraCards) ? s.rightExtraCards : [])]
+    .find(card => (card?.visibility || 'visible') === 'visible') || null;
   const initials = a.name.split(/\s+/).filter(Boolean).slice(0, 2).map(part => part[0]).join('').toUpperCase() || 'A';
   const percent = (value, fallback) => {
     const n = Number.parseFloat(String(value || '').replace(/[^0-9.]/g, ''));

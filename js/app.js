@@ -4,10 +4,9 @@
 
 const TOTAL_STEPS = 7;
 let currentStep = 0;
-let state = cloneIndustry('recruiting');
-state.brandName = 'NCSA College Recruiting';
-state.logo = '';
-state.userAvatar = '';
+// Start with a complete, presentation-ready B2C story. Industry templates
+// remain available whenever the user changes industry or starts a B2B build.
+let state = cloneTonyRobbinsStarter();
 
 const B2B_SECTION_DEFAULTS = {
   overviewMetrics: true, overviewDetails: true, overviewSignals: true,
@@ -150,8 +149,104 @@ const PERSONA_SAMPLE_LIBRARY = {
   }
 };
 
+// Supporting cards complete the first screen for every persona without
+// forcing an AI-created card to push the page below the fold. A card marked
+// "suggested" stays available in the builder, but is not rendered until the
+// user promotes it into a column.
+const PERSONA_SUPPORTING_MODULES = {
+  sales: {
+    visible: [
+      { title: 'Business Profile (Vance Tech)', icon: '💼', items: [['Industry Vertical', 'SaaS / Tech Services'], ['Annual Growth Rate', '35% YoY'], ['Marketing Budget', '$150,000 / year'], ['Sales Model', 'B2B Enterprise']] }
+    ],
+    suggested: [
+      { title: 'Sales Qualification Notes', icon: '📝', items: [['Authority', 'Sole Founder & Decision Maker'], ['Timeline', 'Q1 Upgrade Goal'], ['Key Motivator', 'Peer networking with high-growth founders']] }
+    ]
+  },
+  service: {
+    visible: [
+      { title: 'Service Context', icon: '🎧', items: [['Case priority', 'High'], ['Recommended owner', 'Retention specialist'], ['Preferred resolution', 'Guided walkthrough']] },
+      { title: 'Retention Plan', icon: '🛟', items: [['Save motion', 'Executive check-in'], ['Risk driver', 'Repeated workflow issue'], ['Next milestone', 'Resolved-case confirmation']] }
+    ],
+    suggested: [
+      { title: 'Voice of Customer', icon: '💬', items: [['Sentiment trend', 'Declining'], ['Survey follow-up', 'Requested'], ['Top theme', 'Faster resolution']] }
+    ]
+  },
+  marketing: {
+    visible: [
+      { title: 'Journey Context', icon: '🧭', items: [['Current stage', 'Consideration'], ['Next milestone', 'Webinar attendance'], ['Journey owner', 'Growth marketing']] },
+      { title: 'Content Performance', icon: '📣', items: [['Top content', 'Advanced product guide'], ['Campaign response', '18% click rate'], ['Audience fit', 'High intent segment']] }
+    ],
+    suggested: [
+      { title: 'Audience Activation', icon: '✨', items: [['Eligible channel', 'Email + web'], ['Next audience', 'Product explorers'], ['Suppression status', 'None']] }
+    ]
+  },
+  success: {
+    visible: [
+      { title: 'Success Context', icon: '🌱', items: [['Primary goal', 'Advance proficiency'], ['Next milestone', 'Advanced workflow workshop'], ['Success owner', 'Customer success team']] },
+      { title: 'Value Realization', icon: '📈', items: [['Value signal', 'Core workflow adoption'], ['Expansion cue', 'Advanced feature interest'], ['Renewal confidence', 'On track']] }
+    ],
+    suggested: [
+      { title: 'Success Plan', icon: '🗺️', items: [['Executive sponsor', 'Engaged'], ['Plan status', 'On track'], ['Next review', 'Monthly value check-in']] }
+    ]
+  },
+  custom: {
+    visible: [
+      { title: 'Decision Context', icon: '✦', items: [['Primary signal', 'High-value behavior'], ['Next step', 'Review and act'], ['Decision owner', 'Profile viewer']] },
+      { title: 'Action Plan', icon: '✅', items: [['Recommended motion', 'Contextual follow-up'], ['Confidence', 'High'], ['Timing', 'This week']] }
+    ],
+    suggested: [
+      { title: 'Supporting Evidence', icon: '◉', items: [['Evidence source', 'Engagement + program data'], ['Signal freshness', '2 days ago'], ['Coverage', 'Strong']] }
+    ]
+  }
+};
+
+const PERSONA_ACTIVITY_BOOSTS = {
+  sales: [['📨', 'Opened leadership playbook', 'Opened the <b>growth playbook</b> after a commercial touchpoint', '4 days ago'], ['🤝', 'Advisor follow-up booked', 'Scheduled a focused <b>value review</b> with an advisor', '1 week ago']],
+  service: [['📚', 'Knowledge article viewed', 'Reviewed the troubleshooting guide before reopening the case', '7 days ago'], ['📞', 'Service follow-up scheduled', 'Accepted a proactive resolution check-in', '9 days ago']],
+  marketing: [['🎯', 'Audience qualification updated', 'Moved into the <b>high-intent</b> nurture audience', '5 days ago'], ['🧩', 'Personalized web content served', 'Viewed a tailored proof-point experience', '8 days ago']],
+  success: [['📈', 'Value milestone tracked', 'Logged progress against the <b>advanced workflow</b> milestone', '5 days ago'], ['🤝', 'Success review confirmed', 'Accepted the next value realization check-in', '9 days ago']],
+  custom: [['🧠', 'Context signal refreshed', 'New supporting behavior was added to the decision view', '5 days ago'], ['✅', 'Recommended action queued', 'A contextual next step is ready for review', '8 days ago']]
+};
+
 function itemsFromPairs(items, keys) {
   return items.map(values => Object.fromEntries(keys.map((key, index) => [key, values[index]])));
+}
+
+function createSupportingCard(definition, placement = 'middle', visibility = 'visible') {
+  return {
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: definition.title,
+    icon: definition.icon,
+    items: itemsFromPairs(definition.items, ['label', 'value']),
+    placement,
+    visibility
+  };
+}
+
+function normalizeCustomModules(target = state) {
+  ['extraCards', 'rightExtraCards'].forEach((key) => {
+    if (!Array.isArray(target[key])) target[key] = [];
+    const defaultPlacement = key === 'rightExtraCards' ? 'right' : 'middle';
+    target[key].forEach((card, index) => {
+      if (!card.moduleId) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
+      if (!['middle', 'right'].includes(card.placement)) card.placement = defaultPlacement;
+      if (!['visible', 'suggested', 'hidden'].includes(card.visibility)) card.visibility = 'visible';
+      if (!Array.isArray(card.items)) card.items = [];
+    });
+  });
+}
+
+function getCustomModules(target = state) {
+  normalizeCustomModules(target);
+  return [...target.extraCards, ...target.rightExtraCards];
+}
+
+function buildPersonaSupportingModules(lens) {
+  const registry = PERSONA_SUPPORTING_MODULES[lens] || PERSONA_SUPPORTING_MODULES.sales;
+  return [
+    ...registry.visible.map(card => createSupportingCard(card, 'middle', 'visible')),
+    ...registry.suggested.map(card => createSupportingCard(card, 'middle', 'suggested'))
+  ];
 }
 
 function applyPersonaSampleTemplate(target = state) {
@@ -159,6 +254,14 @@ function applyPersonaSampleTemplate(target = state) {
   const mode = target.profileType === 'b2b' ? 'b2b' : 'b2c';
   const template = PERSONA_SAMPLE_LIBRARY[strategy.lens]?.[mode];
   if (!template) return;
+  // Preserve the curated Tony Robbins sales story on first launch. It is the
+  // richer out-of-the-box example users can edit without analyzing a website.
+  if (target._starterProfile === 'tony-robbins' && mode === 'b2c' && strategy.lens === 'sales') {
+    target.extraCards = buildPersonaSupportingModules('sales');
+    target.rightExtraCards = [];
+    normalizeCustomModules(target);
+    return;
+  }
   const primary = target.colors?.primary || '#001E5B';
   const accent = target.colors?.accent || '#066AFE';
   // The Salesforce chrome intentionally defaults to a white accent. Keep the
@@ -173,9 +276,16 @@ function applyPersonaSampleTemplate(target = state) {
   target.membership.items = itemsFromPairs(template.membership, ['label', 'value']);
   const oldRecommendations = target.recommendations.items || [];
   target.recommendations.items = template.recommendations.map((item, index) => ({ eyebrow: item[0], title: item[1], cta: item[2], image: oldRecommendations[index]?.image || '' }));
-  target.activity.items = itemsFromPairs(template.activity, ['icon', 'title', 'body', 'time']);
-  target.extraCards = [{ title: template.extra[0], icon: template.extra[1], items: itemsFromPairs(template.extra[2], ['label', 'value']) }];
-  target.rightExtraCards = [];
+  const activityItems = [...template.activity, ...(PERSONA_ACTIVITY_BOOSTS[strategy.lens] || [])];
+  target.activity.items = itemsFromPairs(activityItems, ['icon', 'title', 'body', 'time']);
+  if (mode === 'b2c') {
+    target.extraCards = buildPersonaSupportingModules(strategy.lens);
+    target.rightExtraCards = [];
+  } else {
+    target.extraCards = [{ ...createSupportingCard({ title: template.extra[0], icon: template.extra[1], items: template.extra[2] }, 'middle', 'visible') }];
+    target.rightExtraCards = [];
+  }
+  normalizeCustomModules(target);
   if (mode === 'b2b') target.accountMetrics = Object.assign({}, target.accountMetrics || {}, template.metrics);
 }
 
@@ -783,11 +893,16 @@ function removeMembership(i) { state.membership.items.splice(i, 1); renderMember
 // and any number of label/value rows.
 function renderExtraCards() {
   const c = document.getElementById('extra-cards-container');
-  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  normalizeCustomModules();
   c.innerHTML = state.extraCards.map((card, ci) => `
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
+        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
+          <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
+          <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
+          <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
+        </select>
         <button class="icon-btn danger" onclick="removeExtraCard(${ci})">Remove card</button>
       </div>
       <div class="grid grid-cols-12 gap-2 items-center mb-2">
@@ -815,14 +930,16 @@ function renderExtraCards() {
   });
 }
 function addExtraCard() {
-  if (!Array.isArray(state.extraCards)) state.extraCards = [];
+  normalizeCustomModules();
   state.extraCards.push({
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     title: 'New Section',
     icon: '📋',
     items: [
       { label: 'Field 1', value: '' },
       { label: 'Field 2', value: '' }
-    ]
+    ],
+    placement: 'middle', visibility: 'visible'
   });
   renderExtraCards();
   refreshPreview();
@@ -837,11 +954,16 @@ function removeExtraCardRow(ci, ri) { state.extraCards[ci].items.splice(ri, 1); 
 function renderRightExtraCards() {
   const c = document.getElementById('right-extra-cards-container');
   if (!c) return;
-  if (!Array.isArray(state.rightExtraCards)) state.rightExtraCards = [];
+  normalizeCustomModules();
   c.innerHTML = state.rightExtraCards.map((card, ci) => `
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.rightExtraCards[${ci}].title=this.value; refreshPreview()">
+        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
+          <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
+          <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
+          <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
+        </select>
         <button class="icon-btn danger" onclick="removeRightExtraCard(${ci})">Remove card</button>
       </div>
       <div class="grid grid-cols-12 gap-2 items-center mb-2">
@@ -868,14 +990,16 @@ function renderRightExtraCards() {
   });
 }
 function addRightExtraCard() {
-  if (!Array.isArray(state.rightExtraCards)) state.rightExtraCards = [];
+  normalizeCustomModules();
   state.rightExtraCards.push({
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
     title: 'New Section',
     icon: '📋',
     items: [
       { label: 'Field 1', value: '' },
       { label: 'Field 2', value: '' }
-    ]
+    ],
+    placement: 'right', visibility: 'visible'
   });
   renderRightExtraCards();
   refreshPreview();
@@ -883,6 +1007,82 @@ function addRightExtraCard() {
 function removeRightExtraCard(i) { state.rightExtraCards.splice(i, 1); renderRightExtraCards(); refreshPreview(); }
 function addRightExtraCardRow(ci) { state.rightExtraCards[ci].items.push({ label: '', value: '' }); renderRightExtraCards(); refreshPreview(); }
 function removeRightExtraCardRow(ci, ri) { state.rightExtraCards[ci].items.splice(ri, 1); renderRightExtraCards(); refreshPreview(); }
+
+function setCustomCardVisibility(bucket, index, visibility) {
+  normalizeCustomModules();
+  const card = state[bucket]?.[index];
+  if (!card) return;
+  card.visibility = visibility;
+  renderAll();
+  refreshPreview();
+}
+
+function findCustomModule(moduleId) {
+  normalizeCustomModules();
+  for (const bucket of ['extraCards', 'rightExtraCards']) {
+    const index = state[bucket].findIndex(card => card.moduleId === moduleId);
+    if (index !== -1) return { bucket, index, card: state[bucket][index] };
+  }
+  return null;
+}
+
+function moveCustomModule(moduleId, destination) {
+  const found = findCustomModule(moduleId);
+  if (!found) return;
+  const [card] = state[found.bucket].splice(found.index, 1);
+  if (destination === 'suggested') {
+    card.visibility = 'suggested';
+    state[card.placement === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+  } else {
+    card.placement = destination;
+    card.visibility = 'visible';
+    state[destination === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+  }
+  renderAll();
+  refreshPreview();
+}
+
+function onModuleDragStart(event, moduleId) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', moduleId);
+}
+
+function allowModuleDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('module-composer-drop-active');
+}
+
+function clearModuleDrop(event) {
+  event.currentTarget.classList.remove('module-composer-drop-active');
+}
+
+function dropModule(event, destination) {
+  event.preventDefault();
+  clearModuleDrop(event);
+  moveCustomModule(event.dataTransfer.getData('text/plain'), destination);
+}
+
+function renderModuleComposer() {
+  const container = document.getElementById('module-composer');
+  if (!container) return;
+  const modules = getCustomModules();
+  const zones = {
+    middle: modules.filter(card => card.visibility === 'visible' && card.placement === 'middle'),
+    right: modules.filter(card => card.visibility === 'visible' && card.placement === 'right'),
+    suggested: modules.filter(card => card.visibility === 'suggested')
+  };
+  const zone = (key, title, description) => `
+    <div class="module-composer-zone" ondragover="allowModuleDrop(event)" ondragleave="clearModuleDrop(event)" ondrop="dropModule(event, '${key}')">
+      <div class="module-composer-zone-title">${title}</div>
+      <p>${description}</p>
+      ${zones[key].length ? zones[key].map(card => `
+        <div class="module-composer-card" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
+          <span class="module-composer-grip">⠿</span><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
+          ${key === 'suggested' ? `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'middle')">Show</button>` : `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'suggested')">Stash</button>`}
+        </div>`).join('') : `<div class="module-composer-empty">Drop a card here</div>`}
+    </div>`;
+  container.innerHTML = `${zone('middle', 'Middle column', 'Below preferences')}${zone('right', 'Right column', 'Below products / offers')}${zone('suggested', 'Suggested library', 'Available but not on the first screen')}`;
+}
 
 function renderRecs() {
   const c = document.getElementById('recs-container');
@@ -996,12 +1196,10 @@ function onPhotoUrlChange() {
 // ─── START OVER + EXPORT ───────────────────────────────────
 function startOver() {
   if (!confirm('Reset everything back to industry defaults?')) return;
-  const key = document.getElementById('brand-industry').value || 'recruiting';
-  state = cloneProfileMode(state.profileType || 'b2c', key);
-  state._industry = key;
-  state.brandName = INDUSTRY_DEFAULTS[key].label;
-  state.logo = '';
-  state.userAvatar = '';
+  const profileType = state.profileType || 'b2c';
+  const key = document.getElementById('brand-industry').value || 'generic';
+  state = profileType === 'b2b' ? cloneAccountIndustry(key) : cloneTonyRobbinsStarter();
+  state._industry = profileType === 'b2b' ? key : 'generic';
   applyPersonaPreset();
   applyPersonaSampleTemplate();
   snapshotPersonaView();
@@ -1011,7 +1209,10 @@ function startOver() {
   refreshPreview();
 }
 
-function downloadHTML() {
+async function downloadHTML() {
+  // Convert bundled starter artwork to data URLs before downloading so the
+  // exported HTML continues to show its recommendation images anywhere.
+  if (typeof hydrateBundledStarterImages === 'function') await hydrateBundledStarterImages(state);
   const html = generateProfileHTML(state);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
@@ -1187,6 +1388,7 @@ function applyAIProfile(ai) {
   const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
   base.profileStrategy = Object.assign({}, getProfileStrategy());
+  const recommendationFallbacks = (base.recommendations?.items || []).map(item => item.image || '');
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
   base.appName = profileType === 'b2b' ? 'Data Cloud' : (ai.appName || base.appName);
@@ -1205,6 +1407,11 @@ function applyAIProfile(ai) {
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
+  if (Array.isArray(base.recommendations?.items)) {
+    base.recommendations.items = base.recommendations.items.map((item, index) => Object.assign({}, item, {
+      image: item.image || recommendationFallbacks[index] || ''
+    }));
+  }
   if (Array.isArray(base.activity?.items)) {
     base.activity.items = base.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
   }
@@ -1215,8 +1422,29 @@ function applyAIProfile(ai) {
     base.tabName = ai.tabName || base.account.name || base.tabName;
   }
   if (profileType !== 'b2b' && Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
-  if (Array.isArray(ai.extraCards)) base.extraCards = ai.extraCards;
-  if (Array.isArray(ai.rightExtraCards)) base.rightExtraCards = ai.rightExtraCards;
+  // AI may identify valuable additional modules. Keep them in the builder as
+  // suggestions so the initial profile remains a single presentable screen.
+  if (profileType === 'b2c') {
+    // A compact persona-specific card gives the main screen a balanced
+    // information density; AI extras are then available as optional depth.
+    base.extraCards = buildPersonaSupportingModules(base.profileStrategy.lens);
+    base.rightExtraCards = [];
+  }
+  if (Array.isArray(ai.extraCards)) {
+    const aiCards = ai.extraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `ai-middle-${index + 1}`,
+      placement: 'middle', visibility: 'suggested'
+    }));
+    base.extraCards = (base.extraCards || []).concat(aiCards);
+  }
+  if (Array.isArray(ai.rightExtraCards)) {
+    const aiCards = ai.rightExtraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `ai-right-${index + 1}`,
+      placement: 'right', visibility: 'suggested'
+    }));
+    base.rightExtraCards = (base.rightExtraCards || []).concat(aiCards);
+  }
+  normalizeCustomModules(base);
   // The AI supplies the content, while the selected viewer lens owns the
   // information hierarchy and section names shown to the presenter.
   applyPersonaPreset(base);
@@ -1243,6 +1471,7 @@ function renderAll() {
   renderMembership();
   renderExtraCards();
   renderRightExtraCards();
+  renderModuleComposer();
   renderRecs();
   renderActivity();
   renderNavLinks();
@@ -1477,6 +1706,7 @@ async function onQuickStartAnalyze() {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
         else if (phase === 'analyzing') setStatus('Analyzing with Claude…');
+        else if (phase === 'generating_images') setStatus('Creating on-brand profile imagery…');
       }
     });
     applyAIProfile(ai);
@@ -1534,12 +1764,15 @@ function onScraperEndpointChange() {
 
 // ─── INIT ───────────────────────────────────────────────────
 function bootstrap() {
-  state._industry = 'recruiting';
+  state._industry = state._industry || 'generic';
   applyPersonaPreset();
   applyPersonaSampleTemplate();
   snapshotPersonaView();
   fillStaticFields();
   renderAll();
+  if (typeof hydrateBundledStarterImages === 'function') {
+    hydrateBundledStarterImages(state).then(() => refreshPreview());
+  }
 
   attachDropZone('drop-logo', 'preview-logo', (dataUrl) => {
     state.logo = dataUrl;

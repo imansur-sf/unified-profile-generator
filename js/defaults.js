@@ -605,6 +605,83 @@ function cloneIndustry(key) {
   return clone;
 }
 
+// The first-run experience is intentionally a complete, presentation-ready
+// example instead of a thin industry seed. It gives users something useful to
+// edit even when they skip website analysis. Recommendation images live in the
+// repository so the local preview does not depend on a third-party image host.
+function cloneTonyRobbinsStarter() {
+  const clone = cloneIndustry('generic');
+  clone._starterProfile = 'tony-robbins';
+  clone._industry = 'generic';
+  clone.brandName = 'Tony Robbins';
+  clone.appName = 'Data Cloud';
+  clone.logo = '';
+  clone.userAvatar = '';
+  clone.userName = 'Marcus Vance';
+  clone.colors = Object.assign({}, clone.colors, {
+    primary: '#0D1B2A', accent: '#FFFFFF', secondary: '#F4F6F9',
+    menu: '#FFFFFF', menuText: '#000000', pageBg: '#EAF5FE'
+  });
+  clone.navLinks = ['Home', 'Data Streams', 'Segments', 'Activations', 'Data Lake Objects', 'Data Model', 'Identity Resolutions', 'Calculated Insights'];
+  clone.tabName = 'Marcus Vance';
+  clone.profile = {
+    name: 'Marcus Vance', city: 'Austin, TX', customerId: '84029173',
+    email: 'marcus.vance@vancetech.com', secondaryEmail: '', secondaryEmailLabel: 'Secondary Email', secondaryEmailInclude: false,
+    phone: '(512) 555-0189', address: '1204 Congress Ave\nAustin, TX 78701',
+    segment: 'UPW Graduate, Business Mastery Alumni, High-Value VIP Lead, Platinum Partner Prospect', photo: ''
+  };
+  clone.loyalty = { title: 'Inner Circle Status', memberId: 'TR-9921-X', tier: 'Elite Member', points: '12,500', redeemedPoints: '4,000' };
+  clone.insights = {
+    title: 'Revenue & Propensity Insights',
+    items: [
+      { icon: '🔥', label: 'Lead Score', value: '98/100' }, { icon: '💰', label: 'Estimated Annual Revenue', value: '$8.5M' },
+      { icon: '📈', label: 'Coaching Intent Score', value: 'High' }, { icon: '🎓', label: 'LTV (Events & Digital)', value: '$18,500' },
+      { icon: '👥', label: 'Team Size', value: '45 Employees' }, { icon: '⚡', label: 'Growth Propensity', value: '94%' }
+    ]
+  };
+  clone.affinities = {
+    title: 'Purchase & Engagement Signals',
+    seriesA: { label: 'Content Browse', color: '#93A4B8' }, seriesB: { label: 'Event Engagement', color: '#FF5A1F' },
+    groups: [
+      { name: 'Focus Pillars', items: [{ label: 'Business Scaling', a: 88, b: 92 }, { label: 'Wealth Machine', a: 64, b: 51 }, { label: 'Mindset Mastery', a: 78, b: 84 }] },
+      { name: 'Delivery Channels', items: [{ label: 'In-Person Seminars', a: 59, b: 96 }, { label: '1-on-1 Coaching', a: 91, b: 72 }, { label: 'Virtual Events', a: 82, b: 88 }] }
+    ]
+  };
+  clone.preferences = {
+    title: 'Buying Preferences', icon: '🧾',
+    items: [{ label: 'Primary Driver', value: 'Exponential Business Growth' }, { label: 'Preferred Medium', value: 'In-Person Immersive Experiences' }, { label: 'Communication Style', value: 'Direct & Action-Oriented' }, { label: 'Immediate Challenge', value: 'Leadership Team Alignment' }]
+  };
+  clone.events = {
+    title: 'Recent Commercial Touchpoints', icon: '📅',
+    items: [{ name: 'Unleash the Power Within (UPW)', date: '12/4/26 - 12/9/26', confirmation: 'CONF-UPW88912' }, { name: 'Business Mastery Virtual', date: '1/13/27 - 1/17/27', confirmation: 'CONF-BM104' }]
+  };
+  clone.membership = {
+    title: 'Products & Offers', icon: '📦',
+    items: [{ label: 'Active Program', value: 'Business Accelerator Elite' }, { label: 'Assigned Coach', value: 'Sarah Jenkins (Senior Results Coach)' }, { label: 'Status', value: 'Active · Month 4' }]
+  };
+  clone.recommendations = {
+    title: 'Einstein Sales Recommendations',
+    items: [
+      { eyebrow: 'Next Best Action:', title: 'Pitch Platinum Partnership Upgrade', cta: 'View Deck', image: 'assets/tony-robbins-workshop-v1.jpg' },
+      { eyebrow: 'Recommended:', title: 'Schedule 1-on-1 Leadership Diagnostic', cta: 'Book Call', image: 'assets/tony-robbins-coaching-v1.jpg' }
+    ]
+  };
+  clone.activity = {
+    title: 'Sales & Engagement Activity',
+    items: [
+      { icon: '🟠', title: 'Coaching Consultation Completed', body: 'Spoke with Senior Advisor. Highly receptive to Platinum Partnership. Budget approved.', time: '2 hours ago' },
+      { icon: '▣', title: 'Viewed Platinum Partnership Page', body: 'Spent 14 minutes reading the full retreat and peer advisory benefits.', time: '1 day ago' },
+      { icon: '📊', title: 'Completed Business Growth Assessment', body: 'Identified leadership bottleneck as the primary obstacle to hitting $15M target.', time: '3 days ago' },
+      { icon: '🎓', title: 'Attended Business Mastery Virtual', body: 'Logged 100% attendance across all 5 days. Rated the event 10/10.', time: '2 weeks ago' },
+      { icon: '🟧', title: 'Email Opened: “The Science of Scaling”', body: 'Opened newsletter and clicked “Get the Playbook.”', time: '3 weeks ago' }
+    ]
+  };
+  clone.extraCards = [];
+  clone.rightExtraCards = [];
+  clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  return clone;
+}
+
 // B2B accounts share the brand, navigation, recommendations, and activity
 // primitives with B2C profiles, but have a purpose-built account schema and
 // a distinctly different rendered dashboard. Keeping this in defaults.js

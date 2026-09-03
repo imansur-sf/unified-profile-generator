@@ -72,3 +72,37 @@ function setImagePreviewFromURL(previewId, url) {
   preview.src = url;
   preview.classList.remove('hidden');
 }
+
+// The starter profile uses two project-owned photographs. They display as
+// normal local assets in the builder and are converted to data URLs before a
+// standalone export so the exported profile has no broken recommendation art.
+const BUNDLED_STARTER_IMAGE_PATHS = new Set([
+  'assets/tony-robbins-workshop-v1.jpg',
+  'assets/tony-robbins-coaching-v1.jpg'
+]);
+
+async function bundledImageToDataUrl(path) {
+  const response = await fetch(path);
+  if (!response.ok) throw new Error(`Unable to load ${path}`);
+  const blob = await response.blob();
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result);
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function hydrateBundledStarterImages(target) {
+  const items = target?.recommendations?.items;
+  if (!Array.isArray(items)) return;
+  await Promise.all(items.map(async (item) => {
+    if (!item?.image || !BUNDLED_STARTER_IMAGE_PATHS.has(item.image)) return;
+    try {
+      item.image = await bundledImageToDataUrl(item.image);
+    } catch (_) {
+      // Keep the asset path when the browser does not permit fetch from a
+      // local file context. It still renders in the live preview and app.
+    }
+  }));
+}

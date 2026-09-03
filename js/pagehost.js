@@ -147,7 +147,7 @@ Schema:
     ]
   },
 
-  "extraCards": [            // 1-2 items — additional middle-column cards to fill vertical space
+  "extraCards": [            // 0-2 OPTIONAL suggested cards for the manual builder; not shown on the first screen by default
     {
       "title": string,       // vertical-appropriate category (e.g. "Coaching History", "Skills Assessment", "Family Info")
       "icon": "emoji",       // single emoji
@@ -155,7 +155,7 @@ Schema:
     }
   ],
 
-  "rightExtraCards": [       // 0-1 item — extra card BELOW Membership Details in the right column
+  "rightExtraCards": [       // 0-1 OPTIONAL suggested card for the manual builder
     {
       "title": string,       // e.g. "Recent Communications", "Program Enrollment", "Referral Sources"
       "icon": "emoji",
@@ -169,7 +169,7 @@ Rules:
 - If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
 - Colors should match the customer's actual visual brand where discernible from the page, but use a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
 - Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
-- **COMPOSITION MATTERS** — SEs screenshot one 1300×860 profile canvas onto slides. Populate it with meaningful, varied content, but do not overfill it: use 2-3 affinity groups with 2-3 items each, 1 focused extraCard, up to 1 rightExtraCard, 2 recommendations, and 4-6 concise activity items. Keep labels short and messages scannable. Choose modules that tell a coherent customer story; users can add or remove sections later.
+- **COMPOSITION MATTERS** — SEs screenshot one 1300×860 profile canvas onto slides. The standard profile modules must form a complete, useful single-screen story: use 2-3 affinity groups with 2-3 items each, 2 recommendations, and 5-6 concise activity items. Only return an extraCard when it adds genuine optional value; it is presented in the builder as a suggested module rather than being placed on the first screen automatically. Keep labels short and messages scannable.
 - Keep all recommendation copy and standard labels suitable for dark text on white cards. Do not use white text or inline styles that reduce contrast.
 - A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs purchase/expansion signals and commercial actions; Service needs churn, case, sentiment, and save actions; Marketing needs journey, channel, content, and campaign engagement; Customer Success needs health, adoption, renewal, and value-realization actions. For Custom, the supplied role and decision request override these default patterns. Adapt every supporting module to that lens while keeping the customer internally consistent.
 - Return ONLY the JSON. No explanation.`;
@@ -213,7 +213,7 @@ Schema:
   "membership": { "title": "Products & Contracts", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
   "recommendations": { "title": "Next Best Actions", "items": [ { "eyebrow": string, "title": string, "cta": string, "image": "" } ] },
   "activity": { "title": "Account Activity", "items": [ { "icon": "emoji", "title": string, "body": string, "time": string } ] },
-  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ],
+  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ], // optional builder suggestions
   "rightExtraCards": []
 }
 
@@ -223,7 +223,7 @@ Rules:
 - Return 6 calculated insights, including Account Health, Expansion Propensity, Renewal/Churn Risk, Stakeholder Coverage, Product Adoption, and Engagement Score.
 - Include 2 affinity groups that combine aggregate people signals with account engagement. Explain scale only through the labels; do not invent source citations.
 - Put 3 named people in events, using date for their buying-committee role and confirmation for their job title.
-- Populate Products & Contracts, the Billing/Renewal extra card, 2 next-best actions, and 4-6 account activity items. The output should be dense enough to screenshot cleanly.
+- Populate Products & Contracts, 2 next-best actions, and 5-6 account activity items. Return a Billing/Renewal extra card only when it adds optional detail; it is offered in the builder rather than forced onto the first visible account screen. The output should be dense enough to screenshot cleanly.
 - Keep the workspace screenshot-ready: use concise labels, short action titles, and only the most decision-useful details. Do not use white text or inline styling that could reduce contrast on white cards.
 - Keep actual brand colors discernible from the page when possible, but specify a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
 - A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs opportunity, buying-committee, expansion, and commercial actions; Service needs account risk, support, entitlement, and save actions; Marketing needs account intent, campaign, content, and journey engagement; Customer Success needs adoption, renewal, stakeholder, and health actions. For Custom, the supplied role and decision request override these default patterns.
