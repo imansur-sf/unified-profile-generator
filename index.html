@@ -765,7 +765,19 @@
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 7 of 7</div>
             <h2 class="wizard-title mb-1">Preview & Export</h2>
-            <p class="wizard-sub mb-6">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
+            <p class="wizard-sub mb-5">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
+
+            <section class="rounded-xl border border-blue-100 bg-blue-50/60 p-4 mb-5" aria-labelledby="persona-output-title">
+              <div class="flex items-start justify-between gap-4 mb-3">
+                <div>
+                  <h3 id="persona-output-title" class="text-sm font-700 text-gray-800">Persona output</h3>
+                  <p id="persona-output-summary" class="text-xs text-gray-600 mt-1">Sales is selected. Present, download, or copy this saved persona view.</p>
+                </div>
+                <span class="text-[10px] uppercase tracking-[0.14em] font-700 text-blue-600 whitespace-nowrap">Switch &amp; export</span>
+              </div>
+              <div id="persona-output-switcher" class="flex flex-wrap gap-2" role="group" aria-label="Choose a persona output"></div>
+              <p class="text-[11px] leading-4 text-gray-500 mt-3">Each persona keeps its own modules and brief. Downloads include the selected persona in the filename.</p>
+            </section>
 
             <div class="flex gap-3 mb-3">
               <button onclick="saveCurrentProject()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">

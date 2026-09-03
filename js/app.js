@@ -272,6 +272,26 @@ function updateProfileStrategyUI() {
   setText('step-6-sub', `Prioritize concise next-best actions and the activity evidence ${profileLabel.toLowerCase()} needs to act with confidence.`);
   setText('step-6-recs-heading', content.recommendations);
   setText('step-6-activity-heading', content.activity);
+  renderPersonaOutputSwitcher(strategy);
+}
+
+// Step 7 is a delivery surface, so it mirrors the persona picker without
+// making people return to Quick Start or lose the independently saved view.
+function renderPersonaOutputSwitcher(strategy = getProfileStrategy()) {
+  const container = document.getElementById('persona-output-switcher');
+  if (!container) return;
+  const label = getProfileStrategyLabel(strategy);
+  setText('persona-output-summary', `${label} is selected. Present, download, or copy this saved persona view.`);
+  container.innerHTML = Object.entries(PERSONA_PRESETS).map(([lens, preset]) => {
+    const active = strategy.lens === lens;
+    const name = lens === 'custom' && strategy.customRole ? strategy.customRole : preset.label;
+    return `<button type="button" class="${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700'} border rounded-lg px-3 py-2 text-xs font-700 transition" onclick="setPersonaOutputLens('${lens}')" aria-pressed="${active}">${escHTML(name)}</button>`;
+  }).join('');
+}
+
+function setPersonaOutputLens(lens) {
+  setViewerLens(lens);
+  if (currentStep !== TOTAL_STEPS - 1) goToStep(TOTAL_STEPS - 1);
 }
 
 function setViewerLens(lens) {
@@ -283,7 +303,7 @@ function setViewerLens(lens) {
   fillStaticFields();
   renderAll();
   refreshPreview();
-  if (lens === 'custom' && !getProfileStrategy().customRole) document.getElementById('strategy-custom-role')?.focus();
+  if (currentStep === 0 && lens === 'custom' && !getProfileStrategy().customRole) document.getElementById('strategy-custom-role')?.focus();
 }
 
 function onProfileStrategyChange() {
@@ -998,7 +1018,9 @@ function downloadHTML() {
   const a = document.createElement('a');
   a.href = url;
   const name = (state.profile.name || 'profile').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  a.download = `unified-profile-${name}.html`;
+  const strategy = getProfileStrategy();
+  const persona = getProfileStrategyLabel(strategy).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
+  a.download = `unified-profile-${name}-${persona}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }
