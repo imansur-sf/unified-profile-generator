@@ -3454,6 +3454,99 @@ function applyPersonaPreset(target = state) {
   }
 }
 
+// These are deliberate, fictional starter stories for presenters who choose
+// to build manually. Website analysis replaces them with AI-tailored content;
+// changing personas swaps the working story without changing the customer or
+// account identity in the left rail.
+const PERSONA_SAMPLE_LIBRARY = {
+  sales: {
+    b2c: {
+      insights: [['🎯', 'Purchase Propensity', '84% · High'], ['💸', 'Estimated Value', '$1,240'], ['↗', 'Offer Engagement', '3 high-intent actions'], ['◉', 'Decision Readiness', 'Active research'], ['📅', 'Last Commercial Touch', '2 days ago'], ['✦', 'Cross-sell Fit', 'Strong']],
+      series: ['Research activity', 'Purchase intent'], groups: [['Commercial interest', [['Premium plan', 84, 78], ['Expert consultation', 72, 69]]], ['Offer signals', [['Pricing page', 76, 81], ['Product comparison', 68, 74]]]],
+      preferences: [['Preferred outreach', 'SMS then email'], ['Decision timing', 'Next 30 days'], ['Primary interest', 'Premium experience'], ['Best contact time', 'Weekday evening']], events: [['Product consultation', 'Sep 18, 2026', 'Booked'], ['Offer comparison', 'Sep 12, 2026', 'Viewed']], membership: [['Current plan', 'Core membership'], ['Recommended offer', 'Premium upgrade']],
+      recommendations: [['High intent', 'Schedule a tailored product consultation', 'Open play'], ['Offer fit', 'Share the premium value comparison', 'Send offer']], activity: [['↗', 'Pricing page revisited', 'Viewed pricing for the <b>third time</b>', '2 hours ago'], ['🎯', 'Consultation interest', 'Requested product details through chat', '1 day ago'], ['✦', 'Offer engagement', 'Clicked the <b>premium comparison</b>', '2 days ago']], extra: ['Commercial Context', '💼', [['Open opportunity', 'Premium upgrade'], ['Preferred motion', 'Consultative']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.42M', revenueTrend: '↑ 9% MoM', pipeline: '$510K', usageScore: '76%', usageTrend: '↑ 5% MoM', activeUsers: '346 active users', healthScore: '81%', healthTrend: '↑ 4% MoM', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '79% utilization' },
+      insights: [['↗', 'Expansion Propensity', '78% · High'], ['💰', 'Open Pipeline', '$510K'], ['◉', 'Buying Committee', '7 of 9 roles mapped'], ['✦', 'Champion Strength', 'Strong'], ['▦', 'Product Adoption', '76%'], ['⚠', 'Renewal Risk', 'Low']], series: ['Contact research', 'Account intent'], groups: [['Expansion interest', [['Analytics', 82, 77], ['Automation', 71, 74]]], ['Buying motion', [['Pricing review', 76, 81], ['Executive engagement', 68, 73]]]],
+      preferences: [['Commercial owner', 'Morgan Lee'], ['Buying motion', 'Expansion with renewal'], ['Budget cycle', 'Q4 planning'], ['Procurement path', 'Standard review']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Analytics', 'Expansion opportunity'], ['Renewal', 'Nov 30, 2026']], recommendations: [['High intent', 'Align champion on the Analytics expansion case', 'Activate'], ['Pipeline action', 'Schedule executive value review', 'Suggest']], activity: [['↗', 'Pipeline advanced', 'Analytics opportunity moved to <b>solution review</b>', 'Today'], ['◉', 'Champion engaged', 'Reviewed the <b>value realization brief</b>', '2 days ago'], ['✦', 'Executive signal', 'Sponsor joined the expansion workshop', '1 week ago']], extra: ['Commercial Plan', '💼', [['Open pipeline', '$510K'], ['Next milestone', 'Executive value review']]]
+    }
+  },
+  service: {
+    b2c: {
+      insights: [['⚠', 'Churn Risk', 'Moderate · Needs attention'], ['🎧', 'Open Service Case', '1 active case'], ['💚', 'Customer Sentiment', 'Declining'], ['📅', 'Last Successful Contact', '12 days ago'], ['◉', 'Resolution Confidence', '72%'], ['✦', 'Save Opportunity', 'High']], series: ['Support signals', 'Risk intensity'], groups: [['Risk indicators', [['Repeated issue', 74, 82], ['Low engagement', 67, 76]]], ['Service context', [['Self-service use', 58, 44], ['Knowledge content', 71, 53]]]],
+      preferences: [['Preferred support channel', 'Email'], ['Contact preference', 'Detailed updates'], ['Service tier', 'Priority'], ['Best resolution time', 'Weekday morning']], events: [['Case #84721 opened', 'Sep 16, 2026', 'In progress'], ['Support article viewed', 'Sep 14, 2026', 'Troubleshooting guide']], membership: [['Coverage', 'Priority support'], ['Current entitlement', 'Annual service plan']], recommendations: [['Retention action', 'Proactively resolve the active issue', 'Open case'], ['Save play', 'Offer a guided success check-in', 'Apply play']], activity: [['⚠', 'Case reopened', 'Customer reported the issue is <b>not yet resolved</b>', 'Today'], ['🎧', 'Support interaction', 'Shared troubleshooting steps by email', '2 days ago'], ['💬', 'Sentiment signal', 'Survey comment indicates <b>friction</b>', '5 days ago']], extra: ['Service Context', '🎧', [['Case priority', 'High'], ['Recommended owner', 'Retention specialist']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↓ 3% MoM', pipeline: '$180K', usageScore: '61%', usageTrend: '↓ 12% MoM', activeUsers: '214 active users', healthScore: '63%', healthTrend: '↓ 9% MoM', supportCases: '5 open cases', renewalDate: 'Nov 30, 2026', utilization: '64% utilization' },
+      insights: [['⚠', 'Account Churn Risk', 'Elevated'], ['🎧', 'Support Escalations', '2 active'], ['💚', 'Account Health', '63% · At risk'], ['◉', 'Coverage Gap', '3 critical roles'], ['▦', 'Adoption Risk', 'Declining'], ['✦', 'Save Opportunity', 'High']], series: ['Support signals', 'Account risk'], groups: [['Risk indicators', [['Open escalations', 82, 88], ['Usage decline', 75, 84]]], ['Service engagement', [['Knowledge use', 61, 43], ['Case response', 72, 58]]]],
+      preferences: [['Support tier', 'Priority'], ['Escalation owner', 'Morgan Lee'], ['Response SLA', '4 business hours'], ['Renewal status', 'At risk']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Service Champion', 'Director, Platform'], ['Jordan Kim', 'Escalation Contact', 'VP, Technology']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Support coverage', 'Priority Success'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Retention action', 'Launch an executive escalation review', 'Activate'], ['Service action', 'Resolve the two recurring platform issues', 'Open cases']], activity: [['⚠', 'Escalation created', 'Two high-priority issues are <b>awaiting review</b>', 'Today'], ['📉', 'Usage declined', 'Active users fell <b>12% month over month</b>', '3 days ago'], ['🎧', 'Case trend', 'Three contacts reported the same workflow issue', '1 week ago']], extra: ['Service Recovery Plan', '🛟', [['Critical issue', 'Workflow reliability'], ['Next milestone', 'Executive escalation review']]]
+    }
+  },
+  marketing: {
+    b2c: {
+      insights: [['✦', 'Journey Stage', 'Consideration'], ['📨', 'Email Engagement', '62% open · 18% click'], ['🎯', 'Conversion Propensity', '76%'], ['◉', 'Content Affinity', 'How-to guides'], ['📅', 'Last Campaign Touch', 'Yesterday'], ['💚', 'Channel Health', 'Strong']], series: ['Content engagement', 'Conversion signal'], groups: [['Content themes', [['Product education', 84, 73], ['Customer stories', 71, 65]]], ['Channel signals', [['Email', 76, 69], ['Web personalization', 68, 61]]]],
+      preferences: [['Preferred channel', 'Email + web'], ['Consent status', 'Subscribed'], ['Content format', 'How-to video'], ['Frequency', 'Weekly']], events: [['Education nurture journey', 'Sep 15, 2026', 'Active'], ['Product webinar', 'Sep 10, 2026', 'Registered']], membership: [['Current journey', 'Education nurture'], ['Campaign eligibility', 'Product launch']], recommendations: [['Next best content', 'Send the advanced product guide', 'Send content'], ['Journey action', 'Personalize the next website visit', 'Activate']], activity: [['📨', 'Email clicked', 'Clicked <b>advanced product guide</b>', 'Today'], ['🌐', 'Website return', 'Returned to the product comparison page', '1 day ago'], ['▶', 'Video completed', 'Watched 82% of the onboarding video', '3 days ago']], extra: ['Journey Context', '🧭', [['Current stage', 'Consideration'], ['Next milestone', 'Webinar attendance']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↑ 4% MoM', pipeline: '$350K', usageScore: '73%', usageTrend: '↑ 8% MoM', activeUsers: '328 active users', healthScore: '80%', healthTrend: '↑ 3% MoM', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '78% utilization' },
+      insights: [['✦', 'Account Intent', 'High'], ['📨', 'Campaign Engagement', '18 engaged contacts'], ['🎯', 'Marketing Qualified', 'Ready for sales'], ['◉', 'Buying Group Reach', '6 roles engaged'], ['▦', 'Content Resonance', 'Product education'], ['💚', 'Channel Health', 'Strong']], series: ['Contact engagement', 'Account intent'], groups: [['Content themes', [['Product education', 83, 76], ['Customer proof', 72, 68]]], ['Journey signals', [['Webinar interest', 75, 81], ['Website return', 68, 73]]]],
+      preferences: [['Preferred channel', 'Email + webinar'], ['Consent coverage', '18 marketable contacts'], ['Journey stage', 'Solution education'], ['Campaign owner', 'Morgan Lee']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Marketing Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Program', 'Executive nurture'], ['Subscription', 'Product education']], recommendations: [['Next best content', 'Invite the buying group to the value webinar', 'Activate'], ['Journey action', 'Launch account-personalized nurture', 'Suggest']], activity: [['📨', 'Campaign engaged', 'Six contacts clicked the <b>value webinar</b> invitation', 'Today'], ['🌐', 'Account research', 'Buying group returned to solution pages', '2 days ago'], ['▶', 'Content completed', 'Champion watched the adoption story video', '5 days ago']], extra: ['Campaign Context', '📣', [['Active program', 'Executive nurture'], ['Next milestone', 'Value webinar']]]
+    }
+  },
+  success: {
+    b2c: {
+      insights: [['💚', 'Customer Health', '78% · Healthy'], ['▦', 'Product Adoption', '72%'], ['📅', 'Renewal Readiness', 'On track'], ['🎯', 'Expansion Fit', 'Moderate'], ['◉', 'Milestone Progress', '4 of 5 complete'], ['✦', 'Advocacy Potential', 'High']], series: ['Adoption signal', 'Health contribution'], groups: [['Adoption areas', [['Core workflow', 78, 74], ['Advanced feature', 61, 58]]], ['Success signals', [['Milestone completion', 83, 77], ['Value realization', 72, 69]]]],
+      preferences: [['Success channel', 'Video check-in'], ['Primary goal', 'Advance proficiency'], ['Check-in cadence', 'Monthly'], ['Learning format', 'Guided workshop']], events: [['Success milestone', 'Sep 17, 2026', 'Completed'], ['Value review', 'Sep 5, 2026', 'Scheduled']], membership: [['Current plan', 'Premium membership'], ['Adoption program', 'Guided success']], recommendations: [['Success action', 'Celebrate the completed milestone', 'Send note'], ['Adoption action', 'Recommend the advanced-feature workshop', 'Activate']], activity: [['🏁', 'Milestone completed', 'Finished the <b>core workflow</b> milestone', 'Today'], ['▦', 'Adoption increased', 'Used advanced features in three sessions', '3 days ago'], ['💚', 'Health improved', 'Customer health improved <b>6 points</b>', '1 week ago']], extra: ['Success Context', '🌱', [['Primary goal', 'Advance proficiency'], ['Next milestone', 'Advanced workflow workshop']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↑ 6% MoM', pipeline: '$290K', usageScore: '82%', usageTrend: '↑ 10% MoM', activeUsers: '386 active users', healthScore: '86%', healthTrend: '↑ 7% MoM', supportCases: '1 open case', renewalDate: 'Nov 30, 2026', utilization: '84% utilization' },
+      insights: [['💚', 'Account Health', '86% · Healthy'], ['▦', 'Product Adoption', '82%'], ['📅', 'Renewal Readiness', 'On track'], ['◉', 'Stakeholder Coverage', '9 of 10 roles mapped'], ['🎯', 'Expansion Fit', '71%'], ['✦', 'Advocacy Potential', 'High']], series: ['Adoption signals', 'Health contribution'], groups: [['Adoption areas', [['Core platform', 85, 81], ['Analytics feature', 68, 64]]], ['Value signals', [['Milestone completion', 82, 78], ['Executive engagement', 76, 73]]]],
+      preferences: [['Success owner', 'Morgan Lee'], ['Success plan', 'Scale adoption'], ['Review cadence', 'Quarterly'], ['Renewal posture', 'On track']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Success Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Success program', 'Scale adoption'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Success action', 'Run a QBR focused on realized value', 'Activate'], ['Adoption action', 'Expand the advanced-feature cohort', 'Suggest']], activity: [['🏁', 'Milestone completed', 'Two teams completed the advanced workflow', 'Today'], ['▦', 'Adoption increased', 'Active usage grew <b>10% month over month</b>', '3 days ago'], ['💚', 'Health improved', 'Account health improved <b>7 points</b>', '1 week ago']], extra: ['Success Plan', '🌱', [['Primary goal', 'Scale adoption'], ['Next milestone', 'Quarterly value review']]]
+    }
+  },
+  custom: {
+    b2c: {
+      insights: [['✦', 'Decision Priority', 'Needs review'], ['◉', 'Relevant Signal', 'High confidence'], ['🎯', 'Action Readiness', 'Ready'], ['📅', 'Recent Change', '2 days ago'], ['💚', 'Experience Signal', 'Positive'], ['▦', 'Context Coverage', 'Strong']], series: ['Observed behavior', 'Decision signal'], groups: [['Decision context', [['High-value behavior', 78, 74], ['Recent change', 71, 69]]], ['Supporting evidence', [['Engagement signal', 75, 72], ['Program activity', 63, 61]]]],
+      preferences: [['Preferred channel', 'Email'], ['Decision cadence', 'Weekly'], ['Primary context', 'Current program'], ['Best contact time', 'Weekday morning']], events: [['Relevant milestone', 'Sep 16, 2026', 'Completed'], ['Recent interaction', 'Sep 13, 2026', 'Engaged']], membership: [['Current program', 'Core experience'], ['Relevant status', 'Active']], recommendations: [['Recommended action', 'Review the highest-priority signal', 'Open view'], ['Suggested follow-up', 'Send a contextual next step', 'Activate']], activity: [['✦', 'Priority signal detected', 'A high-value behavior requires review', 'Today'], ['◉', 'Context updated', 'New supporting evidence was added', '2 days ago'], ['📨', 'Engagement recorded', 'Responded to a recent communication', '4 days ago']], extra: ['Decision Context', '✦', [['Primary signal', 'High-value behavior'], ['Next step', 'Review and act']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: 'Stable', pipeline: '$300K', usageScore: '74%', usageTrend: 'Stable', activeUsers: '328 active users', healthScore: '80%', healthTrend: 'Stable', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '78% utilization' },
+      insights: [['✦', 'Decision Priority', 'Needs review'], ['◉', 'Signal Confidence', 'High'], ['🎯', 'Action Readiness', 'Ready'], ['▦', 'Context Coverage', 'Strong'], ['💚', 'Account Health', '80%'], ['📅', 'Recent Change', '2 days ago']], series: ['Contact signals', 'Account signals'], groups: [['Decision context', [['High-value behavior', 78, 74], ['Recent change', 71, 69]]], ['Supporting evidence', [['Stakeholder activity', 75, 72], ['Program activity', 63, 61]]]],
+      preferences: [['Profile owner', 'Morgan Lee'], ['Decision cadence', 'Weekly'], ['Account context', 'Current program'], ['Review status', 'Active']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Primary Contact', 'Director, Platform'], ['Jordan Kim', 'Decision Partner', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Relevant program', 'Active'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Recommended action', 'Review the highest-priority account signal', 'Open view'], ['Suggested follow-up', 'Schedule a contextual account review', 'Activate']], activity: [['✦', 'Priority signal detected', 'A high-value account behavior requires review', 'Today'], ['◉', 'Context updated', 'New stakeholder evidence was added', '2 days ago'], ['📨', 'Engagement recorded', 'Account responded to recent communication', '4 days ago']], extra: ['Decision Context', '✦', [['Primary signal', 'High-value account behavior'], ['Next step', 'Review and act']]]
+    }
+  }
+};
+
+function itemsFromPairs(items, keys) {
+  return items.map(values => Object.fromEntries(keys.map((key, index) => [key, values[index]])));
+}
+
+function applyPersonaSampleTemplate(target = state) {
+  const strategy = getProfileStrategy(target);
+  const mode = target.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const template = PERSONA_SAMPLE_LIBRARY[strategy.lens]?.[mode];
+  if (!template) return;
+  const primary = target.colors?.primary || '#001E5B';
+  const accent = target.colors?.accent || '#066AFE';
+  // The Salesforce chrome intentionally defaults to a white accent. Keep the
+  // modeled signal series visible on its white cards until a user edits it.
+  const signalAccent = /^#(?:fff|ffffff)$/i.test(accent) ? '#066AFE' : accent;
+  target.insights.items = itemsFromPairs(template.insights, ['icon', 'label', 'value']);
+  target.affinities.seriesA = { label: template.series[0], color: primary };
+  target.affinities.seriesB = { label: template.series[1], color: signalAccent };
+  target.affinities.groups = template.groups.map(([name, items]) => ({ name, items: itemsFromPairs(items, ['label', 'a', 'b']) }));
+  target.preferences.items = itemsFromPairs(template.preferences, ['label', 'value']);
+  target.events.items = itemsFromPairs(template.events, ['name', 'date', 'confirmation']);
+  target.membership.items = itemsFromPairs(template.membership, ['label', 'value']);
+  const oldRecommendations = target.recommendations.items || [];
+  target.recommendations.items = template.recommendations.map((item, index) => ({ eyebrow: item[0], title: item[1], cta: item[2], image: oldRecommendations[index]?.image || '' }));
+  target.activity.items = itemsFromPairs(template.activity, ['icon', 'title', 'body', 'time']);
+  target.extraCards = [{ title: template.extra[0], icon: template.extra[1], items: itemsFromPairs(template.extra[2], ['label', 'value']) }];
+  target.rightExtraCards = [];
+  if (mode === 'b2b') target.accountMetrics = Object.assign({}, target.accountMetrics || {}, template.metrics);
+}
+
 const PERSONA_VIEW_FIELDS = [
   'insights', 'affinities', 'preferences', 'events', 'membership',
   'recommendations', 'activity', 'extraCards', 'rightExtraCards',
@@ -3501,11 +3594,13 @@ function restorePersonaView(target = state, lens) {
     customRole: lens === 'custom' ? '' : currentStrategy.customRole || ''
   };
   applyPersonaPreset(target);
+  applyPersonaSampleTemplate(target);
   return false;
 }
 
 function updateProfileStrategyUI() {
   const strategy = getProfileStrategy();
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
   Object.keys(PERSONA_PRESETS).forEach(lens => {
     const button = document.getElementById(`persona-${lens}`);
     if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); }
@@ -3520,7 +3615,6 @@ function updateProfileStrategyUI() {
   if (customRoleField) customRoleField.hidden = strategy.lens !== 'custom';
   const blueprint = document.getElementById('strategy-blueprint');
   if (blueprint) {
-    const preset = PERSONA_PRESETS[strategy.lens];
     const profileLabel = getProfileStrategyLabel(strategy);
     const customReminder = strategy.lens === 'custom' && !String(strategy.customRole || '').trim()
       ? '<br><em>Add the profile role above to tailor the generated view.</em>' : '';
@@ -3643,6 +3737,7 @@ function setProfileType(profileType) {
   // fresh after a mode change while retaining the current persona choice.
   nextState.personaVariants = {};
   applyPersonaPreset(nextState);
+  applyPersonaSampleTemplate(nextState);
   snapshotPersonaView(nextState);
   state = nextState;
   fillStaticFields();
@@ -3930,16 +4025,10 @@ function onIndustryChange() {
   state.profileStrategy = strategy;
   state.personaVariants = {};
   applyPersonaPreset();
+  applyPersonaSampleTemplate();
   snapshotPersonaView();
   fillStaticFields();
-  renderInsights();
-  renderAffinityGroups();
-  renderPreferences();
-  renderEvents();
-  renderMembership();
-  renderRecs();
-  renderActivity();
-  renderNavLinks();
+  renderAll();
   refreshPreview();
 }
 
@@ -4262,6 +4351,7 @@ function startOver() {
   state.logo = '';
   state.userAvatar = '';
   applyPersonaPreset();
+  applyPersonaSampleTemplate();
   snapshotPersonaView();
   fillStaticFields();
   renderAll();
@@ -4792,6 +4882,7 @@ function onScraperEndpointChange() {
 function bootstrap() {
   state._industry = 'recruiting';
   applyPersonaPreset();
+  applyPersonaSampleTemplate();
   snapshotPersonaView();
   fillStaticFields();
   renderAll();
