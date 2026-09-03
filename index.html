@@ -676,7 +676,20 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
+              <div class="mode-b2c mb-5 rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-1">Visible profile modules</h3>
+                <p class="text-xs text-gray-500 mb-3">Keep the identity card fixed on the left. Toggle the supporting modules to balance the single-screen presentation; activity remains internally scrollable when it has more detail.</p>
+                <div class="grid grid-cols-2 gap-x-4 gap-y-2 text-xs font-600 text-gray-700">
+                  <label><input id="b2c-section-affinities" type="checkbox" onchange="onFieldChange()"> Affinities</label>
+                  <label><input id="b2c-section-preferences" type="checkbox" onchange="onFieldChange()"> Preferences</label>
+                  <label><input id="b2c-section-events" type="checkbox" onchange="onFieldChange()"> Events</label>
+                  <label><input id="b2c-section-membership" type="checkbox" onchange="onFieldChange()"> Membership</label>
+                  <label><input id="b2c-section-recommendations" type="checkbox" onchange="onFieldChange()"> Einstein recommendations</label>
+                  <label><input id="b2c-section-activity" type="checkbox" onchange="onFieldChange()"> Engagement activity</label>
+                </div>
+              </div>
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-recs-heading">Einstein Recommendations</h3>
+              <p class="text-xs text-gray-500 -mt-1 mb-3">Edit each recommendation’s label, message, call to action, and image below. Recommendation copy is always rendered dark on a white card for readability.</p>
               <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="recs-container" class="space-y-4"></div>
               <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
@@ -718,6 +731,10 @@
             <div id="save-project-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
 
             <div class="flex gap-3 mb-4">
+              <button onclick="openPresentation()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
+                <span aria-hidden="true">▣</span>
+                Preview &amp; Present
+              </button>
               <button onclick="downloadHTML()" class="btn-primary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
                 <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
                 Download HTML

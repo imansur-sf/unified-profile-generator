@@ -167,9 +167,10 @@ Schema:
 Rules:
 - The profile MUST feel specific to this customer's business — not generic.
 - If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
-- Colors should match the customer's actual visual brand where discernible from the page.
+- Colors should match the customer's actual visual brand where discernible from the page, but use a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
 - Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
-- **DENSITY MATTERS** — SEs screenshot the entire profile onto slides. Every section must feel FULL. Aim for the maximum item count in each list, not the minimum. Empty white space looks unfinished. Populate extraCards (1-2) and rightExtraCards (0-1) with content the customer's marketing team would recognize as accurate to their business.
+- **COMPOSITION MATTERS** — SEs screenshot one 1300×860 profile canvas onto slides. Populate it with meaningful, varied content, but do not overfill it: use 2-3 affinity groups with 2-3 items each, 1 focused extraCard, up to 1 rightExtraCard, 2 recommendations, and 4-6 concise activity items. Keep labels short and messages scannable. Choose modules that tell a coherent customer story; users can add or remove sections later.
+- Keep all recommendation copy and standard labels suitable for dark text on white cards. Do not use white text or inline styles that reduce contrast.
 - Return ONLY the JSON. No explanation.`;
 
   const B2B_SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Salesforce Data Cloud unified ACCOUNT profile for a specific customer.
@@ -222,7 +223,8 @@ Rules:
 - Include 2 affinity groups that combine aggregate people signals with account engagement. Explain scale only through the labels; do not invent source citations.
 - Put 3 named people in events, using date for their buying-committee role and confirmation for their job title.
 - Populate Products & Contracts, the Billing/Renewal extra card, 2 next-best actions, and 4-6 account activity items. The output should be dense enough to screenshot cleanly.
-- Keep actual brand colors discernible from the page when possible.
+- Keep the workspace screenshot-ready: use concise labels, short action titles, and only the most decision-useful details. Do not use white text or inline styling that could reduce contrast on white cards.
+- Keep actual brand colors discernible from the page when possible, but specify a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
 - Return ONLY the JSON. No explanation.`;
 
   function getSystemPrompt(profileType) {

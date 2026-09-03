@@ -15,6 +15,16 @@ const B2B_SECTION_DEFAULTS = {
   successInsights: true, relatedActivity: true
 };
 
+const B2C_SECTION_DEFAULTS = {
+  affinities: true, preferences: true, events: true,
+  membership: true, recommendations: true, activity: true
+};
+
+function getB2CSections() {
+  state.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, state.b2cSections || {});
+  return state.b2cSections;
+}
+
 function getB2BSections() {
   state.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, state.b2bSections || {});
   return state.b2bSections;
@@ -211,6 +221,12 @@ function fillStaticFields() {
       const toggle = document.getElementById(`b2b-section-${key.replace(/[A-Z]/g, match => '-' + match.toLowerCase())}`);
       if (toggle) toggle.checked = sections[key] !== false;
     });
+  } else {
+    const sections = getB2CSections();
+    Object.keys(B2C_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2c-section-${key}`);
+      if (toggle) toggle.checked = sections[key] !== false;
+    });
   }
   updateProfileModeUI();
 }
@@ -291,6 +307,12 @@ function readStaticFields() {
       if (toggle) sections[key] = toggle.checked;
     });
     state.tabName = state.account.name || state.tabName;
+  } else {
+    const sections = getB2CSections();
+    Object.keys(B2C_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2c-section-${key}`);
+      if (toggle) sections[key] = toggle.checked;
+    });
   }
 }
 
@@ -691,6 +713,44 @@ function downloadHTML() {
   URL.revokeObjectURL(url);
 }
 
+function fitPresentationScale() {
+  const canvas = document.getElementById('presentation-canvas');
+  const stage = document.getElementById('presentation-stage');
+  const iframe = document.getElementById('presentation-iframe');
+  if (!canvas || !stage || !iframe) return;
+  const scale = Math.min((canvas.clientWidth - 32) / 1300, (canvas.clientHeight - 32) / 860, 1);
+  stage.style.width = `${Math.max(1, 1300 * scale)}px`;
+  stage.style.height = `${Math.max(1, 860 * scale)}px`;
+  iframe.style.transform = `scale(${scale})`;
+}
+
+function openPresentation() {
+  readStaticFields();
+  document.getElementById('presentation-overlay')?.remove();
+  const overlay = document.createElement('div');
+  overlay.id = 'presentation-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Unified profile presentation');
+  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#0f172a;display:flex;flex-direction:column;padding:12px;';
+  overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;padding:0 4px 10px;font:600 13px Salesforce Sans,system-ui,sans-serif;"><span>Unified Profile Presentation</span><div style="display:flex;gap:8px;"><button id="presentation-fullscreen" type="button" style="border:1px solid #64748b;border-radius:6px;background:#1e293b;color:#fff;padding:7px 10px;cursor:pointer;">Full screen</button><button id="presentation-close" type="button" style="border:1px solid #64748b;border-radius:6px;background:#fff;color:#0f172a;padding:7px 10px;cursor:pointer;">Close</button></div></div><div id="presentation-canvas" style="flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;"><div id="presentation-stage" style="position:relative;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.35);"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="position:absolute;top:0;left:0;width:1300px;height:860px;border:0;transform-origin:0 0;"></iframe></div></div>`;
+  document.body.appendChild(overlay);
+  const close = () => overlay.remove();
+  overlay.querySelector('#presentation-close').addEventListener('click', close);
+  overlay.querySelector('#presentation-fullscreen').addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen();
+    else overlay.requestFullscreen?.();
+  });
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  document.getElementById('presentation-iframe').srcdoc = generateProfileHTML(state);
+  const onKey = event => { if (event.key === 'Escape' && document.getElementById('presentation-overlay')) { close(); document.removeEventListener('keydown', onKey); } };
+  document.addEventListener('keydown', onKey);
+  requestAnimationFrame(fitPresentationScale);
+  setTimeout(fitPresentationScale, 100);
+}
+window.addEventListener('resize', fitPresentationScale);
+document.addEventListener('fullscreenchange', () => setTimeout(fitPresentationScale, 0));
+
 function copyHTML() {
   const html = generateProfileHTML(state);
   showCopyModal(html);
@@ -800,6 +860,14 @@ function exportForCloudy() {
 }
 
 // ─── AI-driven ingest — apply parsed profile from URL analysis ─
+function sanitizeAIActivityBody(value) {
+  // Keep the useful lightweight emphasis AI can provide, while removing inline
+  // color declarations that can make copy disappear against a white card.
+  return String(value || '')
+    .replace(/\sstyle\s*=\s*(['"])[^'"]*color\s*:[^;'"]*;?[^'"]*\1/gi, '')
+    .replace(/\sstyle\s*=\s*([^\s>]*color\s*:[^;\s>]*[^\s>]*)/gi, '');
+}
+
 function applyAIProfile(ai) {
   // Preserve current industry unless AI came back with something else.
   const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
@@ -813,15 +881,20 @@ function applyAIProfile(ai) {
 
   if (ai.colors) {
     if (ai.colors.primary)   base.colors.primary = ai.colors.primary;
-    if (ai.colors.accent)    base.colors.accent = ai.colors.accent;
     if (ai.colors.secondary) base.colors.secondary = ai.colors.secondary;
-    if (ai.colors.menu)      base.colors.menu = ai.colors.menu;
-    if (ai.colors.menuText)  base.colors.menuText = ai.colors.menuText;
   }
+  // Keep the Salesforce navigation and recommendation canvas legible after
+  // AI analysis. Users can still choose different values manually in Step 1.
+  base.colors.accent = '#FFFFFF';
+  base.colors.menu = '#FFFFFF';
+  base.colors.menuText = '#000000';
 
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
+  if (Array.isArray(base.activity?.items)) {
+    base.activity.items = base.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
+  }
   if (profileType === 'b2b') {
     if (ai.account) base.account = Object.assign({}, base.account, ai.account);
     if (ai.accountMetrics) base.accountMetrics = Object.assign({}, base.accountMetrics, ai.accountMetrics);

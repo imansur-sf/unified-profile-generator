@@ -586,6 +586,17 @@ function cloneIndustry(key) {
   const base = INDUSTRY_DEFAULTS[key] || INDUSTRY_DEFAULTS.generic;
   const clone = JSON.parse(JSON.stringify(base));
   clone.profileType = 'b2c';
+  // Salesforce chrome should begin neutral and readable. These remain editable
+  // in the wizard, but website analysis never changes these starting values.
+  clone.colors = Object.assign({}, clone.colors, { accent: '#FFFFFF', menu: '#FFFFFF', menuText: '#000000' });
+  clone.b2cSections = {
+    affinities: true,
+    preferences: true,
+    events: true,
+    membership: true,
+    recommendations: true,
+    activity: true
+  };
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
   if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
   if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
