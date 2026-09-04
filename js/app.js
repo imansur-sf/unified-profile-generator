@@ -1632,6 +1632,8 @@ function hideCreateApiKeyForm() {
   document.getElementById('api-key-create-form')?.classList.add('hidden');
   const input = document.getElementById('api-key-name');
   if (input) input.value = '';
+  const generation = document.getElementById('api-key-enable-generation');
+  if (generation) generation.checked = false;
 }
 
 function dismissCreatedApiKey() {
@@ -1658,7 +1660,7 @@ async function refreshApiKeySettings() {
       list.innerHTML = '<div class="text-center text-sm text-slate-400 py-8">No API keys yet. Create one to enable external tool access.</div>';
       return;
     }
-    list.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-400"><tr><th class="pb-3 pr-4">Name</th><th class="pb-3 pr-4">Key</th><th class="pb-3 pr-4">Created</th><th class="pb-3 pr-4">Last used</th><th class="pb-3"></th></tr></thead><tbody>${keys.map(key => `<tr class="border-t border-slate-100"><td class="py-3 pr-4 font-600 text-slate-700">${escHTML(key.name)}</td><td class="py-3 pr-4"><code class="text-xs bg-slate-100 rounded px-2 py-1 text-slate-600">${escHTML(key.keyPrefix)}••••••••</code></td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.createdAt)}</td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.lastUsedAt)}</td><td class="py-3 text-right"><button onclick="revokeApiKeyFromSettings('${String(key.id).replace(/'/g, '')}')" class="text-xs text-red-600 hover:text-red-800">Revoke</button></td></tr>`).join('')}</tbody></table></div>`;
+    list.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-400"><tr><th class="pb-3 pr-4">Name</th><th class="pb-3 pr-4">Key</th><th class="pb-3 pr-4">Access</th><th class="pb-3 pr-4">Created</th><th class="pb-3 pr-4">Last used</th><th class="pb-3"></th></tr></thead><tbody>${keys.map(key => { const generation = Array.isArray(key.scopes) && key.scopes.includes('generations:write'); return `<tr class="border-t border-slate-100"><td class="py-3 pr-4 font-600 text-slate-700">${escHTML(key.name)}</td><td class="py-3 pr-4"><code class="text-xs bg-slate-100 rounded px-2 py-1 text-slate-600">${escHTML(key.keyPrefix)}••••••••</code></td><td class="py-3 pr-4"><span class="text-xs ${generation ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'} rounded-full px-2 py-1">${generation ? 'Generation enabled' : 'Read-only'}</span></td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.createdAt)}</td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.lastUsedAt)}</td><td class="py-3 text-right"><button onclick="revokeApiKeyFromSettings('${String(key.id).replace(/'/g, '')}')" class="text-xs text-red-600 hover:text-red-800">Revoke</button></td></tr>`; }).join('')}</tbody></table></div>`;
   } catch (e) {
     list.innerHTML = '<div class="text-sm text-red-600 py-3">Could not load API keys. Please try again.</div>';
   }
@@ -1669,6 +1671,7 @@ async function createApiKeyFromSettings() {
   const error = document.getElementById('api-key-create-error');
   const button = document.getElementById('api-key-create-button');
   const name = input?.value.trim() || '';
+  const generationEnabled = Boolean(document.getElementById('api-key-enable-generation')?.checked);
   if (!name) {
     if (error) { error.textContent = 'Enter a name for this connection.'; error.classList.remove('hidden'); }
     input?.focus();
@@ -1678,7 +1681,10 @@ async function createApiKeyFromSettings() {
   button?.setAttribute('disabled', 'disabled');
   if (error) error.classList.add('hidden');
   try {
-    const body = await SaasyAuth.createApiKey({ tool: SAASY_TOOL, name });
+    const scopes = generationEnabled
+      ? ['profiles:read', 'exports:read', 'generations:write', 'profiles:write']
+      : ['profiles:read', 'exports:read'];
+    const body = await SaasyAuth.createApiKey({ tool: SAASY_TOOL, name, scopes });
     mostRecentApiKey = body.key || '';
     const value = document.getElementById('api-key-reveal-value');
     if (value) value.textContent = mostRecentApiKey;

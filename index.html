@@ -922,6 +922,7 @@
               <button id="api-key-create-button" onclick="createApiKeyFromSettings()" class="btn-primary-sf px-4 py-2 text-xs">Create</button>
               <button onclick="hideCreateApiKeyForm()" class="btn-secondary-sf px-4 py-2 text-xs">Cancel</button>
             </div>
+            <label class="flex gap-2.5 items-start mt-3 text-xs text-slate-600 cursor-pointer"><input id="api-key-enable-generation" type="checkbox" class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600"><span><strong class="text-slate-700">Allow AI profile generation and saving.</strong> This grants this key permission to start asynchronous UPG generation jobs. Leave unchecked for a read-only profile connection.</span></label>
             <p id="api-key-create-error" class="hidden text-xs text-red-600 mt-2"></p>
           </div>
           <div id="api-key-reveal" class="hidden mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
@@ -966,6 +967,7 @@
           <p class="text-sm leading-6 text-slate-600 mt-2">The API is the direct connection for listing, retrieving, and exporting the saved profiles that belong to the API-key owner. A connected tool such as Holodeck can insert a selected profile into a slide and later offer a refresh action.</p>
           <ol class="mt-4 space-y-2 text-sm text-slate-600 list-decimal pl-5">
             <li>Create a named UPG API key in <strong>Settings &amp; Integrations</strong>.</li>
+            <li>Select <strong>Allow AI profile generation and saving</strong> only when the connected tool needs to create profiles; otherwise keep the key read-only.</li>
             <li>Copy the key when it is shown; it is shown only once.</li>
             <li>In the connected tool, add a <strong>Unified Profile Generator</strong> connection and paste the key.</li>
             <li>Use the API base URL and key below to test the connection and retrieve saved profiles.</li>
@@ -974,15 +976,15 @@
             <div><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">API base URL</div><code id="api-mcp-rest-base" class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto"></code></div>
             <div><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">Authentication header</div><code class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto">X-API-Key: upg_your_key_here</code></div>
           </div>
-          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">Endpoint</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-slate-100"><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/connection</code></td><td class="py-2">Test the authenticated connection.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles</code></td><td class="py-2">List saved UPG profiles.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id</code></td><td class="py-2">Retrieve a selected profile and its metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id/export</code></td><td class="py-2">Retrieve its presentation-ready HTML export.</td></tr></tbody></table></div>
+          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">Endpoint</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-slate-100"><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/connection</code></td><td class="py-2">Test the authenticated connection.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles</code></td><td class="py-2">List saved UPG profiles.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id</code></td><td class="py-2">Retrieve a selected profile and its metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id/export</code></td><td class="py-2">Retrieve its presentation-ready HTML export.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">POST /integrations/v1/upg/generations</code></td><td class="py-2">Start an asynchronous profile generation. Requires a generation-enabled key.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/generations/:id</code></td><td class="py-2">Poll the job until it returns a saved profile ID.</td></tr></tbody></table></div>
         </section>
 
         <section class="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
           <h3 class="text-base font-700 text-slate-900">MCP: let an AI assistant use UPG</h3>
-          <p class="text-sm leading-6 text-slate-600 mt-2">Model Context Protocol (MCP) is the AI-assistant layer. It lets an approved assistant discover your saved profiles and hand a profile or export to its own host application. UPG does not directly edit a Holodeck deck; Holodeck remains responsible for placement and asks for confirmation before changing a presentation.</p>
+          <p class="text-sm leading-6 text-slate-600 mt-2">Model Context Protocol (MCP) is the AI-assistant layer. It lets an approved assistant discover your saved profiles, start a new asynchronous profile generation, and hand a profile or export to its own host application. UPG does not directly edit a Holodeck deck; Holodeck remains responsible for placement and asks for confirmation before changing a presentation.</p>
           <div class="mt-4"><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">Remote MCP endpoint</div><code id="api-mcp-endpoint" class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto"></code></div>
           <p class="text-sm text-slate-600 mt-3">Configure the MCP connection with the same <code class="text-xs bg-white rounded px-1.5 py-0.5">X-API-Key</code>. The connected application should make server-to-server requests and keep the key out of slides, exports, and browser-delivered code.</p>
-          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">MCP tool</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-cyan-100"><tr><td class="py-2 pr-4"><code class="text-xs">upg_list_profiles</code></td><td class="py-2">Find saved B2C or B2B profiles available to the key owner.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile</code></td><td class="py-2">Read profile data and presentation metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile_export</code></td><td class="py-2">Get an export reference, or a small HTML export when explicitly requested.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs text-slate-400">upg_generate_profile</code></td><td class="py-2 text-slate-500">Planned: request a new AI-generated profile and return its job status.</td></tr></tbody></table></div>
+          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">MCP tool</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-cyan-100"><tr><td class="py-2 pr-4"><code class="text-xs">upg_list_profiles</code></td><td class="py-2">Find saved B2C or B2B profiles available to the key owner.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile</code></td><td class="py-2">Read profile data and presentation metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile_export</code></td><td class="py-2">Get an export reference, or a small HTML export when explicitly requested.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_generate_profile</code></td><td class="py-2">Start an asynchronous, AI-generated UPG profile. Requires a generation-enabled key and user confirmation.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_generation_status</code></td><td class="py-2">Check the job and retrieve the saved profile ID when generation completes.</td></tr></tbody></table></div>
         </section>
 
         <section class="rounded-xl border border-slate-200 bg-white p-5">
@@ -991,7 +993,7 @@
             <li>Choose a saved UPG profile from a Holodeck presentation and insert a presentation-ready version.</li>
             <li>Refresh an inserted profile when the saved UPG project changes.</li>
             <li>Let an approved AI assistant find the right profile based on its B2C/B2B type and persona.</li>
-            <li>In a future release, ask an assistant to generate a UPG profile from a customer URL and insert the completed result after confirmation.</li>
+            <li>Ask an assistant to generate a UPG profile from a customer URL, poll for completion, then insert the completed result after confirmation.</li>
           </ul>
         </section>
 
@@ -1003,7 +1005,7 @@
     </div>
   </div>
 
-  <script src="/saasy-auth.js?v=api-keys-v3" onerror="window.__saasyAuthLoadError = true"></script>
+  <script src="/saasy-auth.js?v=api-keys-v4" onerror="window.__saasyAuthLoadError = true"></script>
   <script>window.__UPG_BUILD__ = 'dev-' + Date.now();</script>
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
