@@ -1608,6 +1608,19 @@ function closeSettings() {
   dismissCreatedApiKey();
 }
 
+function openApiMcpGuide() {
+  const origin = /^https?:$/.test(window.location.protocol) ? window.location.origin : 'Available on the deployed UPG app';
+  const restBase = document.getElementById('api-mcp-rest-base');
+  const endpoint = document.getElementById('api-mcp-endpoint');
+  if (restBase) restBase.textContent = origin;
+  if (endpoint) endpoint.textContent = origin.startsWith('http') ? `${origin}/mcp` : origin;
+  document.getElementById('api-mcp-guide-modal')?.classList.remove('hidden');
+}
+
+function closeApiMcpGuide() {
+  document.getElementById('api-mcp-guide-modal')?.classList.add('hidden');
+}
+
 function showCreateApiKeyForm() {
   const form = document.getElementById('api-key-create-form');
   form?.classList.remove('hidden');

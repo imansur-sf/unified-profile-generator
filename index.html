@@ -939,6 +939,65 @@
           <h3 class="text-sm font-700 text-slate-800">Connection usage</h3>
           <p class="text-sm text-slate-500 mt-1">In Holodeck Builder, open Settings → Connections → Unified Profile Generator, then paste a read-only UPG key.</p>
           <code class="block mt-3 rounded-lg bg-slate-900 text-slate-100 px-3 py-3 text-xs overflow-x-auto">X-API-Key: upg_your_key_here</code>
+          <button type="button" onclick="openApiMcpGuide()" class="mt-4 text-sm font-700 text-blue-700 hover:text-blue-900 underline underline-offset-2">About API &amp; MCP Integration</button>
+        </section>
+      </div>
+    </div>
+  </div>
+
+  <div id="api-mcp-guide-modal" class="hidden fixed inset-0 bg-slate-950/55 z-[120] overflow-y-auto p-4 sm:p-8" onclick="if(event.target===this) closeApiMcpGuide()" role="dialog" aria-modal="true" aria-labelledby="api-mcp-guide-title">
+    <div class="max-w-4xl mx-auto bg-slate-50 rounded-2xl shadow-2xl overflow-hidden">
+      <div class="bg-gradient-to-r from-[#06235d] to-[#1378d6] px-6 sm:px-8 py-5 flex items-start justify-between gap-4 text-white">
+        <div>
+          <div class="text-[10px] font-700 tracking-[0.18em] uppercase text-cyan-200">Unified Profile Generator</div>
+          <h2 id="api-mcp-guide-title" class="text-xl font-700 mt-1" style="color:#fff">API &amp; MCP Integration</h2>
+          <p class="text-sm text-white/75 mt-1">Connect saved UPG profiles to approved presentation and AI-assistant tools.</p>
+        </div>
+        <button onclick="closeApiMcpGuide()" class="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/15 text-lg" aria-label="Close API and MCP guide">×</button>
+      </div>
+      <div class="p-6 sm:p-8 space-y-6 text-slate-700">
+        <section>
+          <h3 class="text-lg font-700 text-slate-900">When to sign in</h3>
+          <p class="text-sm leading-6 text-slate-600 mt-2">You can build profiles without signing in. Sign in when you want to save a project online, create an API key, or connect your saved profiles to another approved tool.</p>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 class="text-base font-700 text-slate-900">API: connect UPG to another tool</h3>
+          <p class="text-sm leading-6 text-slate-600 mt-2">The API is the direct connection for listing, retrieving, and exporting the saved profiles that belong to the API-key owner. A connected tool such as Holodeck can insert a selected profile into a slide and later offer a refresh action.</p>
+          <ol class="mt-4 space-y-2 text-sm text-slate-600 list-decimal pl-5">
+            <li>Create a named UPG API key in <strong>Settings &amp; Integrations</strong>.</li>
+            <li>Copy the key when it is shown; it is shown only once.</li>
+            <li>In the connected tool, add a <strong>Unified Profile Generator</strong> connection and paste the key.</li>
+            <li>Use the API base URL and key below to test the connection and retrieve saved profiles.</li>
+          </ol>
+          <div class="mt-4 grid gap-3">
+            <div><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">API base URL</div><code id="api-mcp-rest-base" class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto"></code></div>
+            <div><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">Authentication header</div><code class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto">X-API-Key: upg_your_key_here</code></div>
+          </div>
+          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">Endpoint</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-slate-100"><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/connection</code></td><td class="py-2">Test the authenticated connection.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles</code></td><td class="py-2">List saved UPG profiles.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id</code></td><td class="py-2">Retrieve a selected profile and its metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">GET /integrations/v1/upg/profiles/:id/export</code></td><td class="py-2">Retrieve its presentation-ready HTML export.</td></tr></tbody></table></div>
+        </section>
+
+        <section class="rounded-xl border border-cyan-200 bg-cyan-50 p-5">
+          <h3 class="text-base font-700 text-slate-900">MCP: let an AI assistant use UPG</h3>
+          <p class="text-sm leading-6 text-slate-600 mt-2">Model Context Protocol (MCP) is the AI-assistant layer. It lets an approved assistant discover your saved profiles and hand a profile or export to its own host application. UPG does not directly edit a Holodeck deck; Holodeck remains responsible for placement and asks for confirmation before changing a presentation.</p>
+          <div class="mt-4"><div class="text-xs font-700 uppercase tracking-wide text-slate-500 mb-1">Remote MCP endpoint</div><code id="api-mcp-endpoint" class="block rounded-lg bg-slate-900 text-slate-100 px-3 py-2.5 text-xs overflow-x-auto"></code></div>
+          <p class="text-sm text-slate-600 mt-3">Configure the MCP connection with the same <code class="text-xs bg-white rounded px-1.5 py-0.5">X-API-Key</code>. The connected application should make server-to-server requests and keep the key out of slides, exports, and browser-delivered code.</p>
+          <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">MCP tool</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-cyan-100"><tr><td class="py-2 pr-4"><code class="text-xs">upg_list_profiles</code></td><td class="py-2">Find saved B2C or B2B profiles available to the key owner.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile</code></td><td class="py-2">Read profile data and presentation metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile_export</code></td><td class="py-2">Get an export reference, or a small HTML export when explicitly requested.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs text-slate-400">upg_generate_profile</code></td><td class="py-2 text-slate-500">Planned: request a new AI-generated profile and return its job status.</td></tr></tbody></table></div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 class="text-base font-700 text-slate-900">What this enables</h3>
+          <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600 list-disc pl-5">
+            <li>Choose a saved UPG profile from a Holodeck presentation and insert a presentation-ready version.</li>
+            <li>Refresh an inserted profile when the saved UPG project changes.</li>
+            <li>Let an approved AI assistant find the right profile based on its B2C/B2B type and persona.</li>
+            <li>In a future release, ask an assistant to generate a UPG profile from a customer URL and insert the completed result after confirmation.</li>
+          </ul>
+        </section>
+
+        <section class="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <h3 class="text-base font-700 text-amber-950">Keep your connection secure</h3>
+          <ul class="mt-3 space-y-2 text-sm leading-6 text-amber-900 list-disc pl-5"><li>Treat an API key like a password and create a separate key for each connected tool.</li><li>Do not paste a key into a slide, document, export, or chat message.</li><li>Revoke a key immediately if it is no longer needed or may have been exposed.</li><li>AI-assisted generation and presentation changes should always require user confirmation.</li></ul>
         </section>
       </div>
     </div>
