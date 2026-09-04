@@ -1542,7 +1542,12 @@ function syncAuthUI() {
 }
 
 async function onAuthButtonClick() {
-  if (!window.SaasyAuth) return;
+  if (!window.SaasyAuth) {
+    alert(window.__saasyAuthLoadError
+      ? 'The sign-in service could not be reached. Reload this page while connected to the Salesforce network, then try again.'
+      : 'The sign-in service is still loading. Please wait a moment and try again.');
+    return;
+  }
   if (SaasyAuth.isSignedIn()) return toggleAccountMenu();
   try {
     await SaasyAuth.signIn();
