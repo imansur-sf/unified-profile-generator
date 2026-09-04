@@ -3,6 +3,10 @@ const path = require('path');
 const app = express();
 const PORT = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
+// Browser clients in a Heroku Private Space cannot always reach a sibling
+// internal app directly. Keep account/auth traffic same-origin by proxying it
+// through UPG; the UPG dyno can reach the accounts service privately.
+const SAASY_ACCOUNTS_URL = (process.env.SAASY_ACCOUNTS_URL || 'https://sassysolutions-accounts-8215113235cf.aster-virginia.herokuapp.com').replace(/\/$/, '');
 const MAX_SCRAPE_BYTES = 3000000;
 const SCRAPE_TIMEOUT_MS = 15000;
 const USER_AGENT = 'Mozilla/5.0 (compatible; UnifiedProfileGenerator/1.0)';
@@ -20,6 +24,7 @@ app.use('/api', (req, res, next) => {
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
+app.use(['/saasy-auth.js', '/auth', '/projects', '/api-keys', '/integrations'], proxySaasyAccounts);
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY) });
 });
@@ -106,5 +111,26 @@ async function generateImage(prompt) {
 app.use(express.static(path.join(__dirname), { extensions: ['html'], maxAge: '1h' }));
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
 app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });
+async function proxySaasyAccounts(req, res) {
+  const headers = {};
+  for (const name of ['accept', 'authorization', 'content-type', 'x-api-key']) {
+    const value = req.get(name);
+    if (value) headers[name] = value;
+  }
+  const request = { method: req.method, headers, redirect: 'manual' };
+  if (!['GET', 'HEAD'].includes(req.method) && req.body !== undefined) request.body = JSON.stringify(req.body);
+  try {
+    const upstream = await fetch(`${SAASY_ACCOUNTS_URL}${req.originalUrl}`, request);
+    const contentType = upstream.headers.get('content-type');
+    const cacheControl = upstream.headers.get('cache-control');
+    if (contentType) res.set('Content-Type', contentType);
+    if (cacheControl) res.set('Cache-Control', cacheControl);
+    if (req.path !== '/saasy-auth.js') res.set('Cache-Control', 'no-store');
+    res.status(upstream.status).send(Buffer.from(await upstream.arrayBuffer()));
+  } catch (err) {
+    console.error('Saasy Accounts proxy failed:', err.message);
+    res.status(502).json({ error: 'sign_in_service_unavailable' });
+  }
+}
 function isDangerousHost(host) { if (!host) return true; const h = host.toLowerCase(); if (h === 'localhost' || h === 'localhost.localdomain') return true; if (h === 'metadata.google.internal') return true; if (h.endsWith('.internal') || h.endsWith('.local')) return true; if (h === '169.254.169.254') return true; if (/^(10|127)\./.test(h)) return true; if (/^192\.168\./.test(h)) return true; if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true; if (/^169\.254\./.test(h)) return true; if (h === '0.0.0.0') return true; if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc00:') || h.startsWith('fd00:')) return true; return false; }
 function checkRateLimit(ip) { const now = Date.now(); let bucket = rateBuckets.get(ip); if (!bucket || now >= bucket.resetAt) { bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS }; rateBuckets.set(ip, bucket); } bucket.count++; if (rateBuckets.size > 5000) { for (const [k, v] of rateBuckets) if (v.resetAt < now) rateBuckets.delete(k); } if (bucket.count > RATE_LIMIT_MAX) return { ok: false, retryAfterMs: Math.max(0, bucket.resetAt - now) }; return { ok: true }; }
