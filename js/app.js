@@ -1226,6 +1226,38 @@ async function downloadHTML() {
   URL.revokeObjectURL(url);
 }
 
+async function buildIntegrationArtifact() {
+  // Keep the API payload self-contained so an external presentation tool can
+  // render the same profile the UPG user saved, without knowing our editor
+  // implementation details.
+  const strategy = getProfileStrategy();
+  const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const subject = profileType === 'b2b'
+    ? (state.account?.name || state.tabName || 'Account')
+    : (state.profile?.name || state.tabName || 'Unified Profile');
+  // Do not duplicate large inline AI images into the saved-project payload.
+  // The profile state already retains them; a compact rendered export is made
+  // available when it can be safely persisted alongside that state.
+  const rawHtml = generateProfileHTML(state).replace(/(src=["'])(assets\/[^"']+)/g, (_, before, assetPath) => `${before}${new URL(assetPath, window.location.href).href}`);
+  const canPersistRender = rawHtml.length <= 350000 && !/src=["']data:/i.test(rawHtml);
+  return {
+    schemaVersion: 'upg.profile.v1',
+    generatedAt: new Date().toISOString(),
+    profileType,
+    persona: strategy.lens,
+    personaLabel: getProfileStrategyLabel(strategy),
+    subject,
+    brand: {
+      name: state.brandName || '',
+      appName: state.appName || '',
+      logo: state.logo || '',
+      colors: Object.assign({}, state.colors || {})
+    },
+    renderedHtml: canPersistRender ? rawHtml : '',
+    renderStatus: canPersistRender ? 'ready' : 'requires_hosted_render'
+  };
+}
+
 function fitPresentationScale() {
   const canvas = document.getElementById('presentation-canvas');
   const stage = document.getElementById('presentation-stage');
@@ -1486,28 +1518,185 @@ function syncAuthUI() {
   if (!window.SaasyAuth) return;
   const btn = document.getElementById('btn-auth');
   const emailEl = document.getElementById('auth-email');
+  const accountBtn = document.getElementById('btn-account');
+  const accountLabel = document.getElementById('account-label');
+  const accountInitial = document.getElementById('account-initial');
+  const accountEmail = document.getElementById('account-menu-email');
   if (SaasyAuth.isSignedIn()) {
-    btn.textContent = 'Sign Out';
-    emailEl.textContent = SaasyAuth.getEmail();
-    emailEl.classList.remove('hidden');
+    const email = SaasyAuth.getEmail() || '';
+    btn.classList.add('hidden');
+    emailEl.classList.add('hidden');
+    accountBtn?.classList.remove('hidden');
+    accountBtn?.classList.add('flex');
+    if (accountLabel) accountLabel.textContent = email.split('@')[0] || 'Account';
+    if (accountInitial) accountInitial.textContent = (email[0] || 'U').toUpperCase();
+    if (accountEmail) accountEmail.textContent = email;
   } else {
     btn.textContent = 'Sign In';
+    btn.classList.remove('hidden');
     emailEl.classList.add('hidden');
+    accountBtn?.classList.add('hidden');
+    accountBtn?.classList.remove('flex');
+    closeAccountMenu();
   }
 }
 
 async function onAuthButtonClick() {
   if (!window.SaasyAuth) return;
-  if (SaasyAuth.isSignedIn()) {
-    SaasyAuth.signOut();
-    syncAuthUI();
-    return;
-  }
+  if (SaasyAuth.isSignedIn()) return toggleAccountMenu();
   try {
     await SaasyAuth.signIn();
     syncAuthUI();
   } catch (e) {
     // user cancelled sign-in — nothing to do
+  }
+}
+
+function toggleAccountMenu() {
+  const menu = document.getElementById('account-menu');
+  const button = document.getElementById('btn-account');
+  if (!menu || !button) return;
+  const isOpen = !menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', isOpen);
+  button.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function closeAccountMenu() {
+  const menu = document.getElementById('account-menu');
+  const button = document.getElementById('btn-account');
+  menu?.classList.add('hidden');
+  button?.setAttribute('aria-expanded', 'false');
+}
+
+function openMyProjectsFromMenu() {
+  closeAccountMenu();
+  openMyProjects();
+}
+
+function signOutFromMenu() {
+  if (!window.SaasyAuth) return;
+  SaasyAuth.signOut();
+  closeSettings();
+  syncAuthUI();
+}
+
+let mostRecentApiKey = '';
+
+async function openSettings() {
+  if (!window.SaasyAuth) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  closeAccountMenu();
+  document.getElementById('settings-modal')?.classList.remove('hidden');
+  const email = SaasyAuth.getEmail() || '';
+  const label = document.getElementById('settings-account-email');
+  const initial = document.getElementById('settings-account-initial');
+  if (label) label.textContent = email;
+  if (initial) initial.textContent = (email[0] || 'U').toUpperCase();
+  await refreshApiKeySettings();
+}
+
+function closeSettings() {
+  document.getElementById('settings-modal')?.classList.add('hidden');
+  hideCreateApiKeyForm();
+  dismissCreatedApiKey();
+}
+
+function showCreateApiKeyForm() {
+  const form = document.getElementById('api-key-create-form');
+  form?.classList.remove('hidden');
+  document.getElementById('api-key-create-error')?.classList.add('hidden');
+  setTimeout(() => document.getElementById('api-key-name')?.focus(), 0);
+}
+
+function hideCreateApiKeyForm() {
+  document.getElementById('api-key-create-form')?.classList.add('hidden');
+  const input = document.getElementById('api-key-name');
+  if (input) input.value = '';
+}
+
+function dismissCreatedApiKey() {
+  mostRecentApiKey = '';
+  document.getElementById('api-key-reveal')?.classList.add('hidden');
+  const value = document.getElementById('api-key-reveal-value');
+  if (value) value.textContent = '';
+}
+
+function formatSettingsDate(value) {
+  if (!value) return 'Never';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
+
+async function refreshApiKeySettings() {
+  const list = document.getElementById('api-key-list');
+  if (!list || !window.SaasyAuth) return;
+  list.innerHTML = '<div class="text-sm text-slate-400 py-3">Loading API keys…</div>';
+  try {
+    const body = await SaasyAuth.listApiKeys({ tool: SAASY_TOOL });
+    const keys = body.apiKeys || [];
+    if (!keys.length) {
+      list.innerHTML = '<div class="text-center text-sm text-slate-400 py-8">No API keys yet. Create one to enable external tool access.</div>';
+      return;
+    }
+    list.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-400"><tr><th class="pb-3 pr-4">Name</th><th class="pb-3 pr-4">Key</th><th class="pb-3 pr-4">Created</th><th class="pb-3 pr-4">Last used</th><th class="pb-3"></th></tr></thead><tbody>${keys.map(key => `<tr class="border-t border-slate-100"><td class="py-3 pr-4 font-600 text-slate-700">${escHTML(key.name)}</td><td class="py-3 pr-4"><code class="text-xs bg-slate-100 rounded px-2 py-1 text-slate-600">${escHTML(key.keyPrefix)}••••••••</code></td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.createdAt)}</td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.lastUsedAt)}</td><td class="py-3 text-right"><button onclick="revokeApiKeyFromSettings('${String(key.id).replace(/'/g, '')}')" class="text-xs text-red-600 hover:text-red-800">Revoke</button></td></tr>`).join('')}</tbody></table></div>`;
+  } catch (e) {
+    list.innerHTML = '<div class="text-sm text-red-600 py-3">Could not load API keys. Please try again.</div>';
+  }
+}
+
+async function createApiKeyFromSettings() {
+  const input = document.getElementById('api-key-name');
+  const error = document.getElementById('api-key-create-error');
+  const button = document.getElementById('api-key-create-button');
+  const name = input?.value.trim() || '';
+  if (!name) {
+    if (error) { error.textContent = 'Enter a name for this connection.'; error.classList.remove('hidden'); }
+    input?.focus();
+    return;
+  }
+  if (!window.SaasyAuth) return;
+  button?.setAttribute('disabled', 'disabled');
+  if (error) error.classList.add('hidden');
+  try {
+    const body = await SaasyAuth.createApiKey({ tool: SAASY_TOOL, name });
+    mostRecentApiKey = body.key || '';
+    const value = document.getElementById('api-key-reveal-value');
+    if (value) value.textContent = mostRecentApiKey;
+    document.getElementById('api-key-reveal')?.classList.remove('hidden');
+    hideCreateApiKeyForm();
+    await refreshApiKeySettings();
+  } catch (e) {
+    if (error) { error.textContent = 'Could not create this API key. Please try again.'; error.classList.remove('hidden'); }
+  } finally {
+    button?.removeAttribute('disabled');
+  }
+}
+
+async function copyCreatedApiKey() {
+  if (!mostRecentApiKey) return;
+  try {
+    await navigator.clipboard.writeText(mostRecentApiKey);
+  } catch (e) {
+    const value = document.getElementById('api-key-reveal-value');
+    const range = document.createRange();
+    range.selectNodeContents(value);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.execCommand('copy');
+  }
+}
+
+async function revokeApiKeyFromSettings(id) {
+  if (!confirm('Revoke this API key? Any connected tool using it will stop working.')) return;
+  if (!window.SaasyAuth) return;
+  try {
+    await SaasyAuth.revokeApiKey(id);
+    await refreshApiKeySettings();
+  } catch (e) {
+    alert('Could not revoke this API key. Please try again.');
   }
 }
 
@@ -1542,7 +1731,9 @@ async function confirmSaveProject(asNew) {
   const name = input.value.trim() || state.brandName || 'Untitled Profile';
   const id = asNew ? null : currentProjectId;
   try {
-    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload: state, id });
+    const payload = JSON.parse(JSON.stringify(state));
+    payload.integrationArtifact = await buildIntegrationArtifact();
+    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload, id });
     currentProjectId = project.id;
     currentProjectName = project.name;
     closeSaveProjectModal();
