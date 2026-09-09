@@ -259,6 +259,43 @@ Profile strategy (this controls the generated working view):
 Generate the ${profileType} Unified Profile JSON per the schema.`;
   }
 
+  // A profile set keeps one fictional person/account and brand identity while
+  // giving each team a different decision-ready working view. This prompt
+  // intentionally returns only the per-persona overlay, not a second profile.
+  function buildPersonaOverlayPrompt(scraped, sharedProfile, opts = {}) {
+    const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
+    const strategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, opts.strategy || {});
+    const identity = JSON.stringify(sharedProfile || {}, null, 2).slice(0, 7000);
+    return `Customer URL: ${scraped.url}
+Site title: ${scraped.title || '(not extracted)'}
+Description: ${scraped.description || '(not extracted)'}
+Headings: ${scraped.headings || '(none extracted)'}
+Body text (truncated): ${scraped.bodyText.slice(0, 3500) || '(no body text extracted)'}
+
+This is the shared identity already established for the profile set. Do NOT change it or return brand/profile/account fields:
+${identity}
+
+Create ONLY this ${profileType} persona overlay as JSON with exactly these keys:
+{
+  "insights": { "items": [{ "icon": string, "label": string, "value": string }] },
+  "affinities": { "seriesA": {"label": string, "color": "#RRGGBB"}, "seriesB": {"label": string, "color": "#RRGGBB"}, "groups": [{"name": string, "items": [{"label": string, "a": number, "b": number}]}] },
+  "preferences": { "items": [{"label": string, "value": string}] },
+  "events": { "items": [{"name": string, "date": string, "confirmation": string}] },
+  "membership": { "items": [{"label": string, "value": string}] },
+  "recommendations": { "items": [{"eyebrow": string, "title": string, "cta": string, "image": ""}] },
+  "activity": { "items": [{"icon": string, "title": string, "body": string, "time": string}] },
+  "extraCards": [{"title": string, "icon": string, "items": [{"label": string, "value": string}]}],
+  "rightExtraCards": [{"title": string, "icon": string, "items": [{"label": string, "value": string}]}]
+}
+
+Viewer persona: ${strategy.lens}
+Custom role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not supplied)') : '(not applicable)'}
+Primary objective: ${strategy.objective}
+Additional requirements: ${strategy.brief || '(none)'}
+
+Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Produce 6 concise insights, 2 recommendation actions, 5-6 activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
+  }
+
   // Tolerant JSON parser — handles the three common ways AI models
   // produce technically-invalid JSON:
   //   1) Markdown fences (```json ... ```)
@@ -356,5 +393,5 @@ Generate the ${profileType} Unified Profile JSON per the schema.`;
     return truncated.replace(/,\s*$/, '') + closer;
   }
 
-  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, getSystemPrompt, buildUserPrompt, parseAIResponseText };
+  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, getSystemPrompt, buildUserPrompt, buildPersonaOverlayPrompt, parseAIResponseText };
 })();

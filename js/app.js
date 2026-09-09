@@ -63,6 +63,39 @@ function getProfileStrategy(target = state) {
   return target.profileStrategy;
 }
 
+const STANDARD_PERSONA_LENSES = ['sales', 'service', 'marketing', 'success'];
+
+function ensureProfileSet(target = state) {
+  if (!target.profileSet || typeof target.profileSet !== 'object') {
+    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {} };
+  }
+  if (!Array.isArray(target.profileSet.selectedLenses)) target.profileSet.selectedLenses = [...STANDARD_PERSONA_LENSES];
+  if (!target.profileSet.briefs || typeof target.profileSet.briefs !== 'object') target.profileSet.briefs = {};
+  if (!target.profileSet.statuses || typeof target.profileSet.statuses !== 'object') target.profileSet.statuses = {};
+  return target.profileSet;
+}
+
+function getPersonaBrief(target = state, lens = getProfileStrategy(target).lens) {
+  return String(ensureProfileSet(target).briefs[lens] || '');
+}
+
+function setPersonaBrief(target = state, lens, brief) {
+  ensureProfileSet(target).briefs[lens] = String(brief || '');
+}
+
+function readProfileSetConfig() {
+  const selectedLenses = Array.from(document.querySelectorAll('.profile-set-choices input:checked')).map(input => input.value);
+  const briefs = {};
+  document.querySelectorAll('[data-profile-set-brief]').forEach(input => { briefs[input.dataset.profileSetBrief] = input.value.trim(); });
+  return { selectedLenses: selectedLenses.length ? selectedLenses : ['sales'], briefs };
+}
+
+function syncProfileSetConfigUI() {
+  const profileSet = ensureProfileSet();
+  document.querySelectorAll('.profile-set-choices input').forEach(input => { input.checked = profileSet.selectedLenses.includes(input.value); });
+  document.querySelectorAll('[data-profile-set-brief]').forEach(input => { input.value = profileSet.briefs[input.dataset.profileSetBrief] || ''; });
+}
+
 function getProfileStrategyLabel(strategy = getProfileStrategy()) {
   const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
   if (strategy.lens !== 'custom') return preset.label;
@@ -334,9 +367,8 @@ function restorePersonaView(target = state, lens) {
   target.profileStrategy = {
     lens,
     objective: PERSONA_PRESETS[lens].objective,
-    // Keep broadly useful scenario context when this is the first view, but
-    // give each persona its own objective and later-editable brief.
-    brief: currentStrategy.brief || '',
+    // Every standard view keeps its own optional additive requirements.
+    brief: getPersonaBrief(target, lens),
     customRole: lens === 'custom' ? '' : currentStrategy.customRole || ''
   };
   applyPersonaPreset(target);
@@ -481,6 +513,7 @@ function onProfileStrategyChange() {
   strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
   strategy.brief = document.getElementById('strategy-brief')?.value || '';
   strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
+  setPersonaBrief(state, strategy.lens, strategy.brief);
   updateProfileStrategyUI();
   refreshPreview();
 }
@@ -510,10 +543,10 @@ function updateProfileModeUI() {
   if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); }
   if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); }
 
-  setText('quickstart-title', b2b ? 'Analyze customer URL for an account profile' : 'Analyze customer URL with AI');
+  setText('quickstart-title', b2b ? 'Create an account profile set with AI' : 'Create a customer profile set with AI');
   setText('quickstart-sub', b2b
-    ? 'Paste the customer’s homepage — AI extracts brand context and images, then creates a plausible account-level Unified Profile with commercial, usage, and health signals.'
-    : 'Paste the customer’s homepage — AI extracts brand identity, colors, and pre-fills a unified profile that matches their industry. You can still edit anything after.');
+    ? 'Paste the customer’s homepage — AI extracts brand context once, then creates distinct account views with commercial, usage, health, and role-specific actions.'
+    : 'Paste the customer’s homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.');
   setText('step-2-title', b2b ? 'Account Profile' : 'Profile Card');
   setText('step-2-sub', b2b ? 'Firmographics, ownership, hierarchy, and account identity shown in the left rail.' : 'The customer’s demographic, contact, and segment membership shown in the left panel.');
   setText('step-3-title', b2b ? 'Account Metrics & Insights' : 'Insights');
@@ -555,6 +588,7 @@ function setProfileType(profileType) {
   nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
   nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
   nextState.profileStrategy = Object.assign({}, getProfileStrategy());
+  nextState.profileSet = cloneViewData(ensureProfileSet());
   nextState._aiContext = cloneViewData(state._aiContext);
   // B2C and B2B have different data contracts, so their working views begin
   // fresh after a mode change while retaining the current persona choice.
@@ -711,6 +745,7 @@ function readStaticFields() {
   strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
   strategy.brief = document.getElementById('strategy-brief')?.value || '';
   strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
+  setPersonaBrief(state, strategy.lens, strategy.brief);
   state.brandName = document.getElementById('brand-name').value;
   state.appName = document.getElementById('app-name').value;
   state.colors.primary = document.getElementById('hex-primary').value;
@@ -1474,7 +1509,7 @@ function sanitizeAIActivityBody(value) {
     .replace(/\sstyle\s*=\s*([^\s>]*color\s*:[^;\s>]*[^\s>]*)/gi, '');
 }
 
-function applyAIProfile(ai) {
+function applyAIProfile(ai, strategyOverride, profileSetOverride) {
   // Preserve current industry unless AI came back with something else.
   const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
   const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
@@ -1485,7 +1520,8 @@ function applyAIProfile(ai) {
     provider: ai?._meta?.provider || '',
     analyzedAt: new Date().toISOString()
   };
-  base.profileStrategy = Object.assign({}, getProfileStrategy());
+  base.profileStrategy = Object.assign({}, strategyOverride || getProfileStrategy());
+  base.profileSet = cloneViewData(profileSetOverride || ensureProfileSet());
   const recommendationFallbacks = (base.recommendations?.items || []).map(item => item.image || '');
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
@@ -1559,6 +1595,41 @@ function applyAIProfile(ai) {
   fillStaticFields();
   renderAll();
   refreshPreview();
+}
+
+function mergePersonaOverlay(target, overlay) {
+  if (!overlay || typeof overlay !== 'object') return;
+  ['insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(key => {
+    if (overlay[key] && typeof overlay[key] === 'object') target[key] = Object.assign({}, target[key] || {}, cloneViewData(overlay[key]));
+  });
+  if (Array.isArray(target.activity?.items)) {
+    target.activity.items = target.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
+  }
+  if (Array.isArray(overlay.extraCards)) {
+    target.extraCards = (target.extraCards || []).concat(overlay.extraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `overlay-middle-${index + 1}`, placement: 'middle', visibility: 'suggested'
+    })));
+  }
+  if (Array.isArray(overlay.rightExtraCards)) {
+    target.rightExtraCards = (target.rightExtraCards || []).concat(overlay.rightExtraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `overlay-right-${index + 1}`, placement: 'right', visibility: 'suggested'
+    })));
+  }
+  normalizeCustomModules(target);
+}
+
+function createPersonaVariantFromOverlay(lens, overlay, strategy) {
+  const working = cloneViewData(state);
+  working.profileStrategy = Object.assign({}, strategy, { lens });
+  if (!working.personaVariants || typeof working.personaVariants !== 'object') working.personaVariants = {};
+  delete working.personaVariants[lens];
+  restorePersonaView(working, lens);
+  working.profileStrategy = Object.assign({}, strategy, { lens });
+  mergePersonaOverlay(working, overlay);
+  // The persona owns headers and section hierarchy; the overlay owns content.
+  applyPersonaPreset(working);
+  snapshotPersonaView(working, lens);
+  return working.personaVariants[lens];
 }
 
 function renderAll() {
@@ -1976,17 +2047,67 @@ function nudgeToAdvancedIfDefaultFailed(code) {
   if (panel && !panel.classList.contains('open')) panel.classList.add('open');
 }
 
-async function onQuickStartAnalyze() {
-  const url = document.getElementById('quickstart-url').value.trim();
-  readStaticFields();
+async function onPersonalizeCurrentPersona() {
+  const sourceUrl = state._aiContext?.sourceUrl || document.getElementById('quickstart-url')?.value.trim();
   const strategy = getProfileStrategy();
   const errBox = document.getElementById('quickstart-error');
+  if (!sourceUrl) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add a customer URL and create a profile set before personalizing a view.';
+    return;
+  }
   if (strategy.lens === 'custom' && !strategy.customRole) {
     errBox.style.display = 'block';
-    errBox.textContent = 'Add who will use this custom profile before analyzing.';
+    errBox.textContent = 'Add who will use this custom profile before personalizing it.';
     document.getElementById('strategy-custom-role')?.focus();
     return;
   }
+  if (!window.LocalAI?.collectCustomerContext || !window.LocalAI?.generatePersonaOverlay) return;
+  errBox.style.display = 'none';
+  const status = document.getElementById('quickstart-status');
+  const label = getProfileStrategyLabel(strategy);
+  status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
+  try {
+    const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
+    const sharedIdentity = isB2B()
+      ? { brandName: state.brandName, account: state.account, accountMetrics: state.accountMetrics }
+      : { brandName: state.brandName, profile: state.profile, loyalty: state.loyalty };
+    const overlay = await window.LocalAI.generatePersonaOverlay(context, sharedIdentity, {
+      profileType: state.profileType,
+      strategy: Object.assign({}, strategy)
+    });
+    mergePersonaOverlay(state, overlay);
+    applyPersonaPreset(state);
+    ensureProfileSet().statuses[strategy.lens] = 'ready';
+    snapshotPersonaView(state, strategy.lens);
+    renderAll();
+    refreshPreview();
+    // New recommendation actions need their own role-aware art, so let the
+    // established visual generator fill only blank slots after the content.
+    ensurePersonaRecommendationImages(strategy.lens);
+    status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
+  } catch (error) {
+    errBox.style.display = 'block';
+    errBox.textContent = friendlyError(error);
+    nudgeToAdvancedIfDefaultFailed(error.code);
+    status.textContent = '';
+  }
+}
+
+async function onQuickStartAnalyze() {
+  const url = document.getElementById('quickstart-url').value.trim();
+  readStaticFields();
+  const requestedStrategy = getProfileStrategy();
+  const profileSetConfig = readProfileSetConfig();
+  const leadLens = STANDARD_PERSONA_LENSES.includes(requestedStrategy.lens) && profileSetConfig.selectedLenses.includes(requestedStrategy.lens)
+    ? requestedStrategy.lens : profileSetConfig.selectedLenses[0];
+  const strategy = {
+    lens: leadLens,
+    objective: PERSONA_PRESETS[leadLens].objective,
+    brief: profileSetConfig.briefs[leadLens] || '',
+    customRole: ''
+  };
+  const errBox = document.getElementById('quickstart-error');
   if (!url) return;
   const btn = document.getElementById('quickstart-btn');
   const status = document.getElementById('quickstart-status');
@@ -2001,7 +2122,7 @@ async function onQuickStartAnalyze() {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
       profileType: state.profileType || 'b2c',
-      strategy: Object.assign({}, getProfileStrategy()),
+      strategy,
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
@@ -2009,9 +2130,59 @@ async function onQuickStartAnalyze() {
         else if (phase === 'generating_images') setStatus('Creating on-brand profile imagery…');
       }
     });
-    applyAIProfile(ai);
+    const sourceContext = ai._sourceContext;
+    delete ai._sourceContext;
+    const nextProfileSet = {
+      selectedLenses: profileSetConfig.selectedLenses,
+      briefs: profileSetConfig.briefs,
+      statuses: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, lens === leadLens ? 'ready' : 'queued'])),
+      createdAt: new Date().toISOString()
+    };
+    applyAIProfile(ai, strategy, nextProfileSet);
+    syncProfileSetConfigUI();
+
+    // The first role establishes the shared customer identity. Every other
+    // view is generated from the same scrape and identity, so presenters get
+    // a coherent profile set instead of four unrelated fictional customers.
+    const sharedIdentity = isB2B()
+      ? { brandName: state.brandName, account: state.account, accountMetrics: state.accountMetrics }
+      : { brandName: state.brandName, profile: state.profile, loyalty: state.loyalty };
+    const remainingLenses = profileSetConfig.selectedLenses.filter(lens => lens !== leadLens);
+    for (let index = 0; index < remainingLenses.length; index += 1) {
+      const lens = remainingLenses[index];
+      const personaStrategy = {
+        lens,
+        objective: PERSONA_PRESETS[lens].objective,
+        brief: profileSetConfig.briefs[lens] || '',
+        customRole: ''
+      };
+      state.profileSet.statuses[lens] = 'generating';
+      setStatus(`Preparing ${PERSONA_PRESETS[lens].label} view (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
+      try {
+        const overlay = await window.LocalAI.generatePersonaOverlay(sourceContext, sharedIdentity, {
+          profileType: state.profileType,
+          strategy: personaStrategy
+        });
+        state.personaVariants[lens] = createPersonaVariantFromOverlay(lens, overlay, personaStrategy);
+        state.profileSet.statuses[lens] = 'ready';
+      } catch (overlayError) {
+        // A ready-to-edit template is still more useful than losing the full
+        // generation because one secondary persona encountered a transient LLM error.
+        console.warn(`[UPG] ${lens} profile-set overlay failed:`, overlayError);
+        const fallback = cloneViewData(state);
+        fallback.profileStrategy = personaStrategy;
+        delete fallback.personaVariants[lens];
+        restorePersonaView(fallback, lens);
+        snapshotPersonaView(fallback, lens);
+        state.personaVariants[lens] = fallback.personaVariants[lens];
+        state.profileSet.statuses[lens] = 'template-ready';
+      }
+    }
+    snapshotPersonaView(state, leadLens);
+    renderAll();
+    refreshPreview();
     const kind = isB2B() ? 'account profile' : 'individual profile';
-    status.textContent = `✓ Applied ${INDUSTRY_DEFAULTS[state._industry].label} ${kind} from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}`;
+    status.textContent = `✓ Created ${profileSetConfig.selectedLenses.length} ${kind} views from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}. Open a team tab to personalize it further.`;
   } catch (e) {
     errBox.style.display = 'block';
     errBox.textContent = friendlyError(e);
@@ -2065,10 +2236,12 @@ function onScraperEndpointChange() {
 // ─── INIT ───────────────────────────────────────────────────
 function bootstrap() {
   state._industry = state._industry || 'generic';
+  ensureProfileSet();
   applyPersonaPreset();
   applyPersonaSampleTemplate();
   snapshotPersonaView();
   fillStaticFields();
+  syncProfileSetConfigUI();
   renderAll();
   if (typeof hydrateBundledStarterImages === 'function') {
     hydrateBundledStarterImages(state).then(() => refreshPreview());

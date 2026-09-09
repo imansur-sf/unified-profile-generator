@@ -322,15 +322,11 @@
     return generateImages(prompts);
   }
 
-  // ---- MAIN ----
-  async function analyzeCustomerURL(rawUrl, opts = {}) {
+  async function collectCustomerContext(rawUrl, opts = {}) {
     const url = shared.normalizeURL(rawUrl);
     if (!url) throw localError('invalid_url');
     const onStatus = opts.onStatus || (function() {});
-    const provider = currentProvider();
-    const tier = opts.tier || 'balanced';
-
-    var scraped = null, fallbackReason = null;
+    let scraped = null, fallbackReason = null;
     onStatus('fetching');
     try {
       const html = await scrape(url);
@@ -340,6 +336,28 @@
       onStatus('fallback_url_only');
     }
     if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
+    return { scraped, url, fallbackReason };
+  }
+
+  async function generatePersonaOverlay(context, sharedProfile, opts = {}) {
+    if (!context?.scraped) throw localError('missing_customer_context');
+    const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
+    const response = await callLLM({
+      prompt: shared.buildPersonaOverlayPrompt(context.scraped, sharedProfile, { profileType, strategy: opts.strategy || {} }),
+      system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
+      tier: opts.tier || 'balanced',
+      maxTokens: 6500
+    });
+    return shared.parseAIResponseText(response.text);
+  }
+
+  // ---- MAIN ----
+  async function analyzeCustomerURL(rawUrl, opts = {}) {
+    const onStatus = opts.onStatus || (function() {});
+    const provider = currentProvider();
+    const tier = opts.tier || 'balanced';
+    const context = await collectCustomerContext(rawUrl, { onStatus });
+    const scraped = context.scraped;
 
     onStatus('analyzing');
     const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
@@ -352,15 +370,18 @@
 
     const parsed = shared.parseAIResponseText(text);
     parsed._meta = {
-      source_url: url,
+      source_url: context.url,
       favicon: scraped.favicon,
       og_image: scraped.ogImage,
       model_used: model_used,
       tier: tier,
       provider: provider,
-      mode: fallbackReason ? 'scrape-fallback-url-only' : provider,
-      fallback_reason: fallbackReason
+      mode: context.fallbackReason ? 'scrape-fallback-url-only' : provider,
+      fallback_reason: context.fallbackReason
     };
+    // Caller consumes this only while building a profile set; app state keeps
+    // the compact provenance metadata instead of persisting page text.
+    parsed._sourceContext = context;
 
     // Generate images for profile photo + recommendation cards
     // Only when using the default (Gemini) backend which has the image endpoint
@@ -397,6 +418,8 @@
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
     generatePersonaRecommendationImages,
+    collectCustomerContext,
+    generatePersonaOverlay,
     analyzeCustomerURL
   };
 })();
