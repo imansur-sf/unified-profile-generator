@@ -211,15 +211,15 @@
     .profile-set-panel { margin-top: 14px; padding: 13px; border-radius: 12px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.18); }
     .profile-set-title { color: #fff; font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; }
     .profile-set-help { margin-top: 4px; color: rgba(255,255,255,.72); font-size: 10.5px; line-height: 1.4; }
-    .profile-set-choices { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; margin-top: 10px; }
+    .profile-set-choices { display: grid; grid-template-columns: repeat(5, 1fr); gap: 6px; margin-top: 10px; }
     .profile-set-choice { display: flex; align-items: center; justify-content: center; gap: 5px; min-height: 34px; padding: 6px; border: 1px solid rgba(255,255,255,.22); border-radius: 8px; color: rgba(255,255,255,.9); font-size: 10.5px; cursor: pointer; }
     .profile-set-choice input { accent-color: #fff; }
-    .profile-set-details { margin-top: 10px; }
-    .profile-set-details summary { cursor: pointer; color: rgba(255,255,255,.84); font-size: 10.5px; font-weight: 700; }
-    .profile-set-briefs { display: grid; grid-template-columns: 1fr 1fr; gap: 7px; margin-top: 9px; }
-    .profile-set-briefs label { display: block; color: rgba(255,255,255,.78); font-size: 10px; font-weight: 700; }
-    .profile-set-briefs textarea { width: 100%; min-height: 46px; margin-top: 4px; padding: 7px 8px; resize: vertical; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; background: rgba(0,0,0,.14); color: #fff; font: 10.5px var(--font-body); outline: none; }
-    .profile-set-briefs textarea::placeholder { color: rgba(255,255,255,.5); }
+    .profile-set-custom { margin-top: 9px; padding: 9px; border-radius: 8px; background: rgba(0,0,0,.12); border: 1px solid rgba(255,255,255,.14); }
+    .profile-set-custom[hidden] { display: none; }
+    .profile-set-custom label { display: block; color: rgba(255,255,255,.78); font-size: 10px; font-weight: 700; }
+    .profile-set-custom input, .profile-set-custom textarea { width: 100%; margin-top: 4px; padding: 7px 8px; border: 1px solid rgba(255,255,255,.22); border-radius: 7px; background: rgba(0,0,0,.14); color: #fff; font: 10.5px var(--font-body); outline: none; }
+    .profile-set-custom textarea { min-height: 46px; resize: vertical; }
+    .profile-set-custom input::placeholder, .profile-set-custom textarea::placeholder { color: rgba(255,255,255,.5); }
     .mode-b2b { display: none; }
     body.profile-mode-b2b .mode-b2b { display: block; }
     body.profile-mode-b2b label.mode-b2b { display: flex; }
@@ -334,25 +334,23 @@
               </div>
               <div class="profile-set-panel">
                 <div class="profile-set-title">Profile set</div>
-                <div class="profile-set-help">AI analyzes the customer once, then prepares a distinct, editable view for each selected team. Each brief is optional and adds to that team’s standard blueprint.</div>
+                <div class="profile-set-help">Choose the ready-made views to create. You can refine any selected view after it is generated.</div>
                 <div class="profile-set-choices" role="group" aria-label="Views to create">
                   <label class="profile-set-choice"><input type="checkbox" value="sales" checked> Sales</label>
                   <label class="profile-set-choice"><input type="checkbox" value="service" checked> Service</label>
                   <label class="profile-set-choice"><input type="checkbox" value="marketing" checked> Marketing</label>
                   <label class="profile-set-choice"><input type="checkbox" value="success" checked> Success</label>
+                  <label class="profile-set-choice"><input type="checkbox" value="custom" onchange="onProfileSetCustomToggle()"> Custom</label>
                 </div>
-                <details class="profile-set-details">
-                  <summary>Tailor a team view before creating (optional)</summary>
-                  <div class="profile-set-briefs">
-                    <label>Sales<textarea data-profile-set-brief="sales" placeholder="e.g. Include a call coaching summary."></textarea></label>
-                    <label>Service<textarea data-profile-set-brief="service" placeholder="e.g. Surface unresolved support risks."></textarea></label>
-                    <label>Marketing<textarea data-profile-set-brief="marketing" placeholder="e.g. Show journey and content engagement."></textarea></label>
-                    <label>Customer Success<textarea data-profile-set-brief="success" placeholder="e.g. Add adoption and renewal signals."></textarea></label>
-                  </div>
-                </details>
+                <div class="profile-set-custom" id="profile-set-custom-fields" hidden>
+                  <label for="profile-set-custom-role">Custom role <span aria-hidden="true">*</span></label>
+                  <input id="profile-set-custom-role" type="text" maxlength="64" placeholder="e.g. Finance business partner">
+                  <label for="profile-set-custom-brief" style="margin-top:7px;">Initial decision goal <span aria-hidden="true">*</span></label>
+                  <textarea id="profile-set-custom-brief" placeholder="e.g. Assess payment risk and revenue opportunities."></textarea>
+                </div>
               </div>
               <div class="strategy-panel">
-                <label class="strategy-label">Persona studio</label>
+                <label class="strategy-label">Customize selected view</label>
                 <div class="persona-switch" role="radiogroup" aria-label="Viewer persona">
                   <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true">Sales</button>
                   <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false">Service</button>

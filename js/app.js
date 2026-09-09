@@ -67,11 +67,12 @@ const STANDARD_PERSONA_LENSES = ['sales', 'service', 'marketing', 'success'];
 
 function ensureProfileSet(target = state) {
   if (!target.profileSet || typeof target.profileSet !== 'object') {
-    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {} };
+    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {}, customRole: '' };
   }
   if (!Array.isArray(target.profileSet.selectedLenses)) target.profileSet.selectedLenses = [...STANDARD_PERSONA_LENSES];
   if (!target.profileSet.briefs || typeof target.profileSet.briefs !== 'object') target.profileSet.briefs = {};
   if (!target.profileSet.statuses || typeof target.profileSet.statuses !== 'object') target.profileSet.statuses = {};
+  if (typeof target.profileSet.customRole !== 'string') target.profileSet.customRole = '';
   return target.profileSet;
 }
 
@@ -85,15 +86,29 @@ function setPersonaBrief(target = state, lens, brief) {
 
 function readProfileSetConfig() {
   const selectedLenses = Array.from(document.querySelectorAll('.profile-set-choices input:checked')).map(input => input.value);
-  const briefs = {};
-  document.querySelectorAll('[data-profile-set-brief]').forEach(input => { briefs[input.dataset.profileSetBrief] = input.value.trim(); });
-  return { selectedLenses: selectedLenses.length ? selectedLenses : ['sales'], briefs };
+  const customRole = document.getElementById('profile-set-custom-role')?.value.trim() || '';
+  const customBrief = document.getElementById('profile-set-custom-brief')?.value.trim() || '';
+  return {
+    selectedLenses: selectedLenses.length ? selectedLenses : ['sales'],
+    briefs: selectedLenses.includes('custom') ? { custom: customBrief } : {},
+    customRole
+  };
 }
 
 function syncProfileSetConfigUI() {
   const profileSet = ensureProfileSet();
   document.querySelectorAll('.profile-set-choices input').forEach(input => { input.checked = profileSet.selectedLenses.includes(input.value); });
-  document.querySelectorAll('[data-profile-set-brief]').forEach(input => { input.value = profileSet.briefs[input.dataset.profileSetBrief] || ''; });
+  const customRole = document.getElementById('profile-set-custom-role');
+  const customBrief = document.getElementById('profile-set-custom-brief');
+  if (customRole) customRole.value = profileSet.customRole || '';
+  if (customBrief) customBrief.value = profileSet.briefs.custom || '';
+  onProfileSetCustomToggle();
+}
+
+function onProfileSetCustomToggle() {
+  const enabled = Boolean(document.querySelector('.profile-set-choices input[value="custom"]:checked'));
+  const fields = document.getElementById('profile-set-custom-fields');
+  if (fields) fields.hidden = !enabled;
 }
 
 function getProfileStrategyLabel(strategy = getProfileStrategy()) {
@@ -2099,16 +2114,22 @@ async function onQuickStartAnalyze() {
   readStaticFields();
   const requestedStrategy = getProfileStrategy();
   const profileSetConfig = readProfileSetConfig();
-  const leadLens = STANDARD_PERSONA_LENSES.includes(requestedStrategy.lens) && profileSetConfig.selectedLenses.includes(requestedStrategy.lens)
+  const leadLens = profileSetConfig.selectedLenses.includes(requestedStrategy.lens)
     ? requestedStrategy.lens : profileSetConfig.selectedLenses[0];
   const strategy = {
     lens: leadLens,
     objective: PERSONA_PRESETS[leadLens].objective,
     brief: profileSetConfig.briefs[leadLens] || '',
-    customRole: ''
+    customRole: leadLens === 'custom' ? profileSetConfig.customRole : ''
   };
   const errBox = document.getElementById('quickstart-error');
   if (!url) return;
+  if (profileSetConfig.selectedLenses.includes('custom') && (!profileSetConfig.customRole || !profileSetConfig.briefs.custom)) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add a custom role and its initial decision goal before creating a custom view.';
+    document.getElementById(!profileSetConfig.customRole ? 'profile-set-custom-role' : 'profile-set-custom-brief')?.focus();
+    return;
+  }
   const btn = document.getElementById('quickstart-btn');
   const status = document.getElementById('quickstart-status');
   errBox.style.display = 'none';
@@ -2136,6 +2157,7 @@ async function onQuickStartAnalyze() {
       selectedLenses: profileSetConfig.selectedLenses,
       briefs: profileSetConfig.briefs,
       statuses: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, lens === leadLens ? 'ready' : 'queued'])),
+      customRole: profileSetConfig.customRole,
       createdAt: new Date().toISOString()
     };
     applyAIProfile(ai, strategy, nextProfileSet);
@@ -2154,7 +2176,7 @@ async function onQuickStartAnalyze() {
         lens,
         objective: PERSONA_PRESETS[lens].objective,
         brief: profileSetConfig.briefs[lens] || '',
-        customRole: ''
+        customRole: lens === 'custom' ? profileSetConfig.customRole : ''
       };
       state.profileSet.statuses[lens] = 'generating';
       setStatus(`Preparing ${PERSONA_PRESETS[lens].label} view (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
