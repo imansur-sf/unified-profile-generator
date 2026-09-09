@@ -31,6 +31,9 @@ const DEFAULT_MODEL = TIER_MODELS.balanced;
 const RATE_LIMIT_WINDOW_MS = 60000;
 const RATE_LIMIT_MAX = 30;
 const rateBuckets = new Map();
+// Saved profiles can include several AI-created recommendation images. Keep a
+// deliberate cap, but apply the larger allowance only to project saves.
+app.use('/projects', express.json({ limit: '20mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', (req, res, next) => {
   res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
@@ -141,6 +144,12 @@ async function generateImage(prompt) {
   const mime = imagePart.inlineData.mimeType || 'image/jpeg';
   return { imageData: `data:${mime};base64,${imagePart.inlineData.data}` };
 }
+app.use((err, req, res, next) => {
+  if (err?.type === 'entity.too.large') {
+    return res.status(413).json({ error: 'payload_too_large', message: 'The project is larger than the 20 MB save limit.' });
+  }
+  return next(err);
+});
 app.use(express.static(path.join(__dirname), { extensions: ['html'], maxAge: '1h' }));
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
 app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });

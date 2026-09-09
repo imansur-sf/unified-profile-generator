@@ -5,6 +5,7 @@
 const TOTAL_STEPS = 7;
 let currentStep = 0;
 let personaVisualRequest = 0;
+const MAX_SAVED_PROJECT_BYTES = 18 * 1024 * 1024;
 // Start with a complete, presentation-ready B2C story. Industry templates
 // remain available whenever the user changes industry or starts a B2B build.
 let state = cloneTonyRobbinsStarter();
@@ -1813,6 +1814,22 @@ function closeSaveProjectModal() {
   document.getElementById('save-project-modal').classList.add('hidden');
 }
 
+function buildProjectPayloadForSave() {
+  const payload = JSON.parse(JSON.stringify(state));
+  // The active view is present both at the root and in personaVariants because
+  // it was just snapshotted. Keep its editable root copy, but omit only the
+  // redundant inline image bytes from the duplicate snapshot. When this
+  // project is reopened, switching away and back refreshes that snapshot.
+  const activeLens = payload.profileStrategy?.lens;
+  const activeSnapshot = activeLens && payload.personaVariants?.[activeLens];
+  activeSnapshot?.recommendations?.items?.forEach(item => {
+    if (/^data:/i.test(item?.image || '')) item.image = '';
+  });
+  const bytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+  if (bytes > MAX_SAVED_PROJECT_BYTES) throw new Error('project_payload_too_large');
+  return payload;
+}
+
 async function confirmSaveProject(asNew) {
   readStaticFields();
   snapshotPersonaView();
@@ -1820,7 +1837,7 @@ async function confirmSaveProject(asNew) {
   const name = input.value.trim() || state.brandName || 'Untitled Profile';
   const id = asNew ? null : currentProjectId;
   try {
-    const payload = JSON.parse(JSON.stringify(state));
+    const payload = buildProjectPayloadForSave();
     payload.integrationArtifact = await buildIntegrationArtifact();
     const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload, id });
     currentProjectId = project.id;
@@ -1830,7 +1847,10 @@ async function confirmSaveProject(asNew) {
     s.classList.remove('hidden');
     setTimeout(() => s.classList.add('hidden'), 2200);
   } catch (e) {
-    alert('Could not save project: ' + e.message);
+    const message = ['payload_too_large', 'project_payload_too_large'].includes(e.message)
+      ? 'This project has more image data than can be saved at once. Remove a few recommendation images or save fewer persona views, then try again.'
+      : e.message;
+    alert('Could not save project: ' + message);
   }
 }
 
