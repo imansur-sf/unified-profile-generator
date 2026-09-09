@@ -4,6 +4,7 @@
 
 const TOTAL_STEPS = 7;
 let currentStep = 0;
+let personaVisualRequest = 0;
 // Start with a complete, presentation-ready B2C story. Industry templates
 // remain available whenever the user changes industry or starts a B2B build.
 let state = cloneTonyRobbinsStarter();
@@ -274,8 +275,10 @@ function applyPersonaSampleTemplate(target = state) {
   target.preferences.items = itemsFromPairs(template.preferences, ['label', 'value']);
   target.events.items = itemsFromPairs(template.events, ['name', 'date', 'confirmation']);
   target.membership.items = itemsFromPairs(template.membership, ['label', 'value']);
-  const oldRecommendations = target.recommendations.items || [];
-  target.recommendations.items = template.recommendations.map((item, index) => ({ eyebrow: item[0], title: item[1], cta: item[2], image: oldRecommendations[index]?.image || '' }));
+  // A new persona must never inherit another persona's recommendation art.
+  // Saved persona variants preserve their own images; first-time views either
+  // receive freshly generated visual recommendations or remain editable.
+  target.recommendations.items = template.recommendations.map(item => ({ eyebrow: item[0], title: item[1], cta: item[2], image: '' }));
   const activityItems = [...template.activity, ...(PERSONA_ACTIVITY_BOOSTS[strategy.lens] || [])];
   target.activity.items = itemsFromPairs(activityItems, ['icon', 'title', 'body', 'time']);
   if (mode === 'b2c') {
@@ -413,7 +416,63 @@ function setViewerLens(lens) {
   fillStaticFields();
   renderAll();
   refreshPreview();
+  ensurePersonaRecommendationImages(lens);
   if (currentStep === 0 && lens === 'custom' && !getProfileStrategy().customRole) document.getElementById('strategy-custom-role')?.focus();
+}
+
+function setPersonaVisualStatus(message) {
+  const status = document.getElementById('quickstart-status');
+  if (status) status.textContent = message;
+}
+
+// A website analysis provides an on-brand image source. When a presenter opens
+// another B2C persona for the first time, generate imagery for that persona's
+// distinct next-best actions instead of recycling Sales visuals. Results are
+// stored in that persona variant, so later switches are immediate and stable.
+async function ensurePersonaRecommendationImages(lens) {
+  if (isB2B() || !state._aiContext?.sourceUrl || !window.LocalAI?.generatePersonaRecommendationImages) return;
+  const strategy = getProfileStrategy();
+  if (strategy.lens !== lens) return;
+  const recommendations = Array.isArray(state.recommendations?.items) ? state.recommendations.items : [];
+  if (!recommendations.some(item => item?.title && !item.image)) return;
+
+  const expectedTitles = recommendations.map(item => item?.title || '');
+  const requestId = ++personaVisualRequest;
+  const label = getProfileStrategyLabel(strategy);
+  setPersonaVisualStatus(`Creating ${label} recommendation visuals…`);
+
+  try {
+    const results = await window.LocalAI.generatePersonaRecommendationImages({
+      brandName: state.brandName,
+      industry: state._industry || 'generic',
+      profileType: state.profileType,
+      recommendations: recommendations.map(item => ({ title: item.title, image: item.image || '' })),
+      strategy: Object.assign({}, strategy)
+    });
+    // Do not let a slow request overwrite a different active persona or a
+    // manually edited recommendation image.
+    if (requestId !== personaVisualRequest || getProfileStrategy().lens !== lens) return;
+    let changed = false;
+    results.forEach(result => {
+      const match = /^rec_(\d+)$/.exec(result?.slot || '');
+      const index = match ? Number(match[1]) : -1;
+      const current = state.recommendations?.items?.[index];
+      if (result?.imageData && current && !current.image && current.title === expectedTitles[index]) {
+        current.image = result.imageData;
+        changed = true;
+      }
+    });
+    if (changed) {
+      snapshotPersonaView(state, lens);
+      renderRecs();
+      refreshPreview();
+      setPersonaVisualStatus(`✓ ${label} recommendation visuals are ready`);
+    }
+  } catch (error) {
+    // Image creation is an enhancement. Recommendation copy and all manual
+    // image controls remain available if the image provider is unavailable.
+    console.warn('[UPG] Persona recommendation images were not generated:', error);
+  }
 }
 
 function onProfileStrategyChange() {
@@ -495,6 +554,7 @@ function setProfileType(profileType) {
   nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
   nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
   nextState.profileStrategy = Object.assign({}, getProfileStrategy());
+  nextState._aiContext = cloneViewData(state._aiContext);
   // B2C and B2B have different data contracts, so their working views begin
   // fresh after a mode change while retaining the current persona choice.
   nextState.personaVariants = {};
@@ -1419,6 +1479,11 @@ function applyAIProfile(ai) {
   const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
   const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
+  base._aiContext = {
+    sourceUrl: ai?._meta?.source_url || '',
+    provider: ai?._meta?.provider || '',
+    analyzedAt: new Date().toISOString()
+  };
   base.profileStrategy = Object.assign({}, getProfileStrategy());
   const recommendationFallbacks = (base.recommendations?.items || []).map(item => item.image || '');
 

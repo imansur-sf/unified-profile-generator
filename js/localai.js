@@ -245,9 +245,43 @@
     return data.results || [];
   }
 
+  const PERSONA_VISUAL_DIRECTIONS = {
+    sales: 'a consultative commercial moment: discovery, value alignment, or a confident buying decision',
+    service: 'a supportive service-resolution moment: an expert helping a customer remove friction or restore confidence',
+    marketing: 'a relevant content or campaign-engagement moment: a customer discovering useful, personalized information',
+    success: 'a value-realization moment: adoption, a milestone, or a collaborative success review',
+    custom: 'a thoughtful decision-support moment that reflects the requested role and outcome'
+  };
+
+  function buildRecommendationImagePrompts(options = {}) {
+    const prompts = [];
+    const brand = options.brandName || 'company';
+    const industry = options.industry || 'generic';
+    const strategy = options.strategy || {};
+    const persona = PERSONA_VISUAL_DIRECTIONS[strategy.lens] || PERSONA_VISUAL_DIRECTIONS.custom;
+    const objective = strategy.objective || 'engage';
+    const role = strategy.lens === 'custom' && strategy.customRole ? ` The viewer is a ${strategy.customRole}.` : '';
+    const brief = strategy.brief ? ` Scenario to reflect: ${strategy.brief}.` : '';
+    const recommendations = Array.isArray(options.recommendations) ? options.recommendations : [];
+
+    recommendations.forEach(function(rec, i) {
+      if (!rec.image && rec.title) {
+        prompts.push({
+          slot: 'rec_' + i,
+          prompt: 'Editorial lifestyle photograph for ' + brand + ': "' + rec.title + '". ' +
+            industry + ' industry context. This is for a ' + (strategy.lens || 'custom') +
+            ' persona whose objective is to ' + objective + '. Show ' + persona + '.' + role + brief + ' ' +
+            'Professional, aspirational, on-brand photography suitable for a Salesforce Einstein recommendation card. ' +
+            'No text overlays, no logos, no words in the image.'
+        });
+      }
+    });
+    return prompts;
+  }
+
   // Build image generation prompts from the parsed AI profile.
   // Returns an array of { slot, prompt } objects.
-  function buildImagePrompts(parsed, profileType) {
+  function buildImagePrompts(parsed, profileType, strategy) {
     const prompts = [];
     const brand = parsed.brandName || 'company';
     const industry = parsed.industry || 'generic';
@@ -268,22 +302,24 @@
       });
     }
 
-    // Einstein recommendation images
-    if (Array.isArray(parsed.recommendations?.items)) {
-      parsed.recommendations.items.forEach(function(rec, i) {
-        if (!rec.image && rec.title) {
-          prompts.push({
-            slot: 'rec_' + i,
-            prompt: 'Marketing lifestyle photograph for ' + brand + ': "' + rec.title + '". ' +
-              industry + ' industry context. Beautiful commercial photography, ' +
-              'vibrant colors, professional product/lifestyle shot suitable for a recommendation card. ' +
-              'Aspirational, on-brand imagery. No text overlays, no logos, no words in the image.'
-          });
-        }
-      });
-    }
+    return prompts.concat(buildRecommendationImagePrompts({
+      brandName: brand,
+      industry: industry,
+      profileType: profileType,
+      recommendations: parsed.recommendations?.items,
+      strategy: strategy || {}
+    }));
+  }
 
-    return prompts;
+  // Build a distinct visual set when a presenter opens another persona view.
+  // This intentionally does not generate recommendation copy: the persona
+  // templates retain their own editable actions, while the imagery reflects
+  // the same audience, objective, and decision brief.
+  async function generatePersonaRecommendationImages(options = {}) {
+    if (currentProvider() !== 'default') return [];
+    const prompts = buildRecommendationImagePrompts(options);
+    if (!prompts.length) return [];
+    return generateImages(prompts);
   }
 
   // ---- MAIN ----
@@ -328,7 +364,7 @@
 
     // Generate images for profile photo + recommendation cards
     // Only when using the default (Gemini) backend which has the image endpoint
-    const imagePrompts = buildImagePrompts(parsed, profileType);
+    const imagePrompts = buildImagePrompts(parsed, profileType, opts.strategy || {});
     if (imagePrompts.length > 0 && provider === 'default') {
       onStatus('generating_images');
       try {
@@ -360,6 +396,7 @@
     getModel, setModel,
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
+    generatePersonaRecommendationImages,
     analyzeCustomerURL
   };
 })();
