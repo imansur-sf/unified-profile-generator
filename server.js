@@ -26,6 +26,10 @@ const USER_AGENT = 'Mozilla/5.0 (compatible; UnifiedProfileGenerator/1.0)';
 const IMAGE_GEN_MODEL = 'gemini-3.1-flash-image';
 const IMAGE_GEN_TIMEOUT_MS = 30000;
 const MAX_IMAGE_GEN_BATCH = 12;
+const BRAND_IMAGE_TIMEOUT_MS = 12000;
+// Keep the embedded shared logo small enough that it does not materially add
+// to saved-project payloads already containing generated recommendation art.
+const MAX_BRAND_IMAGE_BYTES = 512 * 1024;
 const TIER_MODELS = { fast: 'gemini-3.5-flash-lite', balanced: 'gemini-3.5-flash', powerful: 'gemini-3.1-pro-preview' };
 const DEFAULT_MODEL = TIER_MODELS.balanced;
 const RATE_LIMIT_WINDOW_MS = 60000;
@@ -62,7 +66,7 @@ app.get('/mcp', (req, res) => {
   res.status(405).set('Allow', 'POST').json({ error: 'method_not_allowed', message: 'Use POST with MCP JSON-RPC messages.' });
 });
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY) });
+  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'GET /api/brand-image', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY) });
 });
 app.get('/api/scrape', async (req, res) => {
   const target = req.query.url;
@@ -87,6 +91,17 @@ app.get('/api/scrape', async (req, res) => {
     res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=600', 'X-Scraper-Source': targetURL.hostname, 'X-Scraper-Bytes': String(total) });
     res.send(body);
   } catch (err) { const code = err && err.name === 'AbortError' ? 'timeout' : 'network_error'; res.status(502).json({ error: code, message: (err && err.message) || 'unknown' }); }
+});
+app.get('/api/brand-image', async (req, res) => {
+  const target = String(req.query.url || '').trim();
+  if (!target) return res.status(400).json({ error: 'missing_url' });
+  try {
+    const image = await fetchBrandImage(target);
+    res.set('Cache-Control', 'private, max-age=86400');
+    res.json({ imageData: `data:${image.mime};base64,${image.data.toString('base64')}` });
+  } catch (err) {
+    res.status(err?.status || 502).json({ error: err?.code || 'brand_image_failed' });
+  }
 });
 app.post('/api/llm', async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: 'llm_not_configured', hint: 'Set GEMINI_API_KEY config var on this Heroku app' });
@@ -143,6 +158,73 @@ async function generateImage(prompt) {
   if (!imagePart) throw new Error('No image in Gemini response');
   const mime = imagePart.inlineData.mimeType || 'image/jpeg';
   return { imageData: `data:${mime};base64,${imagePart.inlineData.data}` };
+}
+
+function brandImageError(code, status) {
+  const error = new Error(code);
+  error.code = code;
+  error.status = status;
+  return error;
+}
+
+function normalizedBrandImageMime(contentType, url) {
+  const mime = String(contentType || '').split(';')[0].trim().toLowerCase();
+  if (mime.startsWith('image/')) return mime;
+  if (mime === 'application/octet-stream' || mime === 'application/x-ico') {
+    const pathName = url.pathname.toLowerCase();
+    if (pathName.endsWith('.png')) return 'image/png';
+    if (pathName.endsWith('.jpg') || pathName.endsWith('.jpeg')) return 'image/jpeg';
+    if (pathName.endsWith('.gif')) return 'image/gif';
+    if (pathName.endsWith('.webp')) return 'image/webp';
+    if (pathName.endsWith('.svg')) return 'image/svg+xml';
+    return 'image/x-icon';
+  }
+  return '';
+}
+
+async function fetchBrandImage(rawUrl, redirects = 0) {
+  if (redirects > 3) throw brandImageError('too_many_redirects', 502);
+  let target;
+  try { target = new URL(rawUrl); } catch (_) { throw brandImageError('invalid_url', 400); }
+  if (!['https:', 'http:'].includes(target.protocol) || isDangerousHost(target.hostname)) throw brandImageError('blocked_host', 403);
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), BRAND_IMAGE_TIMEOUT_MS);
+  let upstream;
+  try {
+    upstream = await fetch(target.toString(), {
+      method: 'GET', redirect: 'manual',
+      headers: { 'User-Agent': USER_AGENT, Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
+      signal: controller.signal
+    });
+  } catch (err) {
+    throw brandImageError(err?.name === 'AbortError' ? 'timeout' : 'network_error', 502);
+  } finally {
+    clearTimeout(timeout);
+  }
+  if ([301, 302, 303, 307, 308].includes(upstream.status)) {
+    const location = upstream.headers.get('location');
+    if (!location) throw brandImageError('invalid_redirect', 502);
+    return fetchBrandImage(new URL(location, target).toString(), redirects + 1);
+  }
+  if (!upstream.ok) throw brandImageError('upstream_status', 502);
+  const mime = normalizedBrandImageMime(upstream.headers.get('content-type'), target);
+  if (!mime) throw brandImageError('not_image', 415);
+  const reader = upstream.body?.getReader();
+  if (!reader) throw brandImageError('empty_image', 502);
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    total += value.length;
+    if (total > MAX_BRAND_IMAGE_BYTES) {
+      try { await reader.cancel(); } catch (_) {}
+      throw brandImageError('image_too_large', 413);
+    }
+    chunks.push(value);
+  }
+  if (!total) throw brandImageError('empty_image', 502);
+  return { mime, data: Buffer.concat(chunks) };
 }
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {

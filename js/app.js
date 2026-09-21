@@ -4,7 +4,7 @@
 
 const TOTAL_STEPS = 7;
 let currentStep = 0;
-let personaVisualRequest = 0;
+const personaVisualRequests = new Map();
 const MAX_SAVED_PROJECT_BYTES = 18 * 1024 * 1024;
 // Start with a complete, presentation-ready B2C story. Industry templates
 // remain available whenever the user changes industry or starts a B2B build.
@@ -67,11 +67,12 @@ const STANDARD_PERSONA_LENSES = ['sales', 'service', 'marketing', 'success'];
 
 function ensureProfileSet(target = state) {
   if (!target.profileSet || typeof target.profileSet !== 'object') {
-    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {}, customRole: '' };
+    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {}, visuals: {}, customRole: '' };
   }
   if (!Array.isArray(target.profileSet.selectedLenses)) target.profileSet.selectedLenses = [...STANDARD_PERSONA_LENSES];
   if (!target.profileSet.briefs || typeof target.profileSet.briefs !== 'object') target.profileSet.briefs = {};
   if (!target.profileSet.statuses || typeof target.profileSet.statuses !== 'object') target.profileSet.statuses = {};
+  if (!target.profileSet.visuals || typeof target.profileSet.visuals !== 'object') target.profileSet.visuals = {};
   if (typeof target.profileSet.customRole !== 'string') target.profileSet.customRole = '';
   return target.profileSet;
 }
@@ -411,7 +412,13 @@ function updateProfileStrategyUI() {
     const profileLabel = getProfileStrategyLabel(strategy);
     const customReminder = strategy.lens === 'custom' && !String(strategy.customRole || '').trim()
       ? '<br><em>Add the profile role above to tailor the generated view.</em>' : '';
-    blueprint.innerHTML = `<span>✦</span><span><strong>${escHTML(profileLabel)} view · ${strategy.objective}</strong><br>${preset.blueprint}${customReminder}<br><em>This view saves its own module choices and brief.</em></span>`;
+    const visual = ensureProfileSet().visuals?.[strategy.lens];
+    const visualNotice = visual?.state === 'generating'
+      ? '<br><em>Creating distinct recommendation visuals for this view…</em>'
+      : ['failed', 'partial'].includes(visual?.state)
+        ? `<br><em>${escHTML(visual.message || 'Some recommendation visuals are still missing.')}</em> <button type="button" class="quickstart-settings-toggle" style="color:#fff;text-decoration:underline;padding:0;min-height:0" onclick="retryPersonaRecommendationImages()">Retry visuals</button>`
+        : '';
+    blueprint.innerHTML = `<span>✦</span><span><strong>${escHTML(profileLabel)} view · ${strategy.objective}</strong><br>${preset.blueprint}${customReminder}<br><em>This view saves its own module choices and brief.</em>${visualNotice}</span>`;
   }
 
   // Keep the seven-step editor oriented around the selected team’s decision,
@@ -473,54 +480,108 @@ function setPersonaVisualStatus(message) {
   if (status) status.textContent = message;
 }
 
-// A website analysis provides an on-brand image source. When a presenter opens
-// another B2C persona for the first time, generate imagery for that persona's
-// distinct next-best actions instead of recycling Sales visuals. Results are
-// stored in that persona variant, so later switches are immediate and stable.
-async function ensurePersonaRecommendationImages(lens) {
-  if (isB2B() || !state._aiContext?.sourceUrl || !window.LocalAI?.generatePersonaRecommendationImages) return;
-  const strategy = getProfileStrategy();
-  if (strategy.lens !== lens) return;
-  const recommendations = Array.isArray(state.recommendations?.items) ? state.recommendations.items : [];
-  if (!recommendations.some(item => item?.title && !item.image)) return;
+// Recommendation visuals belong to each persona view, not the shared customer
+// identity. It can update an off-screen variant during profile-set generation
+// as well as the currently visible working view.
+function visualTargetStrategy(target, lens) {
+  return Object.assign(
+    { lens, objective: PERSONA_PRESETS[lens]?.objective || 'engage', brief: '', customRole: '' },
+    cloneViewData(target?.strategy || target?.profileStrategy) || {},
+    { lens }
+  );
+}
 
-  const expectedTitles = recommendations.map(item => item?.title || '');
-  const requestId = ++personaVisualRequest;
+function imageFailureMessage(response, expectedCount) {
+  const errors = Array.isArray(response?.results) ? response.results.filter(item => item?.error) : [];
+  if (response?.error?.code === 'image_provider_disabled') return 'Recommendation visuals need the shared image service. Remove the Advanced text-model override or retry with the default backend.';
+  if (response?.error?.code === 'rate_limited' || errors.some(item => /429|rate/i.test(item.error || ''))) return 'Recommendation visuals are temporarily rate-limited. Retry this view in a moment.';
+  if (response?.error?.code === 'timeout' || errors.some(item => /timeout|abort/i.test(item.error || ''))) return 'Recommendation visual generation timed out. Retry this view to finish the images.';
+  if (expectedCount) return 'Recommendation visuals could not be created yet. Retry this view, or add images manually.';
+  return '';
+}
+
+async function generatePersonaRecommendationImagesForTarget(lens, target, options = {}) {
+  const strategy = visualTargetStrategy(target, lens);
+  const recommendations = Array.isArray(target?.recommendations?.items) ? target.recommendations.items : [];
+  const missing = recommendations.filter(item => item?.title && !item.image);
+  const profileSet = ensureProfileSet();
   const label = getProfileStrategyLabel(strategy);
-  setPersonaVisualStatus(`Creating ${label} recommendation visuals…`);
+  if (!missing.length) {
+    profileSet.visuals[lens] = { state: 'ready', updatedAt: new Date().toISOString(), count: 0 };
+    return { state: 'ready', changed: false };
+  }
+  if (!window.LocalAI?.generatePersonaRecommendationImages) {
+    const message = 'Recommendation visual service is unavailable. You can retry later or add images manually.';
+    profileSet.visuals[lens] = { state: 'failed', message, updatedAt: new Date().toISOString(), count: 0 };
+    return { state: 'failed', changed: false, message };
+  }
+
+  const requestId = (personaVisualRequests.get(lens) || 0) + 1;
+  personaVisualRequests.set(lens, requestId);
+  profileSet.visuals[lens] = { state: 'generating', updatedAt: new Date().toISOString(), count: 0 };
+  if (options.announce) setPersonaVisualStatus(`Creating ${label} recommendation visuals…`);
+  const expectedTitles = recommendations.map(item => item?.title || '');
 
   try {
-    const results = await window.LocalAI.generatePersonaRecommendationImages({
+    const response = await window.LocalAI.generatePersonaRecommendationImages({
       brandName: state.brandName,
       industry: state._industry || 'generic',
       profileType: state.profileType,
       recommendations: recommendations.map(item => ({ title: item.title, image: item.image || '' })),
-      strategy: Object.assign({}, strategy)
+      strategy
     });
-    // Do not let a slow request overwrite a different active persona or a
-    // manually edited recommendation image.
-    if (requestId !== personaVisualRequest || getProfileStrategy().lens !== lens) return;
+    if (personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    const results = Array.isArray(response?.results) ? response.results : [];
     let changed = false;
     results.forEach(result => {
       const match = /^rec_(\d+)$/.exec(result?.slot || '');
       const index = match ? Number(match[1]) : -1;
-      const current = state.recommendations?.items?.[index];
+      const current = recommendations[index];
       if (result?.imageData && current && !current.image && current.title === expectedTitles[index]) {
         current.image = result.imageData;
         changed = true;
       }
     });
-    if (changed) {
+    const remaining = recommendations.filter(item => item?.title && !item.image).length;
+    const stateName = remaining === 0 ? 'ready' : changed ? 'partial' : 'failed';
+    const message = remaining ? imageFailureMessage(response, remaining) : '';
+    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: missing.length - remaining };
+    if (target === state) updateProfileStrategyUI();
+    if (target === state && changed) {
       snapshotPersonaView(state, lens);
       renderRecs();
       refreshPreview();
-      setPersonaVisualStatus(`✓ ${label} recommendation visuals are ready`);
     }
+    if (options.announce) setPersonaVisualStatus(stateName === 'ready' ? `✓ ${label} recommendation visuals are ready` : message);
+    return { state: stateName, changed, message };
   } catch (error) {
-    // Image creation is an enhancement. Recommendation copy and all manual
-    // image controls remain available if the image provider is unavailable.
+    if (personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    const message = imageFailureMessage({ error: { code: error?.name === 'AbortError' ? 'timeout' : 'generation_failed' } }, missing.length);
+    profileSet.visuals[lens] = { state: 'failed', message, updatedAt: new Date().toISOString(), count: 0 };
+    if (target === state) updateProfileStrategyUI();
+    if (options.announce) setPersonaVisualStatus(message);
     console.warn('[UPG] Persona recommendation images were not generated:', error);
+    return { state: 'failed', changed: false, message };
   }
+}
+
+async function ensurePersonaRecommendationImages(lens) {
+  if (!state._aiContext?.sourceUrl || getProfileStrategy().lens !== lens) return;
+  return generatePersonaRecommendationImagesForTarget(lens, state, { announce: true });
+}
+
+async function retryPersonaRecommendationImages() {
+  await ensurePersonaRecommendationImages(getProfileStrategy().lens);
+}
+
+async function embedSharedBrandLogo(logoUrl, sourceUrl) {
+  if (!logoUrl || /^data:/i.test(logoUrl) || !window.LocalAI?.embedBrandImage) return;
+  const result = await window.LocalAI.embedBrandImage(logoUrl);
+  // Do not overwrite a logo a user changed while the background request ran.
+  if (!result?.imageData || state.logo !== logoUrl || state._aiContext?.sourceUrl !== sourceUrl) return;
+  state.logo = result.imageData;
+  fillStaticFields();
+  refreshPreview();
 }
 
 function onProfileStrategyChange() {
@@ -1610,6 +1671,9 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
   fillStaticFields();
   renderAll();
   refreshPreview();
+  // The website favicon is a shared brand asset. Embed it once so every
+  // persona preview and exported profile uses the same stable logo data.
+  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
 }
 
 function mergePersonaOverlay(target, overlay) {
@@ -2157,11 +2221,17 @@ async function onQuickStartAnalyze() {
       selectedLenses: profileSetConfig.selectedLenses,
       briefs: profileSetConfig.briefs,
       statuses: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, lens === leadLens ? 'ready' : 'queued'])),
+      visuals: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, { state: lens === leadLens ? 'generating' : 'queued', count: 0 }])),
       customRole: profileSetConfig.customRole,
       createdAt: new Date().toISOString()
     };
     applyAIProfile(ai, strategy, nextProfileSet);
     syncProfileSetConfigUI();
+
+    // The lead analysis asks for visuals too, but retry any blank recommendation
+    // slots here so every selected view follows one reliable completion path.
+    setStatus(`Preparing ${PERSONA_PRESETS[leadLens].label} recommendation visuals (1 of ${profileSetConfig.selectedLenses.length})…`);
+    await generatePersonaRecommendationImagesForTarget(leadLens, state, { announce: false });
 
     // The first role establishes the shared customer identity. Every other
     // view is generated from the same scrape and identity, so presenters get
@@ -2187,6 +2257,8 @@ async function onQuickStartAnalyze() {
         });
         state.personaVariants[lens] = createPersonaVariantFromOverlay(lens, overlay, personaStrategy);
         state.profileSet.statuses[lens] = 'ready';
+        setStatus(`Creating ${PERSONA_PRESETS[lens].label} recommendation visuals (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
+        await generatePersonaRecommendationImagesForTarget(lens, state.personaVariants[lens], { announce: false });
       } catch (overlayError) {
         // A ready-to-edit template is still more useful than losing the full
         // generation because one secondary persona encountered a transient LLM error.
@@ -2198,6 +2270,7 @@ async function onQuickStartAnalyze() {
         snapshotPersonaView(fallback, lens);
         state.personaVariants[lens] = fallback.personaVariants[lens];
         state.profileSet.statuses[lens] = 'template-ready';
+        state.profileSet.visuals[lens] = { state: 'failed', message: 'The persona content could not be completed, so its recommendation visuals were not created.', updatedAt: new Date().toISOString(), count: 0 };
       }
     }
     snapshotPersonaView(state, leadLens);

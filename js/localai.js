@@ -234,15 +234,21 @@
     } catch (e) {
       clearTimeout(timer);
       console.warn('[UPG] Image generation network error:', e.message);
-      return []; // Non-fatal — profile works without images
+      return { results: [], error: { code: e?.name === 'AbortError' ? 'timeout' : 'network_error' } }; // Non-fatal — profile works without images
     }
     clearTimeout(timer);
     if (!res.ok) {
       console.warn('[UPG] Image generation failed:', res.status);
-      return [];
+      let body = {};
+      try { body = await res.json(); } catch (_) {}
+      return { results: [], error: { code: body?.error || (res.status === 429 ? 'rate_limited' : 'generation_failed'), status: res.status } };
     }
-    const data = await res.json();
-    return data.results || [];
+    try {
+      const data = await res.json();
+      return { results: Array.isArray(data?.results) ? data.results : [], error: data?.error || null };
+    } catch (e) {
+      return { results: [], error: { code: 'invalid_image_response' } };
+    }
   }
 
   const PERSONA_VISUAL_DIRECTIONS = {
@@ -316,10 +322,36 @@
   // templates retain their own editable actions, while the imagery reflects
   // the same audience, objective, and decision brief.
   async function generatePersonaRecommendationImages(options = {}) {
-    if (currentProvider() !== 'default') return [];
+    // Image creation uses the shared UPG image service, independently from the
+    // text provider selected in Advanced. This lets a BYOK text workflow still
+    // produce the consistent persona visuals promised by a profile set.
     const prompts = buildRecommendationImagePrompts(options);
-    if (!prompts.length) return [];
+    if (!prompts.length) return { results: [] };
     return generateImages(prompts);
+  }
+
+  // Persist a scraped remote favicon/logo as image data once, avoiding CORS,
+  // hotlinking, and iframe reload failures when presenters switch persona tabs.
+  async function embedBrandImage(url) {
+    if (!url || /^data:/i.test(url)) return { imageData: url || '' };
+    const base = getScraperEndpoint();
+    let res;
+    try {
+      res = await fetch(`${base}/api/brand-image?url=${encodeURIComponent(url)}`);
+    } catch (e) {
+      return { imageData: '', error: { code: 'network_error' } };
+    }
+    if (!res.ok) {
+      let body = {};
+      try { body = await res.json(); } catch (_) {}
+      return { imageData: '', error: { code: body?.error || 'brand_image_failed', status: res.status } };
+    }
+    try {
+      const body = await res.json();
+      return { imageData: body?.imageData || '', error: null };
+    } catch (_) {
+      return { imageData: '', error: { code: 'invalid_brand_image_response' } };
+    }
   }
 
   async function collectCustomerContext(rawUrl, opts = {}) {
@@ -383,13 +415,15 @@
     // the compact provenance metadata instead of persisting page text.
     parsed._sourceContext = context;
 
-    // Generate images for profile photo + recommendation cards
-    // Only when using the default (Gemini) backend which has the image endpoint
+    // Generate images through the shared UPG image service. Text may come from
+    // the default backend or an Advanced/BYOK provider; visual generation is a
+    // separate capability and should remain consistent across a profile set.
     const imagePrompts = buildImagePrompts(parsed, profileType, opts.strategy || {});
-    if (imagePrompts.length > 0 && provider === 'default') {
+    if (imagePrompts.length > 0) {
       onStatus('generating_images');
       try {
-        const imageResults = await generateImages(imagePrompts);
+        const imageResponse = await generateImages(imagePrompts);
+        const imageResults = imageResponse.results || [];
         // Map results back into the parsed profile
         for (var r = 0; r < imageResults.length; r++) {
           var result = imageResults[r];
@@ -418,6 +452,7 @@
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
     generatePersonaRecommendationImages,
+    embedBrandImage,
     collectCustomerContext,
     generatePersonaOverlay,
     analyzeCustomerURL
