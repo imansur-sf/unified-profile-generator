@@ -2103,7 +2103,8 @@ function friendlyError(err) {
     default_timeout: `The shared backend didn't respond within 45s.${suggest}`,
     default_unavailable: `Shared backend unavailable${upstream}${upstreamStatus}${upstreamBody}.${suggest}`,
     default_failed: `Shared backend call failed (HTTP ${err.status || '?'})${upstream}${upstreamStatus}${upstreamBody}.${suggest}`,
-    default_network: `Can't reach the shared backend at ${err.endpoint || 'the default URL'}. Check your network, or paste your own key in Advanced.`,
+    default_connection_stale: 'The connection to the shared UPG service could not be restored. This can happen after the tab has been inactive or the service has restarted. Refresh this page to re-establish the connection, then try again.',
+    default_network: `The shared UPG service could not be reached at ${err.endpoint || 'the default URL'}. If this tab has been open for a while, refresh this page to re-establish the connection, then try again.`,
     default_empty_response: `Shared backend returned no content.${suggest}`,
     anthropic_bad_key: 'Anthropic rejected the API key. Check it in the Anthropic Console.',
     anthropic_forbidden: `Your Anthropic key doesn't allow browser-access header calls to this model.`,
@@ -2116,6 +2117,22 @@ function friendlyError(err) {
     invalid_url: `That URL doesn't look right — include the domain (e.g. ncsasports.org).`
   };
   return map[code] || err.message || String(err);
+}
+
+function refreshSharedBackendConnection() {
+  window.location.reload();
+}
+
+function showQuickStartError(err) {
+  const errBox = document.getElementById('quickstart-error');
+  if (!errBox) return;
+  const code = err?.code || '';
+  const reconnect = code === 'default_connection_stale' || code === 'default_network';
+  const refreshButton = reconnect
+    ? ' <button type="button" class="quickstart-refresh-button" onclick="refreshSharedBackendConnection()">Refresh & reconnect</button>'
+    : '';
+  errBox.innerHTML = `<span>${escHTML(friendlyError(err))}</span>${refreshButton}`;
+  errBox.style.display = 'block';
 }
 
 // When the shared backend fails, auto-open Advanced so the user can drop
@@ -2166,8 +2183,7 @@ async function onPersonalizeCurrentPersona() {
     ensurePersonaRecommendationImages(strategy.lens);
     status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
   } catch (error) {
-    errBox.style.display = 'block';
-    errBox.textContent = friendlyError(error);
+    showQuickStartError(error);
     nudgeToAdvancedIfDefaultFailed(error.code);
     status.textContent = '';
   }
@@ -2279,8 +2295,7 @@ async function onQuickStartAnalyze() {
     const kind = isB2B() ? 'account profile' : 'individual profile';
     status.textContent = `✓ Created ${profileSetConfig.selectedLenses.length} ${kind} views from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}. Open a team tab to personalize it further.`;
   } catch (e) {
-    errBox.style.display = 'block';
-    errBox.textContent = friendlyError(e);
+    showQuickStartError(e);
     nudgeToAdvancedIfDefaultFailed(e.code);
     status.textContent = '';
   } finally {
@@ -2341,6 +2356,12 @@ function bootstrap() {
   if (typeof hydrateBundledStarterImages === 'function') {
     hydrateBundledStarterImages(state).then(() => refreshPreview());
   }
+
+  // A no-op warm-up on returning to a long-idle tab gives the shared Heroku
+  // route a chance to recover before the user starts an expensive generation.
+  window.addEventListener('focus', () => {
+    window.LocalAI?.warmSharedBackend?.().catch(() => {});
+  });
 
   attachDropZone('drop-logo', 'preview-logo', (dataUrl) => {
     state.logo = dataUrl;

@@ -40,6 +40,8 @@
     powerful:  'claude-sonnet-4-5-20250929'
   };
   const DEFAULT_MODEL = TIER_MODELS_ANTHROPIC.balanced;
+  const SHARED_BACKEND_HEALTH_TTL_MS = 60 * 1000;
+  let sharedBackendLastHealthyAt = 0;
 
   function localError(code, extra) {
     const err = new Error(code);
@@ -84,6 +86,36 @@
   }
   function currentProvider() { return detectProvider(getApiKey()); }
 
+  function pause(ms) { return new Promise(resolve => setTimeout(resolve, ms)); }
+
+  // HTTP is stateless, but an internal Heroku route, VPN, or browser network
+  // path may become unavailable while a tab sits idle. Warm the shared route
+  // on return and before a default-backend request so a full generation is not
+  // the first request that discovers the problem.
+  async function ensureSharedBackendConnection(options = {}) {
+    if (currentProvider() !== 'default' || hasCustomScraperEndpoint()) return true;
+    const now = Date.now();
+    if (!options.force && now - sharedBackendLastHealthyAt < SHARED_BACKEND_HEALTH_TTL_MS) return true;
+    const base = getScraperEndpoint();
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(`${base}/api/health`, { cache: 'no-store', signal: controller.signal });
+        if (res.ok) {
+          sharedBackendLastHealthyAt = Date.now();
+          return true;
+        }
+      } catch (_) {
+        // The second attempt uses a fresh request after a brief pause.
+      } finally {
+        clearTimeout(timeout);
+      }
+      if (attempt === 0) await pause(500);
+    }
+    throw localError('default_connection_stale', { endpoint: base });
+  }
+
   // ---- SCRAPING (server-side via /api/scrape) ----
   async function scrape(url) {
     const base = getScraperEndpoint();
@@ -118,6 +150,7 @@
   // Heroku server /api/llm — server holds the Gemini API key. No BYOK required.
   // A 60s AbortController guards against slow Gemini responses.
   async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
+    await ensureSharedBackendConnection();
     const base = getScraperEndpoint();
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 60000);
@@ -451,6 +484,7 @@
     getModel, setModel,
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
+    warmSharedBackend: ensureSharedBackendConnection,
     generatePersonaRecommendationImages,
     embedBrandImage,
     collectCustomerContext,
