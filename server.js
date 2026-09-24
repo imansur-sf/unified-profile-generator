@@ -237,7 +237,7 @@ app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); }
 app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });
 async function proxySaasyAccounts(req, res) {
   const headers = {};
-  for (const name of ['accept', 'authorization', 'content-type', 'x-api-key']) {
+  for (const name of ['accept', 'authorization', 'content-type', 'x-api-key', 'idempotency-key']) {
     const value = req.get(name);
     if (value) headers[name] = value;
   }

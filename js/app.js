@@ -1729,6 +1729,8 @@ function renderAll() {
 const SAASY_TOOL = 'upg';
 let currentProjectId = null;
 let currentProjectName = null;
+let projectSaveInFlight = false;
+let projectSaveAttemptKey = null;
 
 function syncAuthUI() {
   if (!window.SaasyAuth) return;
@@ -1949,19 +1951,54 @@ async function saveCurrentProject() {
 }
 
 function openSaveProjectModal() {
+  projectSaveAttemptKey = createProjectSaveAttemptKey();
   const input = document.getElementById('save-project-name-input');
   input.value = currentProjectName || state.brandName || '';
   const actions = document.getElementById('save-project-modal-actions');
   actions.innerHTML = currentProjectId
-    ? `<button onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
-       <button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
-    : `<button onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
+    ? `<button data-save-action onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
+       <button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
+    : `<button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
   document.getElementById('save-project-modal').classList.remove('hidden');
   setTimeout(() => input.focus(), 0);
 }
 
 function closeSaveProjectModal() {
+  if (projectSaveInFlight) return;
   document.getElementById('save-project-modal').classList.add('hidden');
+  projectSaveAttemptKey = null;
+}
+
+function createProjectSaveAttemptKey() {
+  const value = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  return `upg_save_${value.replace(/[^A-Za-z0-9_-]/g, '')}`;
+}
+
+function getProjectSourceUrl() {
+  const raw = String(state._aiContext?.sourceUrl || document.getElementById('quickstart-url')?.value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    url.hash = '';
+    return url.toString();
+  } catch (_) {
+    return raw.slice(0, 2048);
+  }
+}
+
+function setProjectSaveBusy(busy) {
+  const modal = document.getElementById('save-project-modal');
+  if (!modal) return;
+  modal.querySelectorAll('button, input').forEach(control => { control.disabled = busy; });
+  modal.querySelectorAll('[data-save-action]').forEach(button => {
+    if (busy) {
+      if (!button.dataset.originalLabel) button.dataset.originalLabel = button.textContent;
+      button.textContent = 'Saving…';
+    } else if (button.dataset.originalLabel) {
+      button.textContent = button.dataset.originalLabel;
+      delete button.dataset.originalLabel;
+    }
+  });
 }
 
 function buildProjectPayloadForSave() {
@@ -1981,17 +2018,22 @@ function buildProjectPayloadForSave() {
 }
 
 async function confirmSaveProject(asNew) {
+  if (projectSaveInFlight) return;
+  projectSaveInFlight = true;
+  setProjectSaveBusy(true);
   readStaticFields();
   snapshotPersonaView();
   const input = document.getElementById('save-project-name-input');
   const name = input.value.trim() || state.brandName || 'Untitled Profile';
   const id = asNew ? null : currentProjectId;
+  const idempotencyKey = projectSaveAttemptKey || (projectSaveAttemptKey = createProjectSaveAttemptKey());
   try {
     const payload = buildProjectPayloadForSave();
     payload.integrationArtifact = await buildIntegrationArtifact();
-    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload, id });
+    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl: getProjectSourceUrl() });
     currentProjectId = project.id;
     currentProjectName = project.name;
+    projectSaveInFlight = false;
     closeSaveProjectModal();
     const s = document.getElementById('save-project-success');
     s.classList.remove('hidden');
@@ -2001,6 +2043,9 @@ async function confirmSaveProject(asNew) {
       ? 'This project has more image data than can be saved at once. Remove a few recommendation images or save fewer persona views, then try again.'
       : e.message;
     alert('Could not save project: ' + message);
+  } finally {
+    projectSaveInFlight = false;
+    setProjectSaveBusy(false);
   }
 }
 
