@@ -568,6 +568,18 @@
 
             <div class="mode-b2b">
               <div class="account-mode-note">Account profiles replace person-level contact details with firmographics, ownership, and account hierarchy. Brand styling from Step 1 still applies to the generated view.</div>
+              <div class="mt-4">
+                <label for="url-account-photo" class="block text-xs font-600 text-gray-600 mb-1">Account Picture <span class="text-gray-400 font-500">(optional)</span></label>
+                <div id="drop-account-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload account picture" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
+                  <img id="preview-account-photo" src="" alt="Account picture preview" class="hidden w-16 h-16 object-contain rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+                  <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
+                </div>
+                <input type="text" id="url-account-photo" placeholder="Or paste account picture URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onAccountPhotoUrlChange()" aria-describedby="account-photo-help">
+                <div class="flex items-center justify-between gap-3 mt-2">
+                  <p id="account-photo-help" class="text-xs text-gray-500">Shown next to the account name. The brand logo in Step 1 is separate.</p>
+                  <button id="remove-account-photo" type="button" class="hidden text-xs text-blue-600 underline whitespace-nowrap" onclick="setAccountPhoto('')">Remove picture</button>
+                </div>
+              </div>
               <div class="grid grid-cols-2 gap-3 mt-4">
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div><label class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>

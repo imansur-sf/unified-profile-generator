@@ -797,6 +797,7 @@ function fillStaticFields() {
 
   const account = state.account || {};
   const metrics = state.accountMetrics || {};
+  updateAccountPhotoUI();
   const fillAccount = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
   fillAccount('account-name', account.name);
   fillAccount('account-headquarters', account.headquarters);
@@ -1385,6 +1386,27 @@ function onPhotoUrlChange() {
   state.profile.photo = v;
   setImagePreviewFromURL('preview-photo', v);
   refreshPreview();
+}
+
+function updateAccountPhotoUI() {
+  const photo = state.account?.logo || '';
+  const input = document.getElementById('url-account-photo');
+  if (input) input.value = photo.startsWith('data:') ? '' : photo;
+  setImagePreviewFromURL('preview-account-photo', photo);
+  document.getElementById('remove-account-photo')?.classList.toggle('hidden', !photo);
+}
+
+function setAccountPhoto(photo) {
+  if (!state.account) state.account = {};
+  // Account identity is shared across persona views; the Step 1 brand logo
+  // remains independent. Use the existing account.logo export/save field.
+  state.account.logo = String(photo || '').trim();
+  updateAccountPhotoUI();
+  refreshPreview();
+}
+
+function onAccountPhotoUrlChange() {
+  setAccountPhoto(document.getElementById('url-account-photo').value);
 }
 
 // ─── START OVER + EXPORT ───────────────────────────────────
@@ -2470,6 +2492,7 @@ function bootstrap() {
     document.getElementById('url-photo').value = '';
     refreshPreview();
   });
+  attachDropZone('drop-account-photo', 'preview-account-photo', setAccountPhoto);
 
   // Section icon uploaders — write the data URL into the text input so the
   // user can still see (and clear) what's set.
