@@ -2038,6 +2038,30 @@ function buildProjectPayloadForSave() {
   return payload;
 }
 
+function isRejectedSession(error) {
+  return ['invalid_token', 'missing_token'].includes(String(error?.message || ''));
+}
+
+async function saveProjectWithSessionRecovery(options) {
+  try {
+    return await SaasyAuth.saveProject(options);
+  } catch (error) {
+    if (!isRejectedSession(error)) throw error;
+
+    // The shared auth widget clears an invalid local JWT on a 401. Ask Magic
+    // for a fresh DID-backed app session, then retry the *same* save once.
+    // The idempotency key makes this safe even if the original request reached
+    // the server but its response was lost in transit.
+    try {
+      await SaasyAuth.signIn();
+      syncAuthUI();
+    } catch (_) {
+      throw new Error('session_refresh_cancelled');
+    }
+    return SaasyAuth.saveProject(options);
+  }
+}
+
 async function confirmSaveProject(asNew) {
   if (projectSaveInFlight) return;
   projectSaveInFlight = true;
@@ -2051,7 +2075,7 @@ async function confirmSaveProject(asNew) {
   try {
     const payload = buildProjectPayloadForSave();
     payload.integrationArtifact = await buildIntegrationArtifact();
-    const project = await SaasyAuth.saveProject({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl: getProjectSourceUrl() });
+    const project = await saveProjectWithSessionRecovery({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl: getProjectSourceUrl() });
     currentProjectId = project.id;
     currentProjectName = project.name;
     projectSaveInFlight = false;
@@ -2062,6 +2086,8 @@ async function confirmSaveProject(asNew) {
   } catch (e) {
     const message = ['payload_too_large', 'project_payload_too_large'].includes(e.message)
       ? 'This project has more image data than can be saved at once. Remove a few recommendation images or save fewer persona views, then try again.'
+      : e.message === 'session_refresh_cancelled'
+        ? 'Your saved sign-in session is no longer valid. Complete the sign-in prompt to refresh it, then save again.'
       : e.message;
     alert('Could not save project: ' + message);
   } finally {
