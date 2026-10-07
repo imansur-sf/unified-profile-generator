@@ -285,6 +285,7 @@ body {
   flex-shrink: 0;
 }
 .sf-brand-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sf-brand-logo.has-image { background: #ffffff; }
 .sf-search {
   flex: 1;
   max-width: 700px;
@@ -686,7 +687,7 @@ body {
 
 <div class="sf-topbar">
   <div class="sf-brand">
-    <div class="sf-brand-logo">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
+    <div class="sf-brand-logo${s.logo ? ' has-image' : ''}">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
   </div>
   <div class="sf-search">
     <svg width="14" height="14" viewBox="0 0 52 52" fill="currentColor"><path d="M49.7 42.7L37.4 30.4c1.7-2.9 2.6-6.4 2.6-9.9C40 9.7 31.3 1 20.5 1S1 9.7 1 20.5 9.7 40 20.5 40c3.6 0 7-1 9.9-2.6l12.3 12.3c.6.6 1.6.6 2.1 0l4.8-4.8c.7-.6.7-1.5.1-2.2zM7 20.5C7 13 13 7 20.5 7S34 13 34 20.5 28 34 20.5 34 7 28 7 20.5z"/></svg>
@@ -1070,7 +1071,7 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 .score-unknown,.rec-count{display:block;margin:7px 0;color:var(--muted);font-size:10px}
 </style></head>
 <body>
-<header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
+<header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark${s.logo ? ' has-image' : ''}"${s.logo ? ' style="background:#ffffff"' : ''}>${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
 <main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
 <section class="account-workspace"><div class="account-tabs" role="tablist" aria-label="Account views">

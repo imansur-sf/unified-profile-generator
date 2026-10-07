@@ -4,6 +4,7 @@ const fs = require('node:fs');
 const vm = require('node:vm');
 const path = require('node:path');
 const { createRequire } = require('node:module');
+const sharp = require('sharp');
 const { parsePublicOrigin, parseTrustedProxies, requestOrigin } = require('../lib/request-boundary');
 const safeFetch = require('../lib/safe-fetch');
 const root = path.resolve(__dirname, '..');
@@ -50,6 +51,11 @@ test('scrape keeps source body usable as text but blocks active same-origin HTML
   assert.equal(result.headers['content-type'], 'text/plain; charset=utf-8');
   assert.equal(result.headers['x-content-type-options'], 'nosniff');
   assert.match(result.headers['content-security-policy'], /sandbox/);
+  assert.equal(result.headers['x-scraper-url'], 'https://customer.example/about');
+  const corsLayer = app._router.stack.find(layer => !layer.route && layer.regexp.toString().includes('api'));
+  const corsResponse = res();
+  corsLayer.handle({ method: 'GET' }, corsResponse, () => {});
+  assert.match(corsResponse.headers['access-control-expose-headers'], /X-Scraper-URL/);
 });
 
 test('scrape surfaces safe-fetch blocked destinations and size errors', async () => {
@@ -63,9 +69,10 @@ test('scrape surfaces safe-fetch blocked destinations and size errors', async ()
 
 test('brand images and generation source use the shared bounded fetcher', async () => {
   const calls = [];
+  const png = await sharp({ create: { width: 2, height: 2, channels: 4, background: '#ee000080' } }).png().toBuffer();
   const { context } = loadServer({ fetchPublicResource: async (url, options) => {
     calls.push({ url, options });
-    return { url, body: Buffer.from(url.endsWith('.png') ? 'image' : '<title>Customer</title>'), contentType: url.endsWith('.png') ? 'image/png' : 'text/html' };
+    return { url, body: url.endsWith('.png') ? png : Buffer.from('<title>Customer</title>'), contentType: url.endsWith('.png') ? 'image/png' : 'text/html' };
   } });
   const image = await context.fetchBrandImage('https://customer.example/logo.png');
   const source = await context.fetchGenerationSource('https://customer.example/');
@@ -73,8 +80,48 @@ test('brand images and generation source use the shared bounded fetcher', async 
   assert.equal(source.title, 'Customer');
   assert.equal(calls[0].options.maxBytes, 512 * 1024);
   assert.equal(calls[0].options.timeoutMs, 12000);
+  assert.equal(calls[0].options.maxRedirects, 3);
   assert.equal(calls[1].options.maxBytes, 3000000);
   assert.equal(calls[1].options.timeoutMs, 15000);
+  assert.equal(calls[1].options.maxRedirects, 8);
+});
+
+test('GET logo normalizes SVG bytes to inert PNG and rejects spoofed MIME content', async () => {
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path fill="red" d="M0 0h5v5H0z"/></svg>';
+  const { app } = loadServer({ fetchPublicResource: async () => ({ url: 'https://customer.example/icon.svg', body: Buffer.from(svg), contentType: 'image/svg+xml' }) });
+  const result = await call(app, 'get', '/api/brand-image', req({ query: { url: 'https://customer.example/icon.svg' } }));
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body.imageData, /^data:image\/png;base64,/);
+  assert.equal((await sharp(Buffer.from(result.body.imageData.split(',')[1], 'base64')).metadata()).width, 10);
+  const spoofed = loadServer({ fetchPublicResource: async () => ({ url: 'https://customer.example/logo.png', body: Buffer.from('<html>no image</html>'), contentType: 'image/png' }) });
+  assert.equal((await call(spoofed.app, 'get', '/api/brand-image', req({ query: { url: 'https://customer.example/logo.png' } }))).statusCode, 422);
+});
+
+test('legacy embedded SVG repair is POST-only, bounded, validated, and never fetches URLs', async () => {
+  let calls = 0;
+  const { app } = loadServer({ fetchPublicResource: async () => { calls++; throw Error('unexpected fetch'); } });
+  const svg = '<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8"><circle cx="4" cy="4" r="4"/></svg>';
+  const input = `data:image/svg+xml;base64,${Buffer.from(svg).toString('base64')}`;
+  const result = await call(app, 'post', '/api/brand-image', req({ body: { imageData: input } }));
+  assert.equal(result.statusCode, 200);
+  assert.match(result.body.imageData, /^data:image\/png;base64,/);
+  assert.equal(result.headers['cache-control'], 'no-store');
+  for (const imageData of ['https://customer.example/logo.svg', 'data:image/png;base64,abc']) assert.equal((await call(app, 'post', '/api/brand-image', req({ body: { imageData } }))).statusCode, 400);
+  assert.equal((await call(app, 'post', '/api/brand-image', req({ body: { imageData: 'data:image/png;base64,' + 'A'.repeat(800000) } }))).statusCode, 413);
+  const unsafe = `data:image/svg+xml;base64,${Buffer.from(svg.replace('<circle', '<script>alert(1)</script><circle')).toString('base64')}`;
+  assert.equal((await call(app, 'post', '/api/brand-image', req({ body: { imageData: unsafe } }))).statusCode, 422);
+  assert.equal(calls, 0);
+});
+
+test('generation source finds explicit logos and resolves against final redirected page URL', async () => {
+  const { context, app } = loadServer({ fetchPublicResource: async (url, options) => {
+    assert.equal(options.maxRedirects, 8);
+    return { url: 'https://www.customer.example/site/', contentType: 'text/html', body: Buffer.from('<header><img class="logo" src="images/logo.svg"></header><link rel="icon" href="/favicon.ico">') };
+  } });
+  const source = await context.fetchGenerationSource('https://customer.example');
+  assert.equal(source.logoCandidates[0], 'https://www.customer.example/site/images/logo.svg');
+  assert.equal(source.favicon, source.logoCandidates[0]);
+  assert.equal((await call(app, 'get', '/api/scrape', req({ query: { url: 'https://customer.example' } }))).headers['x-scraper-url'], 'https://www.customer.example/site/');
 });
 
 test('guest AI quota ignores client-selected forwarded addresses', async () => {

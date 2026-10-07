@@ -498,6 +498,8 @@
                   </div>
                   <input type="text" id="url-logo" placeholder="Or paste logo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onLogoUrlChange()">
                   <button type="button" class="upload-remove" onclick="document.getElementById('url-logo').value=''; onLogoUrlChange()">Remove brand logo</button>
+                  <p id="brand-logo-status" class="mt-2 text-xs text-gray-500" role="status" aria-live="polite">Logo images use a white background; initials use the primary brand color.</p>
+                  <button id="retry-brand-logo" type="button" class="upload-remove" hidden onclick="retryBrandLogo()">Retry logo only</button>
                 </div>
                 <div>
                   <label for="url-user-avatar" class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
@@ -2524,6 +2526,7 @@ body {
   flex-shrink: 0;
 }
 .sf-brand-logo img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.sf-brand-logo.has-image { background: #ffffff; }
 .sf-search {
   flex: 1;
   max-width: 700px;
@@ -2925,7 +2928,7 @@ body {
 
 <div class="sf-topbar">
   <div class="sf-brand">
-    <div class="sf-brand-logo">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
+    <div class="sf-brand-logo${s.logo ? ' has-image' : ''}">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
   </div>
   <div class="sf-search">
     <svg width="14" height="14" viewBox="0 0 52 52" fill="currentColor"><path d="M49.7 42.7L37.4 30.4c1.7-2.9 2.6-6.4 2.6-9.9C40 9.7 31.3 1 20.5 1S1 9.7 1 20.5 9.7 40 20.5 40c3.6 0 7-1 9.9-2.6l12.3 12.3c.6.6 1.6.6 2.1 0l4.8-4.8c.7-.6.7-1.5.1-2.2zM7 20.5C7 13 13 7 20.5 7S34 13 34 20.5 28 34 20.5 34 7 28 7 20.5z"/></svg>
@@ -3309,7 +3312,7 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 .score-unknown,.rec-count{display:block;margin:7px 0;color:var(--muted);font-size:10px}
 </style></head>
 <body>
-<header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
+<header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark${s.logo ? ' has-image' : ''}"${s.logo ? ' style="background:#ffffff"' : ''}>${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
 <main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
 <section class="account-workspace"><div class="account-tabs" role="tablist" aria-label="Account views">
@@ -3356,6 +3359,192 @@ ${renderLayoutStatusScript(s)}
 }
 
 
+// ==== inlined from ./js/brand-logo.js ====
+// Shared, inert logo discovery for the browser and server. Candidate URLs still
+// pass through the server's public-fetch checks and image decoder before use.
+(function (root, factory) {
+  const api = factory();
+  if (typeof module === 'object' && module.exports) module.exports = api;
+  if (root) root.UPGBrandLogo = api;
+})(typeof window !== 'undefined' ? window : globalThis, function () {
+  'use strict';
+
+  function decodeEntities(value) {
+    const named = { amp: '&', quot: '"', apos: "'", lt: '<', gt: '>', nbsp: ' ' };
+    return String(value || '').replace(/&(#x[\da-f]+|#\d+|amp|quot|apos|lt|gt|nbsp);/gi, (match, entity) => {
+      if (entity[0] !== '#') return named[entity.toLowerCase()] || match;
+      const code = entity[1].toLowerCase() === 'x' ? parseInt(entity.slice(2), 16) : parseInt(entity.slice(1), 10);
+      return code > 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff) ? String.fromCodePoint(code) : '';
+    });
+  }
+
+  function attributes(tag) {
+    const attrs = Object.create(null);
+    let at = 1;
+    while (at < tag.length && /[\w:-]/.test(tag[at])) at++;
+    while (at < tag.length) {
+      while (at < tag.length && /[\s/]/.test(tag[at])) at++;
+      const start = at;
+      while (at < tag.length && !/[\s=<>/]/.test(tag[at])) at++;
+      if (start === at) { at++; continue; }
+      const name = tag.slice(start, at).toLowerCase();
+      while (at < tag.length && /\s/.test(tag[at])) at++;
+      let value = '';
+      if (tag[at] === '=') {
+        at++;
+        while (at < tag.length && /\s/.test(tag[at])) at++;
+        const quote = tag[at] === '"' || tag[at] === "'" ? tag[at++] : '';
+        const valueStart = at;
+        while (at < tag.length && (quote ? tag[at] !== quote : !/[\s>]/.test(tag[at]))) at++;
+        value = tag.slice(valueStart, at);
+        if (quote && tag[at] === quote) at++;
+      }
+      if (!Object.prototype.hasOwnProperty.call(attrs, name)) attrs[name] = decodeEntities(value);
+    }
+    return attrs;
+  }
+
+  // Single forward scan: malformed/unclosed quotes cannot cause regex
+  // backtracking. Oversized tags are consumed but never inspected.
+  function* tags(source, rawTags) {
+    let at = 0;
+    const lowerSource = source.toLowerCase();
+    while (at < source.length) {
+      const start = source.indexOf('<', at);
+      if (start < 0) return;
+      if (source.startsWith('<!--', start)) {
+        const end = source.indexOf('-->', start + 4);
+        at = end < 0 ? source.length : end + 3;
+        continue;
+      }
+      at = start + 1;
+      if (source[at] === '/') at++;
+      if (!/[a-zA-Z]/.test(source[at] || '')) continue;
+      let quote = '';
+      while (at < source.length) {
+        const char = source[at++];
+        if (quote) { if (char === quote) quote = ''; }
+        else if (char === '"' || char === "'") quote = char;
+        else if (char === '>') break;
+      }
+      if (source[at - 1] === '>' && !quote && at - start <= 16384) {
+        const tag = source.slice(start, at);
+        yield { tag };
+        const name = /^<([\w:-]+)/.exec(tag)?.[1].toLowerCase();
+        if (rawTags.has(name)) {
+          const closing = '</' + name;
+          while (at < source.length) {
+            const end = lowerSource.indexOf(closing, at);
+            if (end < 0) return;
+            at = end + closing.length;
+            while (at < source.length && /\s/.test(source[at])) at++;
+            if (source[at] === '>') { yield { tag: closing + '>' }; at++; break; }
+          }
+        }
+      }
+    }
+  }
+
+  function safeURL(value, base) {
+    if (!value || value.length > 4096 || /[\u0000-\u001f\u007f]/.test(value)) return '';
+    try {
+      const url = new URL(value.trim(), base);
+      if (!/^https?:$/.test(url.protocol) || url.username || url.password) return '';
+      url.hash = '';
+      return url.href;
+    } catch { return ''; }
+  }
+
+  function extractLogoCandidates(html, pageURL) {
+    const page = safeURL(pageURL);
+    if (!page) return [];
+    const candidates = [];
+    const stack = [];
+    let base = page;
+    let hasBase = false;
+    let index = 0;
+    const voidTags = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
+    const rawTags = new Set(['script', 'style', 'noscript', 'template', 'iframe', 'textarea', 'title', 'xmp']);
+    // Bounded tokenization is intentionally not a browser HTML renderer. It
+    // inspects only URL/identity attributes and never executes source content.
+    const source = String(html || '').slice(0, 2 * 1024 * 1024);
+    const add = (value, score) => {
+      const url = safeURL(value, base);
+      if (url) candidates.push({ url, score, index: index++ });
+    };
+    let count = 0;
+    let rawName = '';
+    for (const { tag } of tags(source, rawTags)) {
+      if (count++ >= 30000) break;
+      const name = /^<\/?([\w:-]+)/.exec(tag)?.[1].toLowerCase();
+      if (!name) continue;
+      if (rawName) {
+        if (name === rawName && /^<\//.test(tag)) rawName = '';
+        continue;
+      }
+      if (/^<\//.test(tag)) {
+        const position = stack.map(entry => entry.name).lastIndexOf(name);
+        if (position >= 0) stack.length = position;
+        continue;
+      }
+      const attrs = attributes(tag);
+      if (rawTags.has(name)) {
+        rawName = name;
+        continue;
+      }
+      if (name === 'base' && !hasBase && attrs.href) {
+        const resolved = safeURL(attrs.href, page);
+        if (resolved) { base = resolved; hasBase = true; }
+      }
+      const identity = [attrs.id, attrs.class, attrs.alt, attrs.title, attrs['aria-label']].filter(Boolean).join(' ');
+      const context = stack.map(entry => entry.identity).join(' ') + ' ' + identity;
+      const unrelated = /(?:partner|sponsor|client[-_ ]?(?:logo|brand)|customer[-_ ]?(?:logo|brand)|logo[-_ ]?(?:wall|carousel|grid|slider|list)|payment|testimonial|trust[-_ ]?(?:badge|logo))/i.test(context);
+      const inHeader = stack.some(entry => entry.name === 'header' || entry.name === 'nav' || /(?:^|[-_\s])(?:header|masthead|navbar)(?:$|[-_\s])/i.test(entry.identity));
+      if (name === 'img' && !unrelated) {
+        const urls = [attrs['data-src'], attrs['data-lazy-src'], attrs['data-original'], attrs.src].filter(Boolean);
+        // Generic "logos" wrappers elsewhere on the page often hold customer
+        // or college logos, not the site's own identity. Only inherit that
+        // signal in the header; elsewhere require a site-specific wrapper.
+        const logoContext = stack.slice(-4).filter(entry => inHeader || /(?:site|navbar|header)[-_ ](?:logo|brand)/i.test(entry.identity)).map(entry => entry.identity).join(' ');
+        const imageIdentity = inHeader ? identity : [attrs.alt, attrs.title, attrs['aria-label'], /brand[-_ ]?mark|wordmark|(?:navbar|site|header)[-_ ](?:logo|brand)/i.test(identity) ? identity : ''].filter(Boolean).join(' ');
+        const explicitLogo = /logo|brand[-_ ]?mark|wordmark|(?:navbar|site|header)[-_ ]brand/i.test(imageIdentity + ' ' + logoContext + ' ' + urls.map(value => value.split(/[?#]/)[0]).join(' '));
+        if (explicitLogo) {
+          const score = inHeader ? 100 : 75;
+          for (const value of urls) add(value, score);
+          // srcset-only/lazy images are common on modern homepages. Prefer the
+          // largest advertised version, with a strict cap on inspected entries.
+          const srcset = attrs.srcset || attrs['data-srcset'] || '';
+          const versions = srcset.split(',').slice(0, 20).map(value => value.trim().split(/\s+/)).filter(value => value[0]);
+          versions.sort((a, b) => (parseFloat(b[1]) || 1) - (parseFloat(a[1]) || 1));
+          for (const value of versions.slice(0, 2)) add(value[0], score - 1);
+        }
+      }
+      if (name === 'link' && attrs.href) {
+        const rel = (attrs.rel || '').toLowerCase().split(/\s+/);
+        if (rel.includes('apple-touch-icon') || rel.includes('apple-touch-icon-precomposed')) add(attrs.href, 60);
+        else if (rel.includes('icon')) {
+          const size = Math.max(0, ...String(attrs.sizes || '').split(/\s+/).map(value => parseInt(value, 10) || 0));
+          add(attrs.href, attrs.type?.toLowerCase() === 'image/svg+xml' || attrs.sizes === 'any' ? 55 : size >= 64 ? 50 : 40);
+        }
+      }
+      if (!voidTags.has(name) && !/\/\s*>$/.test(tag) && stack.length < 100) stack.push({ name, identity });
+    }
+    const fallback = new URL('/favicon.ico', page).href;
+    const seen = new Set();
+    const result = [];
+    for (const candidate of candidates.sort((a, b) => b.score - a.score || a.index - b.index)) {
+      if (candidate.url === fallback || seen.has(candidate.url)) continue;
+      seen.add(candidate.url);
+      result.push(candidate.url);
+      if (result.length === 5) break;
+    }
+    return [...result, fallback];
+  }
+
+  return { extractLogoCandidates };
+});
+
+
 // ==== inlined from ./js/pagehost.js ====
 // ============================================================
 // pagehost.js — Shared prompt/scrape helpers used by localai.js
@@ -3381,6 +3570,7 @@ ${renderLayoutStatusScript(s)}
   }
 
   function extractCoreHTML(html, url) {
+    const logoCandidates = window.UPGBrandLogo.extractLogoCandidates(html, url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     doc.querySelectorAll('script, style, noscript, svg, iframe, template').forEach(n => n.remove());
 
@@ -3391,11 +3581,7 @@ ${renderLayoutStatusScript(s)}
     const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
     const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
 
-    const faviconEl = doc.querySelector('link[rel~="icon"]') || doc.querySelector('link[rel="apple-touch-icon"]');
-    let favicon = faviconEl?.getAttribute('href') || '';
-    if (favicon && !favicon.startsWith('http')) {
-      try { favicon = new URL(favicon, url).toString(); } catch { /* leave */ }
-    }
+    const favicon = logoCandidates[0] || '';
 
     const bodyText = (doc.body?.innerText || doc.body?.textContent || '')
       .replace(/\s+/g, ' ')
@@ -3413,7 +3599,7 @@ ${renderLayoutStatusScript(s)}
       .filter(t => t && t.length < 30)
       .slice(0, 15);
 
-    return { url, title, siteName, description, ogImage, favicon, headings, navLinkCandidates, bodyText };
+    return { url, title, siteName, description, ogImage, favicon, logoCandidates, headings, navLinkCandidates, bodyText };
   }
 
   const SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Data Cloud unified customer profile for a specific customer.
@@ -3884,7 +4070,7 @@ Use the role's standard blueprint as the foundation, then add the stated require
         const html = await res.text();
         if (html && html.length >= 40) {
           const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
-          if (!looksJson) return html;
+          if (!looksJson) return { html, url: res.headers.get('x-scraper-url') || url };
         }
         throw localError('scraper_empty', { endpoint: base });
       } else {
@@ -4124,24 +4310,27 @@ Use the role's standard blueprint as the foundation, then add the stated require
   // Persist a scraped remote favicon/logo as image data once, avoiding CORS,
   // hotlinking, and iframe reload failures when presenters switch persona tabs.
   async function embedBrandImage(url) {
-    if (!url || /^data:/i.test(url)) return { imageData: url || '' };
+    if (!url) return { imageData: '' };
+    const embedded = /^data:/i.test(url);
+    if (embedded && !/^data:image\/(?:svg\+xml|x-icon|vnd\.microsoft\.icon|ico);base64,/i.test(url)) return { imageData: url };
     const base = getScraperEndpoint();
-    let res;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-      res = await fetch(`${base}/api/brand-image?url=${encodeURIComponent(url)}`);
-    } catch (e) {
-      return { imageData: '', error: { code: 'network_error' } };
-    }
-    if (!res.ok) {
-      let body = {};
-      try { body = await res.json(); } catch (_) {}
-      return { imageData: '', error: { code: body?.error || 'brand_image_failed', status: res.status } };
-    }
-    try {
+      const res = embedded
+        ? await fetch(`${base}/api/brand-image`, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageData: url }) })
+        : await fetch(`${base}/api/brand-image?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+      if (!res.ok) {
+        let body = {};
+        try { body = await res.json(); } catch (_) {}
+        return { imageData: '', error: { code: body?.error || 'brand_image_failed', status: res.status } };
+      }
       const body = await res.json();
       return { imageData: body?.imageData || '', error: null };
-    } catch (_) {
-      return { imageData: '', error: { code: 'invalid_brand_image_response' } };
+    } catch (error) {
+      return { imageData: '', error: { code: controller.signal.aborted ? 'timeout' : error instanceof SyntaxError ? 'invalid_brand_image_response' : 'network_error' } };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -4152,13 +4341,13 @@ Use the role's standard blueprint as the foundation, then add the stated require
     let scraped = null, fallbackReason = null;
     onStatus('fetching');
     try {
-      const html = await scrape(url);
-      scraped = shared.extractCoreHTML(html, url);
+      const response = await scrape(url);
+      scraped = shared.extractCoreHTML(response.html, response.url);
     } catch (e) {
       fallbackReason = e.code || 'scrape_failed';
       onStatus('fallback_url_only');
     }
-    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
+    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', logoCandidates: [], ogImage: '', navLinkCandidates: [] };
     return { scraped, url, fallbackReason };
   }
 
@@ -4195,6 +4384,7 @@ Use the role's standard blueprint as the foundation, then add the stated require
     parsed._meta = {
       source_url: context.url,
       favicon: scraped.favicon,
+      logo_candidates: scraped.logoCandidates || [],
       og_image: scraped.ogImage,
       model_used: model_used,
       tier: tier,
@@ -4434,6 +4624,7 @@ function restoreDraftRecovery() {
   draftPending = null; document.getElementById('quickstart-url').value = record.sourceUrl || '';
   fillStaticFields(); syncProfileSetConfigUI(); renderAll(); goToStep(record.step || 0); refreshPreview();
   setText('draft-status', 'Draft restored. Save online when ready.');
+  if (typeof recoverEmbeddedBrandLogo === 'function') recoverEmbeddedBrandLogo();
 }
 async function discardDraftRecovery() {
   if (!confirm('Discard only this tab’s recovery backup? Your editor and online projects stay unchanged.')) return;
@@ -5075,14 +5266,56 @@ async function retryPersonaRecommendationImages() {
   await ensurePersonaRecommendationImages(getProfileStrategy().lens);
 }
 
-async function embedSharedBrandLogo(logoUrl, sourceUrl) {
-  if (!logoUrl || /^data:/i.test(logoUrl) || !window.LocalAI?.embedBrandImage) return;
-  const result = await window.LocalAI.embedBrandImage(logoUrl);
-  // Do not overwrite a logo a user changed while the background request ran.
-  if (!result?.imageData || state.logo !== logoUrl || state._aiContext?.sourceUrl !== sourceUrl) return;
-  state.logo = result.imageData;
-  fillStaticFields();
-  refreshPreview();
+const brandLogoRequests = new WeakMap();
+const brandLogoStatuses = new WeakMap();
+function renderBrandLogoStatus() {
+  const status = brandLogoStatuses.get(state);
+  setText('brand-logo-status', status?.message || 'Logo images use a white background; initials use the primary brand color.');
+  const retry = document.getElementById('retry-brand-logo');
+  if (retry) {
+    retry.hidden = status?.state !== 'failed';
+    retry.disabled = status?.state === 'loading';
+  }
+}
+function needsBrandLogoNormalization(value) {
+  return /^data:image\/(?:svg\+xml|x-icon|vnd\.microsoft\.icon|ico);base64,/i.test(value || '');
+}
+async function embedSharedBrandLogo(logoUrl, sourceUrl, candidates = []) {
+  if (!window.LocalAI?.embedBrandImage) return;
+  if (/^data:/i.test(logoUrl || '') && !needsBrandLogoNormalization(logoUrl)) return;
+  const owner = state, originalLogo = owner.logo;
+  const request = {};
+  brandLogoRequests.set(owner, request);
+  const active = () => state === owner && brandLogoRequests.get(owner) === request && owner.logo === originalLogo && owner._aiContext?.sourceUrl === sourceUrl;
+  const choices = [...new Set([logoUrl, ...candidates].filter(value => typeof value === 'string' && value))].slice(0, 6);
+  if (!choices.length) return;
+  brandLogoStatuses.set(owner, { state: 'loading', message: 'Finding and preparing a portable customer logo…' });
+  renderBrandLogoStatus();
+  for (const choice of choices) {
+    if (!active()) return;
+    let result;
+    try { result = await window.LocalAI.embedBrandImage(choice); } catch (_) { continue; }
+    if (!active()) return;
+    // Never replace a usable URL with image data the renderer will reject.
+    if (!/^data:image\//i.test(result?.imageData || '') || !safeImageURL(result.imageData)) continue;
+    owner.logo = result.imageData;
+    brandLogoStatuses.set(owner, { state: 'ready', message: 'Customer logo ready · embedded for all views and exports.' });
+    const input = document.getElementById('url-logo');
+    if (input) input.value = '';
+    setImagePreviewFromURL('preview-logo', owner.logo);
+    renderBrandLogoStatus();
+    refreshPreview();
+    return;
+  }
+  if (!active()) return;
+  brandLogoStatuses.set(owner, { state: 'failed', message: 'Could not embed a customer logo. Any existing image was kept; retry or upload a logo below.' });
+  renderBrandLogoStatus();
+}
+function retryBrandLogo() {
+  return embedSharedBrandLogo(state.logo, state._aiContext?.sourceUrl, state._aiContext?.logoCandidates || []);
+}
+function recoverEmbeddedBrandLogo() {
+  if (needsBrandLogoNormalization(state.logo)) return retryBrandLogo();
 }
 
 function onProfileStrategyChange() {
@@ -5278,6 +5511,7 @@ function fillStaticFields() {
   document.getElementById('app-name').value = state.appName || 'Data Cloud';
   document.getElementById('url-logo').value = state.logo && !state.logo.startsWith('data:') ? state.logo : '';
   setImagePreviewFromURL('preview-logo', state.logo);
+  renderBrandLogoStatus();
 
   document.getElementById('url-user-avatar').value = state.userAvatar && !state.userAvatar.startsWith('data:') ? state.userAvatar : '';
   setImagePreviewFromURL('preview-user-avatar', state.userAvatar);
@@ -5970,6 +6204,9 @@ function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
 function onLogoUrlChange() {
   const v = document.getElementById('url-logo').value.trim();
   state.logo = v;
+  brandLogoRequests.delete(state);
+  brandLogoStatuses.delete(state);
+  renderBrandLogoStatus();
   setImagePreviewFromURL('preview-logo', v);
   refreshPreview();
 }
@@ -6236,7 +6473,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base._aiContext = {
     sourceUrl: ai?._meta?.source_url || '',
     provider: ai?._meta?.provider || '',
-    analyzedAt: new Date().toISOString()
+    analyzedAt: new Date().toISOString(),
+    logoCandidates: (Array.isArray(ai?._meta?.logo_candidates) ? ai._meta.logo_candidates : []).filter(value => typeof value === 'string').slice(0, 6)
   };
   base.profileStrategy = Object.assign({}, strategyOverride || getProfileStrategy());
   base.profileSet = cloneViewData(profileSetOverride || ensureProfileSet());
@@ -6305,8 +6543,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base.personaVariants = {};
   snapshotPersonaView(base);
 
-  // Prefer favicon as logo if AI didn't give us anything.
-  if (ai._meta && ai._meta.favicon && !base.logo) base.logo = ai._meta.favicon;
+  // Brand assets come from the website, never an unrelated sample or AI guess.
+  base.logo = base._aiContext.logoCandidates[0] || ai._meta?.favicon || '';
 
   if (UPGContract.companyKey(base._aiContext.sourceUrl) !== UPGContract.companyKey(state._aiContext?.sourceUrl)) resetProjectIdentity();
   base.schemaVersion = 2;
@@ -6317,7 +6555,7 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   refreshPreview();
   // The website favicon is a shared brand asset. Embed it once so every
   // persona preview and exported profile uses the same stable logo data.
-  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
+  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl, state._aiContext.logoCandidates).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
 }
 
 function mergePersonaOverlay(target, overlay) {
@@ -6867,6 +7105,7 @@ async function loadProjectAndHydrate(id) {
     refreshPreview();
     closeMyProjects();
     goToStep(0);
+    recoverEmbeddedBrandLogo();
   } catch (e) {
     alert('Could not load project: ' + e.message);
   }
@@ -7233,6 +7472,9 @@ function bootstrap() {
 
   attachDropZone('drop-logo', 'preview-logo', (dataUrl) => {
     state.logo = dataUrl;
+    brandLogoRequests.delete(state);
+    brandLogoStatuses.delete(state);
+    renderBrandLogoStatus();
     document.getElementById('url-logo').value = '';
     refreshPreview();
   });

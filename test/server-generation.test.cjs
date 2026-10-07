@@ -59,6 +59,16 @@ test('multi-view pipeline shares source, identity, validation and image prompt b
   assert.equal(checkpoints.at(-1).value.state, undefined);
 });
 
+test('API/MCP generation tries alternate logos and retains one normalized shared image', async () => {
+  const deps = adapters(), tried = [];
+  deps.fetchSource = async url => ({ url, title: 'Customer', bodyText: '', navLinkCandidates: [], favicon: 'https://customer.example/first.svg', logoCandidates: ['https://customer.example/first.svg', 'https://customer.example/second.png'] });
+  deps.fetchLogo = async url => { tried.push(url); return url.endsWith('.svg') ? 'data:image/svg+xml;base64,PHN2Zy8+' : 'data:image/png;base64,cG5n'; };
+  const output = await runGenerationPipeline({ input: { ...input, includeImages: false }, onCheckpoint: async()=>{} }, deps);
+  assert.deepEqual(tried, ['https://customer.example/first.svg', 'https://customer.example/second.png']);
+  assert.equal(output.project.payload.logo, 'data:image/png;base64,cG5n');
+  for(const persona of ['sales','service','marketing'])assert.equal(selectSavedView(output.project.payload,persona).logo,'data:image/png;base64,cG5n');
+});
+
 test('restart after one image resumes remaining paid slots without repeating source, text or completed image', async () => {
   let saved;
   const calls = {};

@@ -24,6 +24,7 @@ SCRIPTS = [
     "js/profile-contract.js",
     "js/images.js",
     "js/generator.js",
+    "js/brand-logo.js",
     "js/pagehost.js",
     "js/localai.js",
     "js/editor-support.js",

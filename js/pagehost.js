@@ -22,6 +22,7 @@
   }
 
   function extractCoreHTML(html, url) {
+    const logoCandidates = window.UPGBrandLogo.extractLogoCandidates(html, url);
     const doc = new DOMParser().parseFromString(html, 'text/html');
     doc.querySelectorAll('script, style, noscript, svg, iframe, template').forEach(n => n.remove());
 
@@ -32,11 +33,7 @@
     const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
     const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
 
-    const faviconEl = doc.querySelector('link[rel~="icon"]') || doc.querySelector('link[rel="apple-touch-icon"]');
-    let favicon = faviconEl?.getAttribute('href') || '';
-    if (favicon && !favicon.startsWith('http')) {
-      try { favicon = new URL(favicon, url).toString(); } catch { /* leave */ }
-    }
+    const favicon = logoCandidates[0] || '';
 
     const bodyText = (doc.body?.innerText || doc.body?.textContent || '')
       .replace(/\s+/g, ' ')
@@ -54,7 +51,7 @@
       .filter(t => t && t.length < 30)
       .slice(0, 15);
 
-    return { url, title, siteName, description, ogImage, favicon, headings, navLinkCandidates, bodyText };
+    return { url, title, siteName, description, ogImage, favicon, logoCandidates, headings, navLinkCandidates, bodyText };
   }
 
   const SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Data Cloud unified customer profile for a specific customer.

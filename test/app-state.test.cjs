@@ -23,10 +23,10 @@ function harness() {
     window:{addEventListener(){},location:{href:'https://upg.example/'}},
     localStorage:{getItem(){return null;}}, fetch:async()=>{throw Error('Network disabled');} };
   vm.createContext(box);
-  for (const file of ['defaults','profile-contract','generator','pagehost','editor-support','app']) vm.runInContext(fs.readFileSync(path.join(root,'js',file+'.js'),'utf8'),box,{filename:file+'.js'});
+  for (const file of ['defaults','profile-contract','generator','brand-logo','pagehost','editor-support','app']) vm.runInContext(fs.readFileSync(path.join(root,'js',file+'.js'),'utf8'),box,{filename:file+'.js'});
   const run = source => vm.runInContext(source,box);
   run(`readStaticFields=()=>{};fillStaticFields=()=>{};renderAll=()=>{};refreshPreview=()=>{};
-    updateProfileStrategyUI=()=>{};renderRecs=()=>{};syncProfileSetConfigUI=()=>{};goToStep=()=>{};syncAuthUI=()=>{};activateDialogFocus=()=>{};
+    updateProfileStrategyUI=()=>{};renderRecs=()=>{};syncProfileSetConfigUI=()=>{};goToStep=()=>{};syncAuthUI=()=>{};activateDialogFocus=()=>{};setImagePreviewFromURL=()=>{};
     state=cloneIndustry('retail');state.brandName='Test Retail';state._industry='retail';state._aiContext={sourceUrl:'https://test.example/'};
     applyPersonaPreset();applyPersonaSampleTemplate();snapshotPersonaView();`);
   node('quickstart-url').value='https://test.example/';
@@ -252,4 +252,37 @@ test('loading a saved company restores its source URL instead of the previous ed
   const h=harness();h.box.SaasyAuth={getEmail:()=> 'owner@salesforce.com',loadProject:async()=>({id:'new-project',name:'Acme',tool:'upg',source_url:'https://acme.example/',payload:h.fixture()})};
   await h.run("loadProjectAndHydrate('new-project')");
   assert.equal(h.node('quickstart-url').value,'https://acme.example/');assert.equal(h.run('currentProjectId'),'new-project');
+});
+
+test('logo embedding tries alternatives and never replaces a URL with rejected SVG data',async()=>{
+  const h=harness(),calls=[];h.run("state.logo='https://test.example/favicon.svg'");
+  h.box.window.LocalAI={embedBrandImage:async url=>{calls.push(url);return {imageData:url.endsWith('.svg')?'data:image/svg+xml;base64,PHN2Zy8+':'data:image/png;base64,cG5n'};}};
+  await h.run("embedSharedBrandLogo(state.logo,state._aiContext.sourceUrl,['https://test.example/apple.png'])");
+  assert.deepEqual(calls,['https://test.example/favicon.svg','https://test.example/apple.png']);
+  assert.equal(h.get().logo,'data:image/png;base64,cG5n');assert.match(h.node('brand-logo-status').textContent,/logo ready/);
+});
+test('failed logo retrieval preserves the existing source and exposes retry',async()=>{
+  const h=harness();h.run("state.logo='https://test.example/logo.svg'");
+  h.box.window.LocalAI={embedBrandImage:async()=>({error:{code:'invalid_image'}})};
+  await h.run('retryBrandLogo()');
+  assert.equal(h.get().logo,'https://test.example/logo.svg');assert.equal(h.node('retry-brand-logo').hidden,false);
+});
+test('late logos cannot overwrite a manual upload, a newer attempt, or a replacement project',async()=>{
+  for(const action of ['manual','retry','project']) {
+    const h=harness(),wait=deferred();h.run("state.logo='https://test.example/logo.svg'");
+    h.box.window.LocalAI={embedBrandImage:()=>wait.promise};
+    const pending=h.run('retryBrandLogo()');
+    if(action==='manual')h.run("state.logo='data:image/png;base64,bWFudWFs'");
+    if(action==='project')h.run("state=Object.assign(cloneViewData(state),{logo:'data:image/png;base64,bmV3'})");
+    if(action==='retry') {h.box.window.LocalAI.embedBrandImage=async()=>({imageData:'data:image/png;base64,bmV3ZXI='});await h.run('retryBrandLogo()');}
+    const before=h.get().logo;wait.resolve({imageData:'data:image/png;base64,b2xk'});await pending;
+    assert.equal(h.get().logo,before,action);
+  }
+});
+test('legacy embedded SVG/ICO is normalized on demand without changing cloud project identity',async()=>{
+  for(const mime of ['svg+xml','x-icon','vnd.microsoft.icon']) {
+    const h=harness();h.run(`state.logo='data:image/${mime};base64,b2xk';currentProjectId='saved-42'`);
+    h.box.window.LocalAI={embedBrandImage:async()=>({imageData:'data:image/png;base64,bm9ybWFs'})};
+    await h.run('recoverEmbeddedBrandLogo()');assert.equal(h.get().logo,'data:image/png;base64,bm9ybWFs');assert.equal(h.run('currentProjectId'),'saved-42');
+  }
 });

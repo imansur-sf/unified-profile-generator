@@ -177,6 +177,7 @@ function restoreDraftRecovery() {
   draftPending = null; document.getElementById('quickstart-url').value = record.sourceUrl || '';
   fillStaticFields(); syncProfileSetConfigUI(); renderAll(); goToStep(record.step || 0); refreshPreview();
   setText('draft-status', 'Draft restored. Save online when ready.');
+  if (typeof recoverEmbeddedBrandLogo === 'function') recoverEmbeddedBrandLogo();
 }
 async function discardDraftRecovery() {
   if (!confirm('Discard only this tab’s recovery backup? Your editor and online projects stay unchanged.')) return;

@@ -2,6 +2,8 @@
 
 Current implementation status: see [QUALITY-IMPLEMENTATION.md](docs/QUALITY-IMPLEMENTATION.md) for the October 7, 2026 two-phase release, rollback checkpoints, verified tests, and remaining live checks. The standing directives below still apply. The August 8 notes below are historical context, not the current backlog or deployment status.
 
+Customer-logo follow-up: see [LOGO-RECOVERY-2026-10-07.md](docs/LOGO-RECOVERY-2026-10-07.md) for safe SVG/ICO conversion, shared discovery/fallbacks, white image backgrounds, verification and its separate rollback checkpoint.
+
 ## Where we are
 
 - **Working directory**: `/Users/imansur/claude/unified-profile-generator`.

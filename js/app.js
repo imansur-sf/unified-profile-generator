@@ -630,14 +630,56 @@ async function retryPersonaRecommendationImages() {
   await ensurePersonaRecommendationImages(getProfileStrategy().lens);
 }
 
-async function embedSharedBrandLogo(logoUrl, sourceUrl) {
-  if (!logoUrl || /^data:/i.test(logoUrl) || !window.LocalAI?.embedBrandImage) return;
-  const result = await window.LocalAI.embedBrandImage(logoUrl);
-  // Do not overwrite a logo a user changed while the background request ran.
-  if (!result?.imageData || state.logo !== logoUrl || state._aiContext?.sourceUrl !== sourceUrl) return;
-  state.logo = result.imageData;
-  fillStaticFields();
-  refreshPreview();
+const brandLogoRequests = new WeakMap();
+const brandLogoStatuses = new WeakMap();
+function renderBrandLogoStatus() {
+  const status = brandLogoStatuses.get(state);
+  setText('brand-logo-status', status?.message || 'Logo images use a white background; initials use the primary brand color.');
+  const retry = document.getElementById('retry-brand-logo');
+  if (retry) {
+    retry.hidden = status?.state !== 'failed';
+    retry.disabled = status?.state === 'loading';
+  }
+}
+function needsBrandLogoNormalization(value) {
+  return /^data:image\/(?:svg\+xml|x-icon|vnd\.microsoft\.icon|ico);base64,/i.test(value || '');
+}
+async function embedSharedBrandLogo(logoUrl, sourceUrl, candidates = []) {
+  if (!window.LocalAI?.embedBrandImage) return;
+  if (/^data:/i.test(logoUrl || '') && !needsBrandLogoNormalization(logoUrl)) return;
+  const owner = state, originalLogo = owner.logo;
+  const request = {};
+  brandLogoRequests.set(owner, request);
+  const active = () => state === owner && brandLogoRequests.get(owner) === request && owner.logo === originalLogo && owner._aiContext?.sourceUrl === sourceUrl;
+  const choices = [...new Set([logoUrl, ...candidates].filter(value => typeof value === 'string' && value))].slice(0, 6);
+  if (!choices.length) return;
+  brandLogoStatuses.set(owner, { state: 'loading', message: 'Finding and preparing a portable customer logo…' });
+  renderBrandLogoStatus();
+  for (const choice of choices) {
+    if (!active()) return;
+    let result;
+    try { result = await window.LocalAI.embedBrandImage(choice); } catch (_) { continue; }
+    if (!active()) return;
+    // Never replace a usable URL with image data the renderer will reject.
+    if (!/^data:image\//i.test(result?.imageData || '') || !safeImageURL(result.imageData)) continue;
+    owner.logo = result.imageData;
+    brandLogoStatuses.set(owner, { state: 'ready', message: 'Customer logo ready · embedded for all views and exports.' });
+    const input = document.getElementById('url-logo');
+    if (input) input.value = '';
+    setImagePreviewFromURL('preview-logo', owner.logo);
+    renderBrandLogoStatus();
+    refreshPreview();
+    return;
+  }
+  if (!active()) return;
+  brandLogoStatuses.set(owner, { state: 'failed', message: 'Could not embed a customer logo. Any existing image was kept; retry or upload a logo below.' });
+  renderBrandLogoStatus();
+}
+function retryBrandLogo() {
+  return embedSharedBrandLogo(state.logo, state._aiContext?.sourceUrl, state._aiContext?.logoCandidates || []);
+}
+function recoverEmbeddedBrandLogo() {
+  if (needsBrandLogoNormalization(state.logo)) return retryBrandLogo();
 }
 
 function onProfileStrategyChange() {
@@ -833,6 +875,7 @@ function fillStaticFields() {
   document.getElementById('app-name').value = state.appName || 'Data Cloud';
   document.getElementById('url-logo').value = state.logo && !state.logo.startsWith('data:') ? state.logo : '';
   setImagePreviewFromURL('preview-logo', state.logo);
+  renderBrandLogoStatus();
 
   document.getElementById('url-user-avatar').value = state.userAvatar && !state.userAvatar.startsWith('data:') ? state.userAvatar : '';
   setImagePreviewFromURL('preview-user-avatar', state.userAvatar);
@@ -1525,6 +1568,9 @@ function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
 function onLogoUrlChange() {
   const v = document.getElementById('url-logo').value.trim();
   state.logo = v;
+  brandLogoRequests.delete(state);
+  brandLogoStatuses.delete(state);
+  renderBrandLogoStatus();
   setImagePreviewFromURL('preview-logo', v);
   refreshPreview();
 }
@@ -1791,7 +1837,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base._aiContext = {
     sourceUrl: ai?._meta?.source_url || '',
     provider: ai?._meta?.provider || '',
-    analyzedAt: new Date().toISOString()
+    analyzedAt: new Date().toISOString(),
+    logoCandidates: (Array.isArray(ai?._meta?.logo_candidates) ? ai._meta.logo_candidates : []).filter(value => typeof value === 'string').slice(0, 6)
   };
   base.profileStrategy = Object.assign({}, strategyOverride || getProfileStrategy());
   base.profileSet = cloneViewData(profileSetOverride || ensureProfileSet());
@@ -1860,8 +1907,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base.personaVariants = {};
   snapshotPersonaView(base);
 
-  // Prefer favicon as logo if AI didn't give us anything.
-  if (ai._meta && ai._meta.favicon && !base.logo) base.logo = ai._meta.favicon;
+  // Brand assets come from the website, never an unrelated sample or AI guess.
+  base.logo = base._aiContext.logoCandidates[0] || ai._meta?.favicon || '';
 
   if (UPGContract.companyKey(base._aiContext.sourceUrl) !== UPGContract.companyKey(state._aiContext?.sourceUrl)) resetProjectIdentity();
   base.schemaVersion = 2;
@@ -1872,7 +1919,7 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   refreshPreview();
   // The website favicon is a shared brand asset. Embed it once so every
   // persona preview and exported profile uses the same stable logo data.
-  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
+  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl, state._aiContext.logoCandidates).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
 }
 
 function mergePersonaOverlay(target, overlay) {
@@ -2422,6 +2469,7 @@ async function loadProjectAndHydrate(id) {
     refreshPreview();
     closeMyProjects();
     goToStep(0);
+    recoverEmbeddedBrandLogo();
   } catch (e) {
     alert('Could not load project: ' + e.message);
   }
@@ -2788,6 +2836,9 @@ function bootstrap() {
 
   attachDropZone('drop-logo', 'preview-logo', (dataUrl) => {
     state.logo = dataUrl;
+    brandLogoRequests.delete(state);
+    brandLogoStatuses.delete(state);
+    renderBrandLogoStatus();
     document.getElementById('url-logo').value = '';
     refreshPreview();
   });

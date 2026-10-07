@@ -174,6 +174,18 @@ test('light, white and dark brand colors receive readable semantic foregrounds',
   }
 });
 
+test('both modes give image logos a white box without changing primary branding or monograms', () => {
+  for (const mode of ['b2c', 'b2b']) {
+    const state = profile(mode); state.colors.primary = '#002b66'; state.logo = 'data:image/png;base64,cG5n';
+    const html = render(state), parsed = parseHTML(html);
+    const mark = parsed.tags.find(tag => /sf-brand-(?:logo|mark) has-image/.test(tag.attrs.class || ''));
+    assert.ok(mark, mode); assert.match(html, /--primary:\s*#002b66/);
+    if(mode==='b2c')assert.match(html,/\.sf-brand-logo\.has-image\s*\{\s*background: #ffffff/);
+    else assert.equal(mark.attrs.style,'background:#ffffff');
+    state.logo='';assert.ok(!parseHTML(render(state)).tags.some(tag=>/sf-brand-(?:logo|mark) has-image/.test(tag.attrs.class || '')));
+  }
+});
+
 test('image URL policy permits supported images and rejects executable schemes', () => {
   for (const input of ['https://example.com/a.png', 'http://example.com/a.jpg', 'assets/tony-robbins-workshop-v1.jpg', 'data:image/png;base64,AAAA']) assert.ok(context.safeImageURL(input), input);
   for (const input of ['javascript:alert(1)', 'data:text/html;base64,AAAA', 'data:image/svg+xml;base64,AAAA', '//example.com/a.png', 'file:///tmp/a.png', 'https://u:p@example.com/a.png', 'https://example.com/\na.png', 'assets/../a.png']) assert.equal(context.safeImageURL(input), '', input);
@@ -281,7 +293,7 @@ test('fresh standalone build preserves script boundaries and includes every curr
     scripts.forEach(script => assert.doesNotThrow(() => new vm.Script(script)));
     const builder = scripts.find(script => script.includes('function bootstrap()'));
     assert.ok(builder, 'HTML parser must retain the complete builder script');
-    for (const name of ['defaults', 'profile-contract', 'images', 'generator', 'pagehost', 'localai', 'editor-support', 'app']) assert.ok(builder.includes(`inlined from ./js/${name}.js`), name);
+    for (const name of ['defaults', 'profile-contract', 'images', 'generator', 'brand-logo', 'pagehost', 'localai', 'editor-support', 'app']) assert.ok(builder.includes(`inlined from ./js/${name}.js`), name);
     assert.equal(html, fs.readFileSync(path.join(root, 'Unified_Profile_Generator.html'), 'utf8'), 'Run npm run build when changing editor sources');
     assert.ok(!html.includes('window.__UPG_BUILD__'));
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }

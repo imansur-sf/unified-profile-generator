@@ -494,6 +494,8 @@
                   </div>
                   <input type="text" id="url-logo" placeholder="Or paste logo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onLogoUrlChange()">
                   <button type="button" class="upload-remove" onclick="document.getElementById('url-logo').value=''; onLogoUrlChange()">Remove brand logo</button>
+                  <p id="brand-logo-status" class="mt-2 text-xs text-gray-500" role="status" aria-live="polite">Logo images use a white background; initials use the primary brand color.</p>
+                  <button id="retry-brand-logo" type="button" class="upload-remove" hidden onclick="retryBrandLogo()">Retry logo only</button>
                 </div>
                 <div>
                   <label for="url-user-avatar" class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
@@ -1148,7 +1150,7 @@
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
     // without the browser's aggressive JS cache getting in the way.
-    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js'].forEach(src => {
+    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/brand-logo.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js'].forEach(src => {
       const s = document.createElement('script');
       s.src = src + '?v=' + window.__UPG_BUILD__;
       s.defer = false;

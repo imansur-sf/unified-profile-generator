@@ -126,7 +126,7 @@
         const html = await res.text();
         if (html && html.length >= 40) {
           const looksJson = /application\/json/i.test(ct) || (html.trim().startsWith('{') && !html.trim().startsWith('{"contents"'));
-          if (!looksJson) return html;
+          if (!looksJson) return { html, url: res.headers.get('x-scraper-url') || url };
         }
         throw localError('scraper_empty', { endpoint: base });
       } else {
@@ -366,24 +366,27 @@
   // Persist a scraped remote favicon/logo as image data once, avoiding CORS,
   // hotlinking, and iframe reload failures when presenters switch persona tabs.
   async function embedBrandImage(url) {
-    if (!url || /^data:/i.test(url)) return { imageData: url || '' };
+    if (!url) return { imageData: '' };
+    const embedded = /^data:/i.test(url);
+    if (embedded && !/^data:image\/(?:svg\+xml|x-icon|vnd\.microsoft\.icon|ico);base64,/i.test(url)) return { imageData: url };
     const base = getScraperEndpoint();
-    let res;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
     try {
-      res = await fetch(`${base}/api/brand-image?url=${encodeURIComponent(url)}`);
-    } catch (e) {
-      return { imageData: '', error: { code: 'network_error' } };
-    }
-    if (!res.ok) {
-      let body = {};
-      try { body = await res.json(); } catch (_) {}
-      return { imageData: '', error: { code: body?.error || 'brand_image_failed', status: res.status } };
-    }
-    try {
+      const res = embedded
+        ? await fetch(`${base}/api/brand-image`, { method: 'POST', signal: controller.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ imageData: url }) })
+        : await fetch(`${base}/api/brand-image?url=${encodeURIComponent(url)}`, { signal: controller.signal });
+      if (!res.ok) {
+        let body = {};
+        try { body = await res.json(); } catch (_) {}
+        return { imageData: '', error: { code: body?.error || 'brand_image_failed', status: res.status } };
+      }
       const body = await res.json();
       return { imageData: body?.imageData || '', error: null };
-    } catch (_) {
-      return { imageData: '', error: { code: 'invalid_brand_image_response' } };
+    } catch (error) {
+      return { imageData: '', error: { code: controller.signal.aborted ? 'timeout' : error instanceof SyntaxError ? 'invalid_brand_image_response' : 'network_error' } };
+    } finally {
+      clearTimeout(timer);
     }
   }
 
@@ -394,13 +397,13 @@
     let scraped = null, fallbackReason = null;
     onStatus('fetching');
     try {
-      const html = await scrape(url);
-      scraped = shared.extractCoreHTML(html, url);
+      const response = await scrape(url);
+      scraped = shared.extractCoreHTML(response.html, response.url);
     } catch (e) {
       fallbackReason = e.code || 'scrape_failed';
       onStatus('fallback_url_only');
     }
-    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', ogImage: '', navLinkCandidates: [] };
+    if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', logoCandidates: [], ogImage: '', navLinkCandidates: [] };
     return { scraped, url, fallbackReason };
   }
 
@@ -437,6 +440,7 @@
     parsed._meta = {
       source_url: context.url,
       favicon: scraped.favicon,
+      logo_candidates: scraped.logoCandidates || [],
       og_image: scraped.ogImage,
       model_used: model_used,
       tier: tier,

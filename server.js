@@ -2,6 +2,8 @@ const express = require('express');
 const path = require('path');
 const crypto = require('crypto');
 const { fetchPublicResource, validatePublicUrl } = require('./lib/safe-fetch');
+const { normalizeBrandImage, decodeImageData } = require('./lib/brand-image');
+const { extractLogoCandidates } = require('./js/brand-logo');
 const { parsePublicOrigin, parseTrustedProxies, requestOrigin: resolveRequestOrigin } = require('./lib/request-boundary');
 const { buildState, renderSavedProfile, integrationArtifact, LENSES } = require('./lib/profile-runtime');
 const { runGenerationPipeline } = require('./lib/generation-pipeline');
@@ -41,7 +43,7 @@ const rateBuckets = new Map();
 app.use('/projects', express.json({ limit: '20mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', (req, res, next) => {
-  res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Max-Age': '86400' });
+  res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Expose-Headers': 'X-Scraper-URL, X-Scraper-Source, X-Scraper-Bytes', 'Access-Control-Max-Age': '86400' });
   if (req.method === 'OPTIONS') return res.sendStatus(204);
   next();
 });
@@ -72,21 +74,21 @@ app.get('/mcp', (req, res) => {
   res.status(405).set('Allow', 'POST').json({ error: 'method_not_allowed', message: 'Use POST with MCP JSON-RPC messages.' });
 });
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'GET /api/brand-image', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY), public_origin_configured: Boolean(PUBLIC_ORIGIN), integrations_configured: process.env.NODE_ENV !== 'production' || Boolean(PUBLIC_ORIGIN) });
+  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'GET /api/brand-image', 'POST /api/brand-image', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY), public_origin_configured: Boolean(PUBLIC_ORIGIN), integrations_configured: process.env.NODE_ENV !== 'production' || Boolean(PUBLIC_ORIGIN) });
 });
 app.get('/api/scrape', async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).json({ error: 'missing_url' });
   try {
     const upstream = await fetchPublicResource(target, {
-      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS,
+      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS, maxRedirects: 8,
       headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' },
       acceptContentType: value => !value || /^text\//i.test(value) || /(json|xml|xhtml)/i.test(value)
     });
     res.set({
       'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff',
       'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=600',
-      'X-Scraper-Source': new URL(upstream.url).hostname, 'X-Scraper-Bytes': String(upstream.body.length)
+      'X-Scraper-Source': new URL(upstream.url).hostname, 'X-Scraper-URL': upstream.url, 'X-Scraper-Bytes': String(upstream.body.length)
     });
     res.send(upstream.body);
   } catch (err) {
@@ -99,6 +101,15 @@ app.get('/api/brand-image', async (req, res) => {
   try {
     const image = await fetchBrandImage(target);
     res.set('Cache-Control', 'private, max-age=86400');
+    res.json({ imageData: `data:${image.mime};base64,${image.data.toString('base64')}` });
+  } catch (err) {
+    res.status(err?.status || 502).json({ error: err?.code || 'brand_image_failed' });
+  }
+});
+app.post('/api/brand-image', async (req, res) => {
+  try {
+    const image = await normalizeBrandImage(decodeImageData(req.body?.imageData));
+    res.set('Cache-Control', 'no-store');
     res.json({ imageData: `data:${image.mime};base64,${image.data.toString('base64')}` });
   } catch (err) {
     res.status(err?.status || 502).json({ error: err?.code || 'brand_image_failed' });
@@ -171,31 +182,23 @@ function brandImageError(code, status) {
   return error;
 }
 
-function normalizedBrandImageMime(contentType, url) {
+function acceptsBrandImageType(contentType) {
   const mime = String(contentType || '').split(';')[0].trim().toLowerCase();
-  if (mime.startsWith('image/')) return mime;
-  if (mime === 'application/octet-stream' || mime === 'application/x-ico') {
-    const pathName = url.pathname.toLowerCase();
-    if (pathName.endsWith('.png')) return 'image/png';
-    if (pathName.endsWith('.jpg') || pathName.endsWith('.jpeg')) return 'image/jpeg';
-    if (pathName.endsWith('.gif')) return 'image/gif';
-    if (pathName.endsWith('.webp')) return 'image/webp';
-    if (pathName.endsWith('.svg')) return 'image/svg+xml';
-    return 'image/x-icon';
-  }
-  return '';
+  // Content type is only an early rejection. Actual bytes must also decode and
+  // are always re-encoded as inert PNG; extensions never establish image safety.
+  return !mime || /^image\//.test(mime) || ['application/octet-stream', 'application/x-ico', 'application/xml', 'text/xml'].includes(mime);
 }
 
 async function fetchBrandImage(rawUrl) {
   try {
     const upstream = await fetchPublicResource(rawUrl, {
-      maxBytes: MAX_BRAND_IMAGE_BYTES, timeoutMs: BRAND_IMAGE_TIMEOUT_MS,
+      maxBytes: MAX_BRAND_IMAGE_BYTES, timeoutMs: BRAND_IMAGE_TIMEOUT_MS, maxRedirects: 3,
       headers: { 'User-Agent': USER_AGENT, Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
-      acceptContentType: (contentType, url) => Boolean(normalizedBrandImageMime(contentType, url)),
+      acceptContentType: acceptsBrandImageType,
       contentTypeError: 'not_image'
     });
     if (!upstream.body.length) throw brandImageError('empty_image', 502);
-    return { mime: normalizedBrandImageMime(upstream.contentType, new URL(upstream.url)), data: upstream.body };
+    return await normalizeBrandImage(upstream.body);
   } catch (err) {
     if (err.code === 'too_large') throw brandImageError('image_too_large', 413);
     throw err;
@@ -592,7 +595,7 @@ function generationError(code, message) { const err = new Error(message || code)
 async function fetchGenerationSource(url) {
   try {
     const upstream = await fetchPublicResource(url, {
-      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS,
+      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS, maxRedirects: 8,
       headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
       acceptContentType: value => /text\/html|application\/xhtml\+xml/i.test(value)
     });
@@ -608,10 +611,10 @@ function extractGenerationContext(html, url) {
   const description = extractMetaContent(html, 'name', 'description') || extractMetaContent(html, 'property', 'og:description');
   const headings = Array.from(html.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)).map(match => cleanHtmlText(match[1])).filter(Boolean).slice(0, 20).join('\n');
   const navLinkCandidates = Array.from(html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)).map(match => cleanHtmlText(match[1])).filter(value => value && value.length <= 60).slice(0, 30);
-  const icon = html.match(/<link\b(?=[^>]*\brel=["'][^"']*icon[^"']*["'])(?=[^>]*\bhref=["']([^"']+)["'])[^>]*>/i);
-  let favicon = '';
-  try { favicon = validatePublicUrl(new URL(icon?.[1] || '/favicon.ico', url).href).href; } catch (_) {}
-  return { url, title, description, headings, navLinkCandidates: [...new Set(navLinkCandidates)], siteName: extractMetaContent(html, 'property', 'og:site_name'), favicon, bodyText: cleanHtmlText(html).slice(0, 8000) };
+  const logoCandidates = extractLogoCandidates(html, url).filter(candidate => {
+    try { validatePublicUrl(candidate); return true; } catch (_) { return false; }
+  });
+  return { url, title, description, headings, navLinkCandidates: [...new Set(navLinkCandidates)], siteName: extractMetaContent(html, 'property', 'og:site_name'), favicon: logoCandidates[0] || '', logoCandidates, bodyText: cleanHtmlText(html).slice(0, 8000) };
 }
 
 function extractHtmlTag(html, tag) { const match = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')); return match ? cleanHtmlText(match[1]) : ''; }
