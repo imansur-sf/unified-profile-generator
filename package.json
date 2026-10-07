@@ -4,7 +4,9 @@
   "description": "Unified Profile Generator – Heroku Private Space app with Gemini AI backend",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node --test test/*.test.cjs",
+    "build": "python3 build-standalone.py"
   },
   "engines": {
     "node": "22.x"

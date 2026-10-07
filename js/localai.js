@@ -413,7 +413,7 @@
       tier: opts.tier || 'balanced',
       maxTokens: 6500
     });
-    return shared.parseAIResponseText(response.text);
+    return UPGContract.validateAIProfile(shared.parseAIResponseText(response.text), { profileType, overlay: true });
   }
 
   // ---- MAIN ----
@@ -433,7 +433,7 @@
       maxTokens: 8000
     });
 
-    const parsed = shared.parseAIResponseText(text);
+    const parsed = UPGContract.validateAIProfile(shared.parseAIResponseText(text), { profileType });
     parsed._meta = {
       source_url: context.url,
       favicon: scraped.favicon,

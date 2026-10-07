@@ -2,9 +2,8 @@
 """
 build-standalone.py — Bundle index.html + js/*.js into a single self-contained HTML.
 
-The output file has no external dependencies (except CDN Tailwind for the wizard
-shell, which the exported customer profile does NOT depend on — the exported
-profile ships its own inlined CSS).
+The builder retains its backend/auth endpoints, CDN styling, and local starter
+assets. Exported customer profiles have their own inlined styles.
 
 Usage:
     python3 build-standalone.py                   # writes Unified_Profile_Generator.html
@@ -22,6 +21,7 @@ INDEX = ROOT / "index.html"
 # Script tags in load order — mirrors index.html
 SCRIPTS = [
     "js/defaults.js",
+    "js/profile-contract.js",
     "js/images.js",
     "js/generator.js",
     "js/pagehost.js",
@@ -59,7 +59,11 @@ def build(out_path: Path) -> None:
         if not p.exists():
             sys.exit(f"error: missing script {p}")
         inlined.append(f"// ==== inlined from ./{rel} ====")
-        inlined.append(p.read_text(encoding="utf-8"))
+        # The HTML parser recognizes closing script tags even inside JS strings.
+        # Escaping the slash preserves their runtime value in template strings.
+        source = re.sub(r"</script", lambda match: "<\\/" + match.group(0)[2:],
+                        p.read_text(encoding="utf-8"), flags=re.IGNORECASE)
+        inlined.append(source)
         inlined.append("")
     inlined.append("</script>")
     inlined_block = "\n".join(inlined)

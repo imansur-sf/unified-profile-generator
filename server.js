@@ -3,7 +3,12 @@ const path = require('path');
 const fs = require('fs');
 const vm = require('vm');
 const crypto = require('crypto');
+const { fetchPublicResource, validatePublicUrl } = require('./lib/safe-fetch');
+const { parsePublicOrigin, parseTrustedProxies, requestOrigin: resolveRequestOrigin } = require('./lib/request-boundary');
+const profileContract = require('./js/profile-contract');
 const app = express();
+const PUBLIC_ORIGIN = parsePublicOrigin(process.env.PUBLIC_ORIGIN || '');
+app.set('trust proxy', parseTrustedProxies(process.env.TRUST_PROXY || ''));
 const PORT = process.env.PORT || 3000;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY || '';
 const GEMINI_API_BASE_URL = (process.env.GEMINI_API_BASE_URL || 'https://generativelanguage.googleapis.com').replace(/\/$/, '');
@@ -49,12 +54,14 @@ app.post('/integrations/v1/upg/generations', handleCreateGeneration);
 app.get('/integrations/v1/upg/generations/:id', handleGetGeneration);
 app.use('/integrations', proxySaasyAccounts);
 app.get('/.well-known/mcp.json', (req, res) => {
+  let origin;
+  try { origin = requestOrigin(req); } catch (_) { return res.status(400).json({ error: 'invalid_request_origin' }); }
   res.set('Cache-Control', 'public, max-age=300');
   res.json({
     name: 'Unified Profile Generator',
     version: '1.0.0',
     transport: 'streamable-http',
-    endpoint: `${req.protocol}://${req.get('host')}/mcp`,
+    endpoint: `${origin}/mcp`,
     authentication: { type: 'api-key', header: 'X-API-Key', keyPrefix: 'upg_' },
     protocolVersions: MCP_PROTOCOL_VERSIONS,
     capabilities: { tools: ['upg_list_profiles', 'upg_get_profile', 'upg_get_profile_export', 'upg_generate_profile', 'upg_get_generation_status'] },
@@ -71,26 +78,21 @@ app.get('/api/health', (req, res) => {
 app.get('/api/scrape', async (req, res) => {
   const target = req.query.url;
   if (!target) return res.status(400).json({ error: 'missing_url' });
-  let targetURL;
-  try { targetURL = new URL(target); } catch { return res.status(400).json({ error: 'invalid_url' }); }
-  if (targetURL.protocol !== 'https:' && targetURL.protocol !== 'http:') return res.status(400).json({ error: 'bad_protocol', got: targetURL.protocol });
-  if (isDangerousHost(targetURL.hostname)) return res.status(403).json({ error: 'blocked_host', hostname: targetURL.hostname });
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS);
-    const upstream = await fetch(targetURL.toString(), { method: 'GET', redirect: 'follow', headers: { 'User-Agent': USER_AGENT, 'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' }, signal: controller.signal });
-    clearTimeout(timeout);
-    if (!upstream.ok) return res.status(502).json({ error: 'upstream_status', status: upstream.status });
-    const contentType = upstream.headers.get('content-type') || 'text/html; charset=utf-8';
-    if (!/^text\//i.test(contentType) && !/(json|xml|xhtml)/i.test(contentType)) return res.status(415).json({ error: 'not_text', contentType });
-    const reader = upstream.body.getReader();
-    const chunks = [];
-    let total = 0;
-    while (true) { const { done, value } = await reader.read(); if (done) break; total += value.length; if (total > MAX_SCRAPE_BYTES) { try { reader.cancel(); } catch (_) {} return res.status(413).json({ error: 'too_large', limitBytes: MAX_SCRAPE_BYTES }); } chunks.push(value); }
-    const body = Buffer.concat(chunks);
-    res.set({ 'Content-Type': contentType, 'Cache-Control': 'public, max-age=600', 'X-Scraper-Source': targetURL.hostname, 'X-Scraper-Bytes': String(total) });
-    res.send(body);
-  } catch (err) { const code = err && err.name === 'AbortError' ? 'timeout' : 'network_error'; res.status(502).json({ error: code, message: (err && err.message) || 'unknown' }); }
+    const upstream = await fetchPublicResource(target, {
+      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS,
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8', 'Accept-Language': 'en-US,en;q=0.9' },
+      acceptContentType: value => !value || /^text\//i.test(value) || /(json|xml|xhtml)/i.test(value)
+    });
+    res.set({
+      'Content-Type': 'text/plain; charset=utf-8', 'X-Content-Type-Options': 'nosniff',
+      'Content-Security-Policy': "default-src 'none'; sandbox", 'Cache-Control': 'public, max-age=600',
+      'X-Scraper-Source': new URL(upstream.url).hostname, 'X-Scraper-Bytes': String(upstream.body.length)
+    });
+    res.send(upstream.body);
+  } catch (err) {
+    res.status(err.status || 502).json({ error: err.code || 'network_error', ...(err.upstreamStatus ? { status: err.upstreamStatus } : {}), ...(err.limitBytes ? { limitBytes: err.limitBytes } : {}) });
+  }
 });
 app.get('/api/brand-image', async (req, res) => {
   const target = String(req.query.url || '').trim();
@@ -105,7 +107,7 @@ app.get('/api/brand-image', async (req, res) => {
 });
 app.post('/api/llm', async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: 'llm_not_configured', hint: 'Set GEMINI_API_KEY config var on this Heroku app' });
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const rl = checkRateLimit(ip);
   if (!rl.ok) return res.status(429).json({ error: 'rate_limited', retryAfterMs: rl.retryAfterMs });
   const { prompt, system, tier, maxTokens } = req.body;
@@ -134,7 +136,7 @@ app.post('/api/llm', async (req, res) => {
 });
 app.post('/api/generate-images', async (req, res) => {
   if (!GEMINI_API_KEY) return res.status(503).json({ error: 'llm_not_configured', hint: 'Set GEMINI_API_KEY' });
-  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  const ip = req.ip || req.socket?.remoteAddress || 'unknown';
   const rl = checkRateLimit(ip);
   if (!rl.ok) return res.status(429).json({ error: 'rate_limited', retryAfterMs: rl.retryAfterMs });
   const { prompts } = req.body;
@@ -182,49 +184,20 @@ function normalizedBrandImageMime(contentType, url) {
   return '';
 }
 
-async function fetchBrandImage(rawUrl, redirects = 0) {
-  if (redirects > 3) throw brandImageError('too_many_redirects', 502);
-  let target;
-  try { target = new URL(rawUrl); } catch (_) { throw brandImageError('invalid_url', 400); }
-  if (!['https:', 'http:'].includes(target.protocol) || isDangerousHost(target.hostname)) throw brandImageError('blocked_host', 403);
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), BRAND_IMAGE_TIMEOUT_MS);
-  let upstream;
+async function fetchBrandImage(rawUrl) {
   try {
-    upstream = await fetch(target.toString(), {
-      method: 'GET', redirect: 'manual',
+    const upstream = await fetchPublicResource(rawUrl, {
+      maxBytes: MAX_BRAND_IMAGE_BYTES, timeoutMs: BRAND_IMAGE_TIMEOUT_MS,
       headers: { 'User-Agent': USER_AGENT, Accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8' },
-      signal: controller.signal
+      acceptContentType: (contentType, url) => Boolean(normalizedBrandImageMime(contentType, url)),
+      contentTypeError: 'not_image'
     });
+    if (!upstream.body.length) throw brandImageError('empty_image', 502);
+    return { mime: normalizedBrandImageMime(upstream.contentType, new URL(upstream.url)), data: upstream.body };
   } catch (err) {
-    throw brandImageError(err?.name === 'AbortError' ? 'timeout' : 'network_error', 502);
-  } finally {
-    clearTimeout(timeout);
+    if (err.code === 'too_large') throw brandImageError('image_too_large', 413);
+    throw err;
   }
-  if ([301, 302, 303, 307, 308].includes(upstream.status)) {
-    const location = upstream.headers.get('location');
-    if (!location) throw brandImageError('invalid_redirect', 502);
-    return fetchBrandImage(new URL(location, target).toString(), redirects + 1);
-  }
-  if (!upstream.ok) throw brandImageError('upstream_status', 502);
-  const mime = normalizedBrandImageMime(upstream.headers.get('content-type'), target);
-  if (!mime) throw brandImageError('not_image', 415);
-  const reader = upstream.body?.getReader();
-  if (!reader) throw brandImageError('empty_image', 502);
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > MAX_BRAND_IMAGE_BYTES) {
-      try { await reader.cancel(); } catch (_) {}
-      throw brandImageError('image_too_large', 413);
-    }
-    chunks.push(value);
-  }
-  if (!total) throw brandImageError('empty_image', 502);
-  return { mime, data: Buffer.concat(chunks) };
 }
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {
@@ -234,7 +207,7 @@ app.use((err, req, res, next) => {
 });
 app.use(express.static(path.join(__dirname), { extensions: ['html'], maxAge: '1h' }));
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
-app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });
+if (require.main === module) app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });
 async function proxySaasyAccounts(req, res) {
   const headers = {};
   for (const name of ['accept', 'authorization', 'content-type', 'x-api-key', 'idempotency-key']) {
@@ -259,7 +232,8 @@ async function proxySaasyAccounts(req, res) {
 function validateMcpOrigin(req, res, next) {
   const origin = req.get('origin');
   if (!origin) return next();
-  const sameOrigin = `${req.protocol}://${req.get('host')}`;
+  let sameOrigin;
+  try { sameOrigin = requestOrigin(req); } catch (_) { return res.status(400).json({ error: 'invalid_request_origin' }); }
   if (origin === sameOrigin || MCP_ALLOWED_ORIGINS.has(origin)) return next();
   res.status(403).json({ jsonrpc: '2.0', error: { code: -32003, message: 'Origin is not allowed for this MCP server.' }, id: null });
 }
@@ -473,6 +447,8 @@ async function createGenerationJob(req, body) {
   if (!authResponse.ok) return { status: authResponse.status, body: { error: integrationErrorMessage(authResponse, auth) } };
   const input = normalizeGenerationRequest(body);
   if (input.error) return { status: 400, body: { error: input.error } };
+  let origin;
+  try { origin = requestOrigin(req); } catch (_) { return { status: 400, body: { error: 'invalid_request_origin' } }; }
   pruneGenerationJobs();
   if (generationJobs.size >= MAX_GENERATION_JOBS) return { status: 429, body: { error: 'generation_capacity_reached', message: 'Please try again shortly.' } };
   const job = {
@@ -487,7 +463,7 @@ async function createGenerationJob(req, body) {
     error: null
   };
   generationJobs.set(job.id, job);
-  void runGenerationJob(job, input, apiKey, requestOrigin(req));
+  void runGenerationJob(job, input, apiKey, origin);
   return { status: 202, body: { job: publicGenerationJob(job) } };
 }
 
@@ -503,8 +479,8 @@ async function handleGetGeneration(req, res) {
 function normalizeGenerationRequest(body) {
   const rawUrl = String(body?.url || '').trim();
   let url;
-  try { url = new URL(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`); } catch { return { error: 'invalid_url' }; }
-  if (!rawUrl || !['http:', 'https:'].includes(url.protocol) || isDangerousHost(url.hostname)) return { error: 'invalid_url' };
+  try { url = validatePublicUrl(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`); } catch { return { error: 'invalid_url' }; }
+  if (!rawUrl) return { error: 'invalid_url' };
   const profileType = body?.profileType === 'b2b' ? 'b2b' : 'b2c';
   const lens = ['sales', 'service', 'marketing', 'success', 'custom'].includes(body?.persona) ? body.persona : 'sales';
   const objective = String(body?.objective || defaultObjective(lens)).trim().slice(0, 80) || defaultObjective(lens);
@@ -576,33 +552,17 @@ function safeGenerationError(err) {
 }
 
 async function fetchGenerationSource(url) {
-  const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), SCRAPE_TIMEOUT_MS);
   try {
-    const upstream = await fetch(url, { headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' }, redirect: 'follow', signal: controller.signal });
-    if (!upstream.ok) throw generationError('scrape_failed');
-    const contentType = upstream.headers.get('content-type') || '';
-    if (!/text\/html|application\/xhtml\+xml/i.test(contentType)) throw generationError('scrape_failed');
-    const html = await readLimitedResponse(upstream, MAX_SCRAPE_BYTES);
-    return extractGenerationContext(html, upstream.url || url);
+    const upstream = await fetchPublicResource(url, {
+      maxBytes: MAX_SCRAPE_BYTES, timeoutMs: SCRAPE_TIMEOUT_MS,
+      headers: { 'User-Agent': USER_AGENT, Accept: 'text/html,application/xhtml+xml;q=0.9,*/*;q=0.8' },
+      acceptContentType: value => /text\/html|application\/xhtml\+xml/i.test(value)
+    });
+    return extractGenerationContext(upstream.body.toString('utf8'), upstream.url);
   } catch (err) {
-    if (err.name === 'AbortError') throw generationError('generation_timeout');
+    if (err.code === 'timeout') throw generationError('generation_timeout');
     throw err;
-  } finally { clearTimeout(timeout); }
-}
-
-async function readLimitedResponse(response, limit) {
-  const reader = response.body.getReader();
-  const chunks = [];
-  let total = 0;
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    total += value.length;
-    if (total > limit) { try { reader.cancel(); } catch (_) {} throw generationError('scrape_too_large'); }
-    chunks.push(value);
   }
-  return Buffer.concat(chunks).toString('utf8');
 }
 
 function extractGenerationContext(html, url) {
@@ -666,6 +626,7 @@ function getGenerationRenderer() {
 }
 
 function buildGeneratedProfile(ai, input, origin) {
+  profileContract.validateAIProfile(ai, { profileType: input.profileType });
   const renderer = getGenerationRenderer();
   const industry = ['recruiting', 'retail', 'healthcare', 'financial', 'generic'].includes(ai?.industry) ? ai.industry : 'generic';
   const state = renderer.cloneProfileMode(input.profileType, industry);
@@ -729,7 +690,8 @@ function applyServerPersonaTitles(state) {
   [state.affinities, state.preferences, state.events, state.membership, state.recommendations, state.activity].forEach((section, index) => { if (section) section.title = labels[index]; });
 }
 function serverPersonaLabel(lens, customRole) { return lens === 'custom' ? (customRole || 'Custom profile') : ({ sales: 'Sales', service: 'Service', marketing: 'Marketing', success: 'Customer Success' })[lens] || 'Sales'; }
-function requestOrigin(req) { const protocol = String(req.get('x-forwarded-proto') || req.protocol || 'https').split(',')[0].trim(); return `${protocol}://${req.get('host')}`; }
+function requestOrigin(req) { return resolveRequestOrigin(req, PUBLIC_ORIGIN); }
 function pruneGenerationJobs() { const cutoff = Date.now() - GENERATION_JOB_TTL_MS; for (const [id, job] of generationJobs) if (new Date(job.updatedAt).getTime() < cutoff) generationJobs.delete(id); }
-function isDangerousHost(host) { if (!host) return true; const h = host.toLowerCase(); if (h === 'localhost' || h === 'localhost.localdomain') return true; if (h === 'metadata.google.internal') return true; if (h.endsWith('.internal') || h.endsWith('.local')) return true; if (h === '169.254.169.254') return true; if (/^(10|127)\./.test(h)) return true; if (/^192\.168\./.test(h)) return true; if (/^172\.(1[6-9]|2\d|3[01])\./.test(h)) return true; if (/^169\.254\./.test(h)) return true; if (h === '0.0.0.0') return true; if (h === '::1' || h.startsWith('fe80:') || h.startsWith('fc00:') || h.startsWith('fd00:')) return true; return false; }
 function checkRateLimit(ip) { const now = Date.now(); let bucket = rateBuckets.get(ip); if (!bucket || now >= bucket.resetAt) { bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS }; rateBuckets.set(ip, bucket); } bucket.count++; if (rateBuckets.size > 5000) { for (const [k, v] of rateBuckets) if (v.resetAt < now) rateBuckets.delete(k); } if (bucket.count > RATE_LIMIT_MAX) return { ok: false, retryAfterMs: Math.max(0, bucket.resetAt - now) }; return { ok: true }; }
+
+module.exports = { app };

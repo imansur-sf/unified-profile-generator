@@ -265,7 +265,7 @@ Generate the ${profileType} Unified Profile JSON per the schema.`;
   function buildPersonaOverlayPrompt(scraped, sharedProfile, opts = {}) {
     const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
     const strategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, opts.strategy || {});
-    const identity = JSON.stringify(sharedProfile || {}, null, 2).slice(0, 7000);
+    const identity = JSON.stringify(UPGContract.textIdentity(sharedProfile || {}), null, 2);
     return `Customer URL: ${scraped.url}
 Site title: ${scraped.title || '(not extracted)'}
 Description: ${scraped.description || '(not extracted)'}
@@ -315,9 +315,6 @@ Use the role's standard blueprint as the foundation, then add the stated require
     const first = t.indexOf('{');
     const last = t.lastIndexOf('}');
     if (first >= 0 && last > first) t = t.slice(first, last + 1);
-
-    // Normalize smart quotes some models emit
-    t = t.replace(/[“”]/g, '"').replace(/[‘’]/g, "'");
 
     // 3) Happy path
     try { return JSON.parse(t); } catch (_) { /* fall through */ }

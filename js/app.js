@@ -5,6 +5,9 @@
 const TOTAL_STEPS = 7;
 let currentStep = 0;
 const personaVisualRequests = new Map();
+const personaTextRequests = new Map();
+let generationRunId = 0;
+let renderRevision = 0;
 const MAX_SAVED_PROJECT_BYTES = 18 * 1024 * 1024;
 // Start with a complete, presentation-ready B2C story. Industry templates
 // remain available whenever the user changes industry or starts a B2B build.
@@ -91,7 +94,8 @@ function readProfileSetConfig() {
   const customBrief = document.getElementById('profile-set-custom-brief')?.value.trim() || '';
   return {
     selectedLenses: selectedLenses.length ? selectedLenses : ['sales'],
-    briefs: selectedLenses.includes('custom') ? { custom: customBrief } : {},
+    briefs: Object.assign({}, ensureProfileSet().briefs, selectedLenses.includes('custom') ? { custom: customBrief || getPersonaBrief(state, 'custom') } : {}),
+    strategies: Object.fromEntries(selectedLenses.map(lens => [lens, Object.assign({}, state.personaVariants?.[lens]?.strategy || {}, getProfileStrategy().lens === lens ? getProfileStrategy() : {})])),
     customRole
   };
 }
@@ -275,11 +279,14 @@ function createSupportingCard(definition, placement = 'middle', visibility = 'vi
 }
 
 function normalizeCustomModules(target = state) {
+  const ids = new Set();
   ['extraCards', 'rightExtraCards'].forEach((key) => {
     if (!Array.isArray(target[key])) target[key] = [];
     const defaultPlacement = key === 'rightExtraCards' ? 'right' : 'middle';
     target[key].forEach((card, index) => {
       if (!card.moduleId) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
+      if (ids.has(card.moduleId)) card.moduleId = `${card.moduleId}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+      ids.add(card.moduleId);
       if (!['middle', 'right'].includes(card.placement)) card.placement = defaultPlacement;
       if (!['visible', 'suggested', 'hidden'].includes(card.visibility)) card.visibility = 'visible';
       if (!Array.isArray(card.items)) card.items = [];
@@ -339,17 +346,42 @@ function applyPersonaSampleTemplate(target = state) {
     target.rightExtraCards = [];
   }
   normalizeCustomModules(target);
-  if (mode === 'b2b') target.accountMetrics = Object.assign({}, target.accountMetrics || {}, template.metrics);
+  // Account facts are shared across views. A persona template must not replace
+  // revenue/pipeline/health already established for this customer.
 }
 
 const PERSONA_VIEW_FIELDS = [
   'insights', 'affinities', 'preferences', 'events', 'membership',
   'recommendations', 'activity', 'extraCards', 'rightExtraCards',
-  'b2cSections', 'b2bSections'
+  'b2cSections', 'b2bSections', 'accountViewTab', 'railFields'
 ];
 
 function cloneViewData(value) {
   return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function personaView(owner, lens) {
+  if (getProfileStrategy(owner).lens === lens) {
+    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key])])));
+  }
+  return cloneViewData(owner.personaVariants?.[lens]);
+}
+
+function personaFingerprint(owner, lens) {
+  return JSON.stringify(personaView(owner, lens));
+}
+
+function commitPersonaView(owner, lens, variant) {
+  if (state !== owner) return false;
+  owner.personaVariants ||= {};
+  owner.personaVariants[lens] = cloneViewData(variant);
+  if (getProfileStrategy(owner).lens === lens) {
+    restorePersonaView(owner, lens);
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+  }
+  return true;
 }
 
 // Brand identity and the unified customer/account remain shared. Everything
@@ -357,6 +389,7 @@ function cloneViewData(value) {
 // as its own editable working view.
 function snapshotPersonaView(target = state, lens = getProfileStrategy(target).lens) {
   if (!PERSONA_PRESETS[lens]) return;
+  if (getProfileStrategy(target).lens !== lens) return;
   if (!target.personaVariants || typeof target.personaVariants !== 'object') target.personaVariants = {};
   const variant = {
     strategy: Object.assign({}, getProfileStrategy(target), { lens })
@@ -385,7 +418,7 @@ function restorePersonaView(target = state, lens) {
     objective: PERSONA_PRESETS[lens].objective,
     // Every standard view keeps its own optional additive requirements.
     brief: getPersonaBrief(target, lens),
-    customRole: lens === 'custom' ? '' : currentStrategy.customRole || ''
+    customRole: lens === 'custom' ? ensureProfileSet(target).customRole : ''
   };
   applyPersonaPreset(target);
   applyPersonaSampleTemplate(target);
@@ -500,14 +533,20 @@ function imageFailureMessage(response, expectedCount) {
   return '';
 }
 
+function personaImageContext(owner, lens) {
+  return JSON.stringify({ brandName: owner.brandName, sourceUrl: owner._aiContext?.sourceUrl,
+    profileType: owner.profileType, strategy: visualTargetStrategy(personaView(owner, lens), lens) });
+}
+
 async function generatePersonaRecommendationImagesForTarget(lens, target, options = {}) {
+  const owner = state;
   const strategy = visualTargetStrategy(target, lens);
   const recommendations = Array.isArray(target?.recommendations?.items) ? target.recommendations.items : [];
   const missing = recommendations.filter(item => item?.title && !item.image);
   const profileSet = ensureProfileSet();
   const label = getProfileStrategyLabel(strategy);
   if (!missing.length) {
-    profileSet.visuals[lens] = { state: 'ready', updatedAt: new Date().toISOString(), count: 0 };
+    profileSet.visuals[lens] = { state: 'ready', updatedAt: new Date().toISOString(), count: recommendations.length };
     return { state: 'ready', changed: false };
   }
   if (!window.LocalAI?.generatePersonaRecommendationImages) {
@@ -521,41 +560,48 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
   profileSet.visuals[lens] = { state: 'generating', updatedAt: new Date().toISOString(), count: 0 };
   if (options.announce) setPersonaVisualStatus(`Creating ${label} recommendation visuals…`);
   const expectedTitles = recommendations.map(item => item?.title || '');
+  const expectedImages = recommendations.map(item => item?.image || '');
+  const expectedContext = personaImageContext(owner, lens);
 
   try {
     const response = await window.LocalAI.generatePersonaRecommendationImages({
-      brandName: state.brandName,
-      industry: state._industry || 'generic',
-      profileType: state.profileType,
+      brandName: owner.brandName,
+      industry: owner._industry || 'generic',
+      profileType: owner.profileType,
       recommendations: recommendations.map(item => ({ title: item.title, image: item.image || '' })),
       strategy
     });
-    if (personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    if (personaImageContext(owner, lens) !== expectedContext) {
+      profileSet.visuals[lens] = { state: 'pending', message: 'This view changed. Retry visuals for the updated brief.', count: 0 };
+      return { state: 'superseded', changed: false };
+    }
+    const view = personaView(owner, lens);
+    if (!view) return { state: 'superseded', changed: false };
+    const currentItems = view.recommendations?.items || [];
     const results = Array.isArray(response?.results) ? response.results : [];
     let changed = false;
     results.forEach(result => {
       const match = /^rec_(\d+)$/.exec(result?.slot || '');
       const index = match ? Number(match[1]) : -1;
-      const current = recommendations[index];
-      if (result?.imageData && current && !current.image && current.title === expectedTitles[index]) {
+      const current = currentItems[index];
+      if (result?.imageData && current && !current.image && (current.image || '') === expectedImages[index] && current.title === expectedTitles[index]) {
         current.image = result.imageData;
+        current.imageSource = 'generated';
+        current.imageForTitle = current.title;
         changed = true;
       }
     });
-    const remaining = recommendations.filter(item => item?.title && !item.image).length;
+    const remaining = currentItems.filter(item => item?.title && !item.image).length;
     const stateName = remaining === 0 ? 'ready' : changed ? 'partial' : 'failed';
     const message = remaining ? imageFailureMessage(response, remaining) : '';
     profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: missing.length - remaining };
-    if (target === state) updateProfileStrategyUI();
-    if (target === state && changed) {
-      snapshotPersonaView(state, lens);
-      renderRecs();
-      refreshPreview();
-    }
+    if (changed) commitPersonaView(owner, lens, view);
+    if (getProfileStrategy().lens === lens) updateProfileStrategyUI();
     if (options.announce) setPersonaVisualStatus(stateName === 'ready' ? `✓ ${label} recommendation visuals are ready` : message);
     return { state: stateName, changed, message };
   } catch (error) {
-    if (personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
     const message = imageFailureMessage({ error: { code: error?.name === 'AbortError' ? 'timeout' : 'generation_failed' } }, missing.length);
     profileSet.visuals[lens] = { state: 'failed', message, updatedAt: new Date().toISOString(), count: 0 };
     if (target === state) updateProfileStrategyUI();
@@ -567,6 +613,8 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
 
 async function ensurePersonaRecommendationImages(lens) {
   if (!state._aiContext?.sourceUrl || getProfileStrategy().lens !== lens) return;
+  if (['queued', 'generating'].includes(ensureProfileSet().statuses[lens])) return;
+  if (ensureProfileSet().visuals[lens]?.state === 'generating') return;
   return generatePersonaRecommendationImagesForTarget(lens, state, { announce: true });
 }
 
@@ -648,7 +696,9 @@ function updateProfileModeUI() {
 function setProfileType(profileType) {
   const next = profileType === 'b2b' ? 'b2b' : 'b2c';
   if ((state.profileType || 'b2c') === next) return;
-  if (currentStep > 0 && !confirm(`Switching to a ${next === 'b2b' ? 'B2B account' : 'B2C individual'} profile replaces mode-specific fields. Brand styling and website analysis are retained. Continue?`)) return;
+  if (!confirm(`Switching to a ${next === 'b2b' ? 'B2B account' : 'B2C individual'} profile starts a new draft and replaces mode-specific fields. Save your current work first if you need to keep it. Continue?`)) return;
+  cancelDraftRequests();
+  resetProjectIdentity();
 
   const key = state._industry || document.getElementById('brand-industry')?.value || 'recruiting';
   const nextState = cloneProfileMode(next, key);
@@ -681,6 +731,32 @@ function setProfileType(profileType) {
 // Debounce the preview iframe refresh — every keystroke otherwise re-parses a big HTML doc.
 let previewTimer = null;
 let lastRenderedPreviewHTML = '';
+let previewContext = null;
+let presentationContext = null;
+
+function cancelDraftRequests() {
+  generationRunId += 1;
+  const button = document.getElementById('quickstart-btn');
+  if (button) button.disabled = false;
+}
+
+function captureOutputSnapshot() {
+  snapshotPersonaView();
+  const snapshot = cloneViewData(state);
+  snapshot._renderRevision = String(++renderRevision);
+  return snapshot;
+}
+
+function renderPreviewNow(snapshot = captureOutputSnapshot()) {
+  clearTimeout(previewTimer);
+  previewTimer = null;
+  const html = renderPreviewDocument(snapshot);
+  lastRenderedPreviewHTML = html;
+  previewContext = { owner: state, lens: snapshot.profileStrategy.lens, revision: snapshot._renderRevision };
+  const iframe = document.getElementById('preview-iframe');
+  if (iframe) iframe.srcdoc = html;
+  return html;
+}
 
 // The live preview is the source of truth for the "Preview & Present"
 // experience. Keep the exact document we put into the iframe so Present
@@ -692,25 +768,27 @@ function renderPreviewDocument(profileState = state) {
 
 function refreshPreview() {
   clearTimeout(previewTimer);
-  previewTimer = setTimeout(() => {
-    const iframe = document.getElementById('preview-iframe');
-    if (!iframe) return;
-    // Capture the state at render time. The iframe gets an immutable document,
-    // rather than a reference that can be changed by a subsequent persona swap.
-    const html = renderPreviewDocument(state);
-    lastRenderedPreviewHTML = html;
-    iframe.srcdoc = html;
-    previewTimer = null;
-  }, 120);
+  previewTimer = setTimeout(() => renderPreviewNow(), 120);
 }
 
 function getPresentationDocument() {
-  const preview = document.getElementById('preview-iframe');
-  // Prefer srcdoc over current state: it is precisely the profile the user is
-  // looking at when they choose Present. The cache covers browser timing where
-  // an iframe has not yet reflected its srcdoc property.
-  return preview?.srcdoc || lastRenderedPreviewHTML || renderPreviewDocument(state);
+  // Flush pending keystrokes/persona changes before presenting. All delivery
+  // surfaces consume the same immutable snapshot, not an old iframe document.
+  const html = renderPreviewNow();
+  presentationContext = Object.assign({}, previewContext);
+  return html;
 }
+
+window.addEventListener('message', event => {
+  if (event.data?.type !== 'upg:account-tab-change' || !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
+  const preview = document.getElementById('preview-iframe');
+  const presentation = document.getElementById('presentation-iframe');
+  const context = event.source === preview?.contentWindow ? previewContext : event.source === presentation?.contentWindow ? presentationContext : null;
+  if (!context || context.owner !== state || context.lens !== getProfileStrategy().lens || event.data.revision !== context.revision) return;
+  state.accountViewTab = event.data.tab;
+  snapshotPersonaView();
+  if (event.source === presentation?.contentWindow) refreshPreview();
+});
 
 // The iframe renders at a fixed 1300×860 desktop viewport, then we scale
 // it down to fit the preview pane. This gives a miniature of the actual
@@ -973,6 +1051,8 @@ function onIndustryChange() {
     return;
   }
   const key = document.getElementById('brand-industry').value;
+  cancelDraftRequests();
+  resetProjectIdentity();
   const strategy = Object.assign({}, getProfileStrategy());
   state = cloneProfileMode(state.profileType || 'b2c', key);
   state._industry = key;
@@ -1412,6 +1492,8 @@ function onAccountPhotoUrlChange() {
 // ─── START OVER + EXPORT ───────────────────────────────────
 function startOver() {
   if (!confirm('Reset everything back to industry defaults?')) return;
+  cancelDraftRequests();
+  resetProjectIdentity();
   const profileType = state.profileType || 'b2c';
   const key = document.getElementById('brand-industry').value || 'generic';
   state = profileType === 'b2b' ? cloneAccountIndustry(key) : cloneTonyRobbinsStarter();
@@ -1426,35 +1508,36 @@ function startOver() {
 }
 
 async function downloadHTML() {
+  const snapshot = captureOutputSnapshot();
   // Convert bundled starter artwork to data URLs before downloading so the
   // exported HTML continues to show its recommendation images anywhere.
-  if (typeof hydrateBundledStarterImages === 'function') await hydrateBundledStarterImages(state);
-  const html = generateProfileHTML(state);
+  if (typeof hydrateBundledStarterImages === 'function') await hydrateBundledStarterImages(snapshot);
+  const html = generateProfileHTML(snapshot);
   const blob = new Blob([html], { type: 'text/html' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
-  const name = (state.profile.name || 'profile').toLowerCase().replace(/[^a-z0-9]+/g, '-');
-  const strategy = getProfileStrategy();
+  const name = ((snapshot.profileType === 'b2b' ? snapshot.account?.name : snapshot.profile?.name) || 'profile').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const strategy = getProfileStrategy(snapshot);
   const persona = getProfileStrategyLabel(strategy).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
   a.download = `unified-profile-${name}-${persona}.html`;
   a.click();
   URL.revokeObjectURL(url);
 }
 
-async function buildIntegrationArtifact() {
+async function buildIntegrationArtifact(profile = captureOutputSnapshot()) {
   // Keep the API payload self-contained so an external presentation tool can
   // render the same profile the UPG user saved, without knowing our editor
   // implementation details.
-  const strategy = getProfileStrategy();
-  const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const strategy = getProfileStrategy(profile);
+  const profileType = profile.profileType === 'b2b' ? 'b2b' : 'b2c';
   const subject = profileType === 'b2b'
-    ? (state.account?.name || state.tabName || 'Account')
-    : (state.profile?.name || state.tabName || 'Unified Profile');
+    ? (profile.account?.name || profile.tabName || 'Account')
+    : (profile.profile?.name || profile.tabName || 'Unified Profile');
   // Do not duplicate large inline AI images into the saved-project payload.
   // The profile state already retains them; a compact rendered export is made
   // available when it can be safely persisted alongside that state.
-  const rawHtml = generateProfileHTML(state).replace(/(src=["'])(assets\/[^"']+)/g, (_, before, assetPath) => `${before}${new URL(assetPath, window.location.href).href}`);
+  const rawHtml = generateProfileHTML(profile).replace(/(src=["'])(assets\/[^"']+)/g, (_, before, assetPath) => `${before}${new URL(assetPath, window.location.href).href}`);
   const canPersistRender = rawHtml.length <= 350000 && !/src=["']data:/i.test(rawHtml);
   return {
     schemaVersion: 'upg.profile.v1',
@@ -1464,10 +1547,10 @@ async function buildIntegrationArtifact() {
     personaLabel: getProfileStrategyLabel(strategy),
     subject,
     brand: {
-      name: state.brandName || '',
-      appName: state.appName || '',
-      logo: state.logo || '',
-      colors: Object.assign({}, state.colors || {})
+      name: profile.brandName || '',
+      appName: profile.appName || '',
+      logo: profile.logo || '',
+      colors: Object.assign({}, profile.colors || {})
     },
     renderedHtml: canPersistRender ? rawHtml : '',
     renderStatus: canPersistRender ? 'ready' : 'requires_hosted_render'
@@ -1512,7 +1595,7 @@ window.addEventListener('resize', fitPresentationScale);
 document.addEventListener('fullscreenchange', () => setTimeout(fitPresentationScale, 0));
 
 function copyHTML() {
-  const html = generateProfileHTML(state);
+  const html = renderPreviewNow();
   showCopyModal(html);
   tryCopyToClipboard(html);
 }
@@ -1628,10 +1711,11 @@ function sanitizeAIActivityBody(value) {
     .replace(/\sstyle\s*=\s*([^\s>]*color\s*:[^;\s>]*[^\s>]*)/gi, '');
 }
 
-function applyAIProfile(ai, strategyOverride, profileSetOverride) {
+function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType = state.profileType) {
+  UPGContract.validateAIProfile(ai, { profileType: requestedType });
   // Preserve current industry unless AI came back with something else.
   const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
-  const profileType = state.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const profileType = requestedType === 'b2b' ? 'b2b' : 'b2c';
   const base = cloneProfileMode(profileType, industry);
   base._industry = industry;
   base._aiContext = {
@@ -1641,10 +1725,9 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
   };
   base.profileStrategy = Object.assign({}, strategyOverride || getProfileStrategy());
   base.profileSet = cloneViewData(profileSetOverride || ensureProfileSet());
-  const recommendationFallbacks = (base.recommendations?.items || []).map(item => item.image || '');
 
   base.brandName = ai.brandName || base.brandName || state.brandName;
-  base.appName = profileType === 'b2b' ? 'Data Cloud' : (ai.appName || base.appName);
+  base.appName = ai.appName || base.appName;
   base.tabName = ai.tabName || (profileType === 'b2b' ? ai.account?.name : ai.profile?.name) || base.tabName;
 
   if (ai.colors) {
@@ -1661,8 +1744,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
   if (Array.isArray(base.recommendations?.items)) {
-    base.recommendations.items = base.recommendations.items.map((item, index) => Object.assign({}, item, {
-      image: item.image || recommendationFallbacks[index] || ''
+    base.recommendations.items = base.recommendations.items.map(item => Object.assign({}, item, {
+      image: item.image || '', imageSource: item.image ? 'generated' : 'pending', imageForTitle: item.title
     }));
   }
   if (Array.isArray(base.activity?.items)) {
@@ -1677,23 +1760,19 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
   if (profileType !== 'b2b' && Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
   // AI may identify valuable additional modules. Keep them in the builder as
   // suggestions so the initial profile remains a single presentable screen.
-  if (profileType === 'b2c') {
-    // A compact persona-specific card gives the main screen a balanced
-    // information density; AI extras are then available as optional depth.
-    base.extraCards = buildPersonaSupportingModules(base.profileStrategy.lens);
-    base.rightExtraCards = [];
-  }
+  base.extraCards = [];
+  base.rightExtraCards = [];
   if (Array.isArray(ai.extraCards)) {
     const aiCards = ai.extraCards.map((card, index) => Object.assign({}, card, {
       moduleId: card.moduleId || `ai-middle-${index + 1}`,
-      placement: 'middle', visibility: 'suggested'
+      placement: 'middle', visibility: index === 0 ? 'visible' : 'suggested', origin: 'ai'
     }));
     base.extraCards = (base.extraCards || []).concat(aiCards);
   }
   if (Array.isArray(ai.rightExtraCards)) {
     const aiCards = ai.rightExtraCards.map((card, index) => Object.assign({}, card, {
       moduleId: card.moduleId || `ai-right-${index + 1}`,
-      placement: 'right', visibility: 'suggested'
+      placement: 'right', visibility: 'suggested', origin: 'ai'
     }));
     base.rightExtraCards = (base.rightExtraCards || []).concat(aiCards);
   }
@@ -1709,6 +1788,8 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
   // Prefer favicon as logo if AI didn't give us anything.
   if (ai._meta && ai._meta.favicon && !base.logo) base.logo = ai._meta.favicon;
 
+  if (UPGContract.companyKey(base._aiContext.sourceUrl) !== UPGContract.companyKey(state._aiContext?.sourceUrl)) resetProjectIdentity();
+  base.schemaVersion = 2;
   state = base;
   document.getElementById('brand-industry').value = industry;
   fillStaticFields();
@@ -1720,34 +1801,40 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride) {
 }
 
 function mergePersonaOverlay(target, overlay) {
-  if (!overlay || typeof overlay !== 'object') return;
+  UPGContract.validateAIProfile(overlay, { profileType: target.profileType, overlay: true });
   ['insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(key => {
     if (overlay[key] && typeof overlay[key] === 'object') target[key] = Object.assign({}, target[key] || {}, cloneViewData(overlay[key]));
   });
   if (Array.isArray(target.activity?.items)) {
     target.activity.items = target.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
   }
-  if (Array.isArray(overlay.extraCards)) {
-    target.extraCards = (target.extraCards || []).concat(overlay.extraCards.map((card, index) => Object.assign({}, card, {
-      moduleId: card.moduleId || `overlay-middle-${index + 1}`, placement: 'middle', visibility: 'suggested'
-    })));
-  }
-  if (Array.isArray(overlay.rightExtraCards)) {
-    target.rightExtraCards = (target.rightExtraCards || []).concat(overlay.rightExtraCards.map((card, index) => Object.assign({}, card, {
-      moduleId: card.moduleId || `overlay-right-${index + 1}`, placement: 'right', visibility: 'suggested'
-    })));
-  }
+  ['extraCards', 'rightExtraCards'].forEach(key => {
+    if (!Array.isArray(overlay[key])) return;
+    target[key] ||= [];
+    overlay[key].forEach(card => {
+      const existing = target[key].find(item => item.origin === 'ai' && item.title.toLowerCase() === card.title.toLowerCase());
+      if (existing) {
+        // Keep visible/edited cards. Refresh unselected alternatives in place.
+        if (existing.visibility === 'suggested') Object.assign(existing, cloneViewData(card), { moduleId: existing.moduleId });
+      } else {
+        target[key].push(Object.assign({}, cloneViewData(card), { moduleId: `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`, origin: 'ai', placement: key === 'rightExtraCards' ? 'right' : 'middle', visibility: 'suggested' }));
+      }
+    });
+  });
   normalizeCustomModules(target);
 }
 
-function createPersonaVariantFromOverlay(lens, overlay, strategy) {
-  const working = cloneViewData(state);
+function createPersonaVariantFromOverlay(lens, overlay, strategy, owner = state) {
+  const working = cloneViewData(owner);
   working.profileStrategy = Object.assign({}, strategy, { lens });
   if (!working.personaVariants || typeof working.personaVariants !== 'object') working.personaVariants = {};
   delete working.personaVariants[lens];
-  restorePersonaView(working, lens);
+  working.extraCards = [];
+  working.rightExtraCards = [];
+  working.railFields = [];
   working.profileStrategy = Object.assign({}, strategy, { lens });
   mergePersonaOverlay(working, overlay);
+  if (working.extraCards.length) working.extraCards[0].visibility = 'visible';
   // The persona owns headers and section hierarchy; the overlay owns content.
   applyPersonaPreset(working);
   snapshotPersonaView(working, lens);
@@ -1772,8 +1859,18 @@ function renderAll() {
 const SAASY_TOOL = 'upg';
 let currentProjectId = null;
 let currentProjectName = null;
+let currentProjectRevision = null;
+let currentProjectOwner = null;
 let projectSaveInFlight = false;
 let projectSaveAttemptKey = null;
+
+function resetProjectIdentity() {
+  currentProjectId = null;
+  currentProjectName = null;
+  currentProjectRevision = null;
+  currentProjectOwner = null;
+  projectSaveAttemptKey = null;
+}
 
 function syncAuthUI() {
   if (!window.SaasyAuth) return;
@@ -2064,7 +2161,7 @@ function isRejectedSession(error) {
   return ['invalid_token', 'missing_token'].includes(String(error?.message || ''));
 }
 
-async function saveProjectWithSessionRecovery(options) {
+async function saveProjectWithSessionRecovery(options, ownerEmail = SaasyAuth.getEmail?.()) {
   try {
     return await SaasyAuth.saveProject(options);
   } catch (error) {
@@ -2075,9 +2172,12 @@ async function saveProjectWithSessionRecovery(options) {
     // The idempotency key makes this safe even if the original request reached
     // the server but its response was lost in transit.
     try {
-      await SaasyAuth.signIn();
+      await SaasyAuth.signIn({ expectedEmail: ownerEmail });
+      if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
       syncAuthUI();
-    } catch (_) {
+    } catch (error) {
+      syncAuthUI();
+      if (error.message === 'account_changed') throw error;
       throw new Error('session_refresh_cancelled');
     }
     return SaasyAuth.saveProject(options);
@@ -2088,18 +2188,26 @@ async function confirmSaveProject(asNew) {
   if (projectSaveInFlight) return;
   projectSaveInFlight = true;
   setProjectSaveBusy(true);
-  readStaticFields();
-  snapshotPersonaView();
-  const input = document.getElementById('save-project-name-input');
-  const name = input.value.trim() || state.brandName || 'Untitled Profile';
-  const id = asNew ? null : currentProjectId;
-  const idempotencyKey = projectSaveAttemptKey || (projectSaveAttemptKey = createProjectSaveAttemptKey());
   try {
+    readStaticFields();
+    snapshotPersonaView();
+    const saveOwner = state;
+    const ownerEmail = SaasyAuth.getEmail?.();
+    if (currentProjectOwner && currentProjectOwner !== ownerEmail) throw new Error('account_changed');
+    const input = document.getElementById('save-project-name-input');
+    const name = input.value.trim() || state.brandName || 'Untitled Profile';
+    const id = asNew ? null : currentProjectId;
+    const idempotencyKey = projectSaveAttemptKey || (projectSaveAttemptKey = createProjectSaveAttemptKey());
+    const sourceUrl = getProjectSourceUrl();
     const payload = buildProjectPayloadForSave();
-    payload.integrationArtifact = await buildIntegrationArtifact();
-    const project = await saveProjectWithSessionRecovery({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl: getProjectSourceUrl() });
-    currentProjectId = project.id;
-    currentProjectName = project.name;
+    payload.integrationArtifact = await buildIntegrationArtifact(payload);
+    const project = await saveProjectWithSessionRecovery({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl, expectedRevision: id ? currentProjectRevision : undefined }, ownerEmail);
+    if (state === saveOwner) {
+      currentProjectId = project.id;
+      currentProjectName = project.name;
+      currentProjectRevision = project.revision || null;
+      currentProjectOwner = ownerEmail;
+    }
     projectSaveInFlight = false;
     closeSaveProjectModal();
     const s = document.getElementById('save-project-success');
@@ -2110,6 +2218,8 @@ async function confirmSaveProject(asNew) {
       ? 'This project has more image data than can be saved at once. Remove a few recommendation images or save fewer persona views, then try again.'
       : e.message === 'session_refresh_cancelled'
         ? 'Your saved sign-in session is no longer valid. Complete the sign-in prompt to refresh it, then save again.'
+      : e.message === 'account_changed' ? 'The signed-in account changed. Your draft was kept and was not saved to another account. Sign in with the original account or deliberately start a new workspace.'
+      : e.message === 'revision_conflict' ? 'This project was updated in another session. Your draft was kept. Save as New to preserve a copy, or reload the latest project before updating.'
       : e.message;
     alert('Could not save project: ' + message);
   } finally {
@@ -2173,10 +2283,21 @@ async function deleteProjectFromList(id, row) {
 
 async function loadProjectAndHydrate(id) {
   try {
+    const owner = state;
     const project = await SaasyAuth.loadProject(id);
-    state = project.payload;
+    if (project.tool !== SAASY_TOOL) throw new Error('This project belongs to a different tool and cannot be opened in UPG.');
+    UPGContract.validateSavedProfile(project.payload);
+    if (state !== owner) return;
+    const hydrated = cloneViewData(project.payload);
+    if (hydrated.personaVariants) Object.values(hydrated.personaVariants).forEach(variant => {
+      UPGContract.validateSavedProfile(Object.assign({}, hydrated, variant));
+    });
+    cancelDraftRequests();
+    state = hydrated;
     currentProjectId = project.id;
     currentProjectName = project.name;
+    currentProjectRevision = project.revision || null;
+    currentProjectOwner = SaasyAuth.getEmail?.();
     document.getElementById('brand-industry').value = state._industry || 'recruiting';
     fillStaticFields();
     renderAll();
@@ -2258,8 +2379,10 @@ function nudgeToAdvancedIfDefaultFailed(code) {
 }
 
 async function onPersonalizeCurrentPersona() {
+  readStaticFields();
   const sourceUrl = state._aiContext?.sourceUrl || document.getElementById('quickstart-url')?.value.trim();
-  const strategy = getProfileStrategy();
+  const owner = state;
+  const strategy = cloneViewData(getProfileStrategy());
   const errBox = document.getElementById('quickstart-error');
   if (!sourceUrl) {
     errBox.style.display = 'block';
@@ -2276,27 +2399,39 @@ async function onPersonalizeCurrentPersona() {
   errBox.style.display = 'none';
   const status = document.getElementById('quickstart-status');
   const label = getProfileStrategyLabel(strategy);
+  snapshotPersonaView(owner);
+  const before = personaFingerprint(owner, strategy.lens);
+  const working = cloneViewData(owner);
+  const requestId = (personaTextRequests.get(strategy.lens) || 0) + 1;
+  personaTextRequests.set(strategy.lens, requestId);
+  const current = () => state === owner && personaTextRequests.get(strategy.lens) === requestId;
   status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
   try {
     const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
-    const sharedIdentity = isB2B()
-      ? { brandName: state.brandName, account: state.account, accountMetrics: state.accountMetrics }
-      : { brandName: state.brandName, profile: state.profile, loyalty: state.loyalty };
+    if (!current()) return;
+    const sharedIdentity = working.profileType === 'b2b'
+      ? { brandName: working.brandName, account: working.account, accountMetrics: working.accountMetrics }
+      : { brandName: working.brandName, profile: working.profile, loyalty: working.loyalty };
     const overlay = await window.LocalAI.generatePersonaOverlay(context, sharedIdentity, {
-      profileType: state.profileType,
+      profileType: working.profileType,
       strategy: Object.assign({}, strategy)
     });
-    mergePersonaOverlay(state, overlay);
-    applyPersonaPreset(state);
-    ensureProfileSet().statuses[strategy.lens] = 'ready';
-    snapshotPersonaView(state, strategy.lens);
-    renderAll();
-    refreshPreview();
+    if (!current()) return;
+    if (personaFingerprint(owner, strategy.lens) !== before) {
+      status.textContent = 'Your view changed while AI was working. Those edits were kept. Choose Update view again to apply your latest requirements.';
+      return;
+    }
+    mergePersonaOverlay(working, overlay);
+    applyPersonaPreset(working);
+    snapshotPersonaView(working, strategy.lens);
+    ensureProfileSet(owner).statuses[strategy.lens] = 'ready';
+    commitPersonaView(owner, strategy.lens, working.personaVariants[strategy.lens]);
     // New recommendation actions need their own role-aware art, so let the
     // established visual generator fill only blank slots after the content.
-    ensurePersonaRecommendationImages(strategy.lens);
+    generatePersonaRecommendationImagesForTarget(strategy.lens, owner.personaVariants[strategy.lens]);
     status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
   } catch (error) {
+    if (!current()) return;
     showQuickStartError(error);
     nudgeToAdvancedIfDefaultFailed(error.code);
     status.textContent = '';
@@ -2308,16 +2443,25 @@ async function onQuickStartAnalyze() {
   readStaticFields();
   const requestedStrategy = getProfileStrategy();
   const profileSetConfig = readProfileSetConfig();
+  snapshotPersonaView();
+  const originalOwner = state;
+  const originalDraft = JSON.stringify(state);
+  const requestedType = state.profileType || 'b2c';
   const leadLens = profileSetConfig.selectedLenses.includes(requestedStrategy.lens)
     ? requestedStrategy.lens : profileSetConfig.selectedLenses[0];
   const strategy = {
     lens: leadLens,
-    objective: PERSONA_PRESETS[leadLens].objective,
+    objective: profileSetConfig.strategies[leadLens]?.objective || PERSONA_PRESETS[leadLens].objective,
     brief: profileSetConfig.briefs[leadLens] || '',
     customRole: leadLens === 'custom' ? profileSetConfig.customRole : ''
   };
   const errBox = document.getElementById('quickstart-error');
-  if (!url) return;
+  if (!url) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Enter the customer website URL before creating a profile set.';
+    document.getElementById('quickstart-url')?.focus();
+    return;
+  }
   if (profileSetConfig.selectedLenses.includes('custom') && (!profileSetConfig.customRole || !profileSetConfig.briefs.custom)) {
     errBox.style.display = 'block';
     errBox.textContent = 'Add a custom role and its initial decision goal before creating a custom view.';
@@ -2326,25 +2470,32 @@ async function onQuickStartAnalyze() {
   }
   const btn = document.getElementById('quickstart-btn');
   const status = document.getElementById('quickstart-status');
+  const runId = ++generationRunId;
   errBox.style.display = 'none';
   errBox.textContent = '';
   btn.disabled = true;
   status.innerHTML = '<div class="spinner"></div> Starting…';
 
-  const setStatus = (label) => { status.innerHTML = `<div class="spinner"></div> ${label}`; };
+  const setStatus = (label) => { if (runId === generationRunId) status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; };
 
   try {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
-      profileType: state.profileType || 'b2c',
+      profileType: requestedType,
       strategy,
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
-        else if (phase === 'analyzing') setStatus('Analyzing with Claude…');
+        else if (phase === 'analyzing') setStatus('Analyzing customer context…');
         else if (phase === 'generating_images') setStatus('Creating on-brand profile imagery…');
       }
     });
+    if (runId !== generationRunId || state !== originalOwner) return;
+    if (JSON.stringify(state) !== originalDraft) {
+      status.textContent = 'Your draft changed while the customer was being analyzed. Your edits were kept. Create the profile set again when you are ready.';
+      return;
+    }
+    UPGContract.validateAIProfile(ai, { profileType: requestedType });
     const sourceContext = ai._sourceContext;
     delete ai._sourceContext;
     const nextProfileSet = {
@@ -2355,65 +2506,85 @@ async function onQuickStartAnalyze() {
       customRole: profileSetConfig.customRole,
       createdAt: new Date().toISOString()
     };
-    applyAIProfile(ai, strategy, nextProfileSet);
+    ai._meta = Object.assign({}, ai._meta, { source_url: sourceContext?.url || ai._meta?.source_url || url });
+    applyAIProfile(ai, strategy, nextProfileSet, requestedType);
+    const owner = state;
+    const active = () => runId === generationRunId && state === owner;
+    // Seed queued variants once so simply visiting one does not look like an
+    // edit. Any real edits after this point win over later generated results.
+    profileSetConfig.selectedLenses.filter(lens => lens !== leadLens).forEach(lens => {
+      const seed = cloneViewData(owner);
+      restorePersonaView(seed, lens);
+      snapshotPersonaView(seed, lens);
+      owner.personaVariants[lens] = seed.personaVariants[lens];
+    });
+    const generationViews = Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, personaFingerprint(owner, lens)]));
     syncProfileSetConfigUI();
 
     // The lead analysis asks for visuals too, but retry any blank recommendation
     // slots here so every selected view follows one reliable completion path.
     setStatus(`Preparing ${PERSONA_PRESETS[leadLens].label} recommendation visuals (1 of ${profileSetConfig.selectedLenses.length})…`);
     await generatePersonaRecommendationImagesForTarget(leadLens, state, { announce: false });
+    if (!active()) return;
 
     // The first role establishes the shared customer identity. Every other
     // view is generated from the same scrape and identity, so presenters get
     // a coherent profile set instead of four unrelated fictional customers.
-    const sharedIdentity = isB2B()
-      ? { brandName: state.brandName, account: state.account, accountMetrics: state.accountMetrics }
-      : { brandName: state.brandName, profile: state.profile, loyalty: state.loyalty };
+    const sharedIdentity = requestedType === 'b2b'
+      ? { brandName: owner.brandName, account: owner.account, accountMetrics: owner.accountMetrics }
+      : { brandName: owner.brandName, profile: owner.profile, loyalty: owner.loyalty };
     const remainingLenses = profileSetConfig.selectedLenses.filter(lens => lens !== leadLens);
     for (let index = 0; index < remainingLenses.length; index += 1) {
       const lens = remainingLenses[index];
       const personaStrategy = {
         lens,
-        objective: PERSONA_PRESETS[lens].objective,
+        objective: profileSetConfig.strategies[lens]?.objective || PERSONA_PRESETS[lens].objective,
         brief: profileSetConfig.briefs[lens] || '',
         customRole: lens === 'custom' ? profileSetConfig.customRole : ''
       };
       state.profileSet.statuses[lens] = 'generating';
+      const before = generationViews[lens];
       setStatus(`Preparing ${PERSONA_PRESETS[lens].label} view (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
       try {
         const overlay = await window.LocalAI.generatePersonaOverlay(sourceContext, sharedIdentity, {
-          profileType: state.profileType,
+          profileType: requestedType,
           strategy: personaStrategy
         });
-        state.personaVariants[lens] = createPersonaVariantFromOverlay(lens, overlay, personaStrategy);
-        state.profileSet.statuses[lens] = 'ready';
+        if (!active()) return;
+        if (personaFingerprint(owner, lens) !== before) {
+          owner.profileSet.statuses[lens] = 'edited';
+          continue;
+        }
+        const variant = createPersonaVariantFromOverlay(lens, overlay, personaStrategy, owner);
+        commitPersonaView(owner, lens, variant);
+        owner.profileSet.statuses[lens] = 'ready';
         setStatus(`Creating ${PERSONA_PRESETS[lens].label} recommendation visuals (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
-        await generatePersonaRecommendationImagesForTarget(lens, state.personaVariants[lens], { announce: false });
+        await generatePersonaRecommendationImagesForTarget(lens, owner.personaVariants[lens], { announce: false });
+        if (!active()) return;
       } catch (overlayError) {
+        if (!active()) return;
         // A ready-to-edit template is still more useful than losing the full
         // generation because one secondary persona encountered a transient LLM error.
         console.warn(`[UPG] ${lens} profile-set overlay failed:`, overlayError);
-        const fallback = cloneViewData(state);
-        fallback.profileStrategy = personaStrategy;
-        delete fallback.personaVariants[lens];
-        restorePersonaView(fallback, lens);
-        snapshotPersonaView(fallback, lens);
-        state.personaVariants[lens] = fallback.personaVariants[lens];
         state.profileSet.statuses[lens] = 'template-ready';
         state.profileSet.visuals[lens] = { state: 'failed', message: 'The persona content could not be completed, so its recommendation visuals were not created.', updatedAt: new Date().toISOString(), count: 0 };
       }
     }
-    snapshotPersonaView(state, leadLens);
+    if (!active()) return;
+    snapshotPersonaView();
+    fillStaticFields();
     renderAll();
     refreshPreview();
     const kind = isB2B() ? 'account profile' : 'individual profile';
-    status.textContent = `✓ Created ${profileSetConfig.selectedLenses.length} ${kind} views from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}. Open a team tab to personalize it further.`;
+    const ready = profileSetConfig.selectedLenses.filter(lens => owner.profileSet.statuses[lens] === 'ready').length;
+    status.textContent = `Created ${ready} of ${profileSetConfig.selectedLenses.length} ${kind} views from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}. ${ready < profileSetConfig.selectedLenses.length ? 'Other views kept their draft/template. Select a view and update it to retry.' : 'Open a team tab to personalize it further.'}`;
   } catch (e) {
+    if (runId !== generationRunId) return;
     showQuickStartError(e);
     nudgeToAdvancedIfDefaultFailed(e.code);
     status.textContent = '';
   } finally {
-    btn.disabled = false;
+    if (runId === generationRunId) btn.disabled = false;
   }
 }
 
