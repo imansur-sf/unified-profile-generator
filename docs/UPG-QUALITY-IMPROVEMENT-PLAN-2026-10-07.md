@@ -3,7 +3,7 @@
 Date: October 7, 2026  
 UPG baseline: `56af5a0` — Add editable B2B account picture  
 Scope: B2C/B2B builder, five persona strategies, generation/images, rendering/export, project lifecycle, shared authentication, REST/MCP.  
-Status: analysis and local characterization testing complete; implementation has not started. No application sources or production data were changed.
+Status: historical pre-implementation audit. The accepted findings were consolidated into two implementation phases; see [current implementation, verification and rollback status](QUALITY-IMPLEMENTATION.md). Findings and source locations below describe the baseline, not the current release.
 
 ## Executive recommendation
 

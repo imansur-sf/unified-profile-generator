@@ -40,6 +40,7 @@
     for (const key of ['extraCards', 'rightExtraCards']) {
       if (data[key] !== undefined && (!Array.isArray(data[key]) || data[key].some(card => !object(card) || !text(card.title) || !Array.isArray(card.items) || card.items.some(item => !object(item) || !text(item.label) || typeof item.value !== 'string')))) invalid('additional module has invalid fields');
     }
+    if (data.railFields !== undefined && (!Array.isArray(data.railFields) || data.railFields.length > 30 || data.railFields.some(field => !object(field) || !text(field.label) || typeof field.value !== 'string'))) invalid('profile-card fields must have a label and value');
     return data;
   }
   function validateSavedProfile(data) {
@@ -58,6 +59,7 @@
       if (data[key] != null && (!Array.isArray(data[key]) || data[key].some(card => !object(card) || !Array.isArray(card.items) || card.items.some(item => !object(item))))) throw new Error('This saved project has invalid additional modules.');
     }
     if (data.personaVariants != null && (!object(data.personaVariants) || Object.values(data.personaVariants).some(view => !object(view)))) throw new Error('This saved project has invalid persona views.');
+    if (data.railFields != null && (!Array.isArray(data.railFields) || data.railFields.some(field => !object(field) || typeof field.label !== 'string' || typeof field.value !== 'string'))) throw new Error('This saved project has invalid profile-card fields.');
     return data;
   }
   function textIdentity(data) {
@@ -79,5 +81,10 @@
       return `${url.hostname.toLowerCase().replace(/^www\./, '')}${url.port ? ':' + url.port : ''}${url.pathname.replace(/\/+$/, '')}`;
     } catch (_) { return ''; }
   }
-  return { validateAIProfile, validateSavedProfile, textIdentity, companyKey };
+  function canonicalJSON(value) {
+    const sorted = item => Array.isArray(item) ? item.map(sorted) : object(item)
+      ? Object.fromEntries(Object.keys(item).sort().map(key => [key, sorted(item[key])])) : item;
+    return JSON.stringify(sorted(value));
+  }
+  return { validateAIProfile, validateSavedProfile, textIdentity, companyKey, canonicalJSON };
 });

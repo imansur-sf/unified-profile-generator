@@ -484,6 +484,8 @@
     getModel, setModel,
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
+    buildImagePrompts,
+    buildRecommendationImagePrompts,
     warmSharedBackend: ensureSharedBackendConnection,
     generatePersonaRecommendationImages,
     embedBrandImage,

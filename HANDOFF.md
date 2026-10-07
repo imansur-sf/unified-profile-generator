@@ -1,6 +1,6 @@
 # UPG Session Handoff
 
-Last updated: 2026-08-08. **Read this first.** No PROGRESS.md exists yet for this repo — `git log` is the history; this file is current state + what's left.
+Current implementation status: see [QUALITY-IMPLEMENTATION.md](docs/QUALITY-IMPLEMENTATION.md) for the October 7, 2026 two-phase release, rollback checkpoints, verified tests, and remaining live checks. The standing directives below still apply. The August 8 notes below are historical context, not the current backlog or deployment status.
 
 ## Where we are
 

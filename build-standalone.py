@@ -26,6 +26,7 @@ SCRIPTS = [
     "js/generator.js",
     "js/pagehost.js",
     "js/localai.js",
+    "js/editor-support.js",
     "js/app.js",
 ]
 

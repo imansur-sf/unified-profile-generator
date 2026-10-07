@@ -48,6 +48,26 @@ test('all ten industry/mode fixtures render complete HTML', () => {
   }
 });
 
+test('both templates preserve every visible extra identity field and escape its content', () => {
+  for (const mode of ['b2c', 'b2b']) {
+    const state = profile(mode);
+    state.railFields = Array.from({ length: 12 }, (_, i) => ({ id: `rail-${i}`, label: `FACT_${i}`, value: `VALUE_${i}`, visible: true }));
+    state.railFields.push({ id: 'hidden', label: 'HIDDEN_RAIL', value: 'secret', visible: false });
+    state.railFields.push({ id: '\" onclick=\"bad()', label: '<script>LABEL</script>', value: 0, icon: '<b>✓</b><img src=x onerror=bad()>' });
+    const html = render(state);
+    const { tags } = parseHTML(html);
+    const fields = tags.filter(({ attrs }) => attrs['data-rail-field-id'] !== undefined);
+    assert.equal(fields.length, 13);
+    for (let i = 0; i < 12; i++) assert.ok(html.includes(`FACT_${i}`) && html.includes(`VALUE_${i}`));
+    assert.ok(!html.includes('HIDDEN_RAIL'));
+    assert.ok(html.includes('&lt;script&gt;LABEL&lt;/script&gt;'));
+    assert.match(html, /<b>✓<\/b>/);
+    assert.ok(!tags.some(({ attrs }) => attrs.onclick === 'bad()' || attrs.onerror));
+    assert.match(html, mode === 'b2b' ? /<b>0<\/b>/ : /class="profile-field-value">0<\/span>/);
+    assert.ok(html.indexOf('FACT_0') < html.indexOf('FACT_11'));
+  }
+});
+
 test('B2C retains added recommendations, activities and visible cards', () => {
   const state = profile();
   state.recommendations.items = Array.from({ length: 7 }, (_, n) => ({ title: `REC_${n}`, cta: 'Review' }));
@@ -180,7 +200,7 @@ test('hostile rich-text, image, color and revision values cannot add executable 
     state.activity.items[0].icon = '<svg onload=bad()></svg>';
     state._renderRevision = '</script><img src=x onerror=bad()>';
     const html = render(state), parsed = parseHTML(html);
-    assert.equal(parsed.scripts.length, mode === 'b2b' ? 1 : 0);
+    assert.equal(parsed.scripts.length, mode === 'b2b' ? 2 : 1);
     parsed.scripts.forEach(script => assert.doesNotThrow(() => new vm.Script(script)));
     assert.ok(parsed.tags.every(tag => !Object.keys(tag.attrs).some(key => /^on/i.test(key))));
     assert.ok(parsed.tags.every(tag => !/^(javascript:|data:text\/html)/i.test(tag.attrs.src || '')));
@@ -192,6 +212,27 @@ test('rendering does not modify the saved state', () => {
   for (const mode of ['b2c', 'b2b']) {
     const state = profile(mode); state.colors.primary = 'invalid'; state.activity.items[0].body = '<b>Keep</b>';
     const before = JSON.stringify(state); render(state); assert.equal(JSON.stringify(state), before);
+  }
+});
+
+test('both templates report layout after images and fonts settle without scroll listeners', async () => {
+  for (const mode of ['b2c', 'b2b']) {
+    const state = profile(mode); state._renderRevision = 'revision-42';
+    const script = parseHTML(render(state)).scripts.at(-1);
+    const listeners = {}, messages = [];
+    const window = { parent: { postMessage: (message, origin) => messages.push({ message, origin }) }, innerHeight: 860, addEventListener: (name, fn) => { listeners[name] = fn; } };
+    const document = { documentElement: { scrollHeight: 1100 }, body: { scrollHeight: 1090 }, readyState: 'loading', fonts: { ready: Promise.resolve() } };
+    vm.runInNewContext(script, { window, document });
+    await Promise.resolve();
+    assert.equal(messages.length, 1);
+    assert.deepEqual(JSON.parse(JSON.stringify(messages[0])), { message: { type: 'upg:layout-status', revision: 'revision-42', height: 1100, viewport: 860 }, origin: '*' });
+    document.body.scrollHeight = 1250; listeners.load();
+    assert.equal(messages.at(-1).message.height, 1250);
+    assert.deepEqual(Object.keys(listeners), ['load']);
+    document.documentElement.scrollHeight = 860; document.body.scrollHeight = 860; window.upgReportLayout();
+    assert.equal(messages.at(-1).message.height, 860);
+    window.parent = window; window.upgReportLayout();
+    assert.equal(messages.length, 3);
   }
 });
 
@@ -240,7 +281,8 @@ test('fresh standalone build preserves script boundaries and includes every curr
     scripts.forEach(script => assert.doesNotThrow(() => new vm.Script(script)));
     const builder = scripts.find(script => script.includes('function bootstrap()'));
     assert.ok(builder, 'HTML parser must retain the complete builder script');
-    for (const name of ['defaults', 'profile-contract', 'images', 'generator', 'pagehost', 'localai', 'app']) assert.ok(builder.includes(`inlined from ./js/${name}.js`), name);
+    for (const name of ['defaults', 'profile-contract', 'images', 'generator', 'pagehost', 'localai', 'editor-support', 'app']) assert.ok(builder.includes(`inlined from ./js/${name}.js`), name);
+    assert.equal(html, fs.readFileSync(path.join(root, 'Unified_Profile_Generator.html'), 'utf8'), 'Run npm run build when changing editor sources');
     assert.ok(!html.includes('window.__UPG_BUILD__'));
   } finally { fs.rmSync(temp, { recursive: true, force: true }); }
 });

@@ -255,6 +255,8 @@ Profile strategy (this controls the generated working view):
 - Primary objective: ${strategy.objective}
 - Additional context from the presenter: ${strategy.brief || '(none)'}
 - Prioritize signals, supporting modules, and next-best actions that help this persona achieve the objective. Keep the same fictional person/account internally consistent. Website facts establish brand context; operational signals and scores are modeled demo data.
+- Additional profile-card fields requested by the presenter belong in optional "railFields": [{"label": "Events attended", "value": "3", "visible": true}]. Use them for identity/summary fields, and extraCards for multi-field topics such as call coaching. Do not copy the example values unless relevant.
+- Distinguish brand facts actually present in the source from modeled demo metrics. Do not portray modeled operational metrics as externally verified. Every next-best action must respond to a specific insight or recent activity and its image must depict that action in this company's business context.
 
 Generate the ${profileType} Unified Profile JSON per the schema.`;
   }
@@ -293,7 +295,7 @@ Custom role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not suppli
 Primary objective: ${strategy.objective}
 Additional requirements: ${strategy.brief || '(none)'}
 
-Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Produce 6 concise insights, 2 recommendation actions, 5-6 activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
+Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Optional railFields: [{"label": string, "value": string, "visible": true}] supplies additional profile-card fields requested for this view. Preserve shared identity and commercial facts; do not invent contradictory account-level metrics. Every recommended action must have a supporting insight or activity, distinct from other role blueprints. Operational metrics are modeled demo data, never verified source facts. Produce 6 concise insights, 2 recommendation actions, 6-8 varied activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
   }
 
   // Tolerant JSON parser — handles the three common ways AI models

@@ -244,6 +244,41 @@
     .font-700 { font-weight: 700; }
 
     input[type="range"] { accent-color: var(--sf-blue-m); }
+    .editor-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 18px auto 0; padding: 14px 18px; border: 1px solid #cad8eb; border-radius: 12px; background: #fff; }
+    .editor-context-label { color: #526479; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .editor-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .editor-note { margin: 8px 0 0; color: #526479; font-size: 12px; line-height: 1.45; }
+    .upload-feedback { margin: 6px 0; font-size: 12px; color: #34516d; }
+    .upload-feedback:empty { margin: 0; }
+    .upload-feedback[data-error="true"] { color: #b42318; }
+    .upload-remove { margin-top: 6px; color: #0b5cab; background: transparent; border: 0; text-decoration: underline; font-size: 12px; cursor: pointer; }
+    .drop-zone-sf { display: block; width: 100%; color: inherit; font: inherit; }
+    .drop-zone-sf.w-14 { width: 3.5rem; }
+    .drop-zone-sf:focus-visible, button:focus-visible, [role="radio"]:focus-visible { outline: 3px solid #0b5cab; outline-offset: 3px; }
+    .quickstart button:focus-visible { outline-color: #fff; }
+    .module-composer-card { flex-wrap: wrap; cursor: default; }
+    .module-composer-card strong { flex-basis: 100%; white-space: normal; }
+    .module-composer-card select { max-width: 100%; padding: 5px; font-size: 11px; }
+    .module-composer-card button { min-height: 30px; }
+    .profile-set-progress { display: grid; gap: 8px; margin-top: 12px; font-size: 12px; }
+    #wizard-col, #preview-col { min-width: 0; }
+    #preview-col { display: block; }
+    #main-layout { flex-direction: column; }
+    @media (min-width: 1024px) { #main-layout { flex-direction: row; } }
+    @media (max-width: 640px) {
+      .app-topbar > div { flex-wrap: wrap; padding: 6px 12px; gap: 6px; }
+      .quickstart-row { flex-direction: column; }
+      .quickstart-input { min-width: 0; width: 100%; }
+      .persona-switch, .profile-set-choices { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .strategy-fields { grid-template-columns: 1fr; }
+      .wizard-card { padding: 18px; }
+      .step-connector { flex: 1; min-width: 0; max-width: 24px; }
+      .step-dot { flex: 0 0 32px; width: 32px; height: 32px; }
+      .editor-context-actions { width: 100%; }
+      .editor-context-actions button { flex: 1; }
+      #preview-col { position: static; width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body class="min-h-screen">
@@ -281,7 +316,7 @@
         <div id="my-projects-panel" class="hidden absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 text-left z-50 overflow-hidden">
           <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="text-xs font-700 uppercase tracking-wide text-gray-500">My Projects</span>
-            <button onclick="closeMyProjects()" class="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            <button onclick="closeMyProjects()" class="text-gray-400 hover:text-gray-600 text-sm" aria-label="Close My Projects">✕</button>
           </div>
           <div id="my-projects-list" class="max-h-72 overflow-y-auto divide-y divide-gray-100"></div>
         </div>
@@ -292,25 +327,41 @@
   <!-- STEP INDICATORS -->
   <div class="stepper-shell">
     <div class="max-w-[1400px] mx-auto px-4 py-4">
-      <div class="flex items-center justify-center gap-1" id="step-indicators">
-        <button onclick="goToStep(0)" class="step-dot active w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="0">1</button>
+      <div class="flex items-center justify-center gap-1" id="step-indicators" role="navigation" aria-label="Profile editing sections">
+        <button onclick="goToStep(0)" class="step-dot active w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="0" aria-label="Step 1: Brand and customer" aria-current="step">1</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(1)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="1">2</button>
+        <button onclick="goToStep(1)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="1" aria-label="Step 2: Identity">2</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(2)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="2">3</button>
+        <button onclick="goToStep(2)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="2" aria-label="Step 3: Insights">3</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(3)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="3">4</button>
+        <button onclick="goToStep(3)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="3" aria-label="Step 4: Affinities">4</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(4)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="4">5</button>
+        <button onclick="goToStep(4)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="4" aria-label="Step 5: Modules">5</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(5)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="5">6</button>
+        <button onclick="goToStep(5)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="5" aria-label="Step 6: Recommendations and activity">6</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(6)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="6">7</button>
+        <button onclick="goToStep(6)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="6" aria-label="Step 7: Preview and export">7</button>
       </div>
     </div>
   </div>
 
   <!-- MAIN LAYOUT: Wizard + Preview -->
+  <div class="max-w-[1400px] mx-auto px-4">
+    <section class="editor-context" id="selected-view-bar" aria-label="Current view and output actions">
+      <div>
+        <div class="editor-context-label">Editing selected view</div>
+        <strong id="selected-view-name">Sales</strong>
+        <span id="selected-view-status" role="status" aria-live="polite" aria-atomic="true"></span>
+        <p id="draft-status" class="editor-note" role="status" aria-live="polite">Unsaved draft</p>
+        <p id="layout-fit-status" class="editor-note" role="status" aria-live="polite">Checking first-screen fit…</p>
+      </div>
+      <div class="editor-context-actions">
+        <button type="button" class="btn-secondary-sf text-sm" onclick="goToStep(6)">Save &amp; export</button>
+        <button type="button" class="btn-primary-sf text-sm" onclick="openPresentation()">Preview &amp; present</button>
+      </div>
+    </section>
+    <p class="editor-note" id="demo-data-note"><strong>Demo data:</strong> Starter and AI-generated profiles contain simulated customer facts for presentations. Review and edit them before use; they do not represent live CRM records.</p>
+  </div>
   <div class="max-w-[1400px] mx-auto px-4 py-6">
     <div class="flex gap-6" id="main-layout">
 
@@ -327,20 +378,20 @@
               <div class="quickstart-title" id="quickstart-title">Create a customer profile set with AI</div>
               <div class="quickstart-sub" id="quickstart-sub">Paste the customer's homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.</div>
               <div class="profile-type-switch" role="radiogroup" aria-label="Profile type">
-                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true">
+                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true" tabindex="0">
                   <strong>Individual · B2C</strong><span>Generate a person-level unified profile.</span>
                 </button>
-                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false">
+                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false" tabindex="-1">
                   <strong>Account · B2B</strong><span>Generate a company-level account profile.</span>
                 </button>
               </div>
               <div class="quickstart-row">
-                <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">
-                <button id="quickstart-btn" class="quickstart-btn" onclick="onQuickStartAnalyze()">Create profile set →</button>
+                <label for="quickstart-url" class="sr-only">Customer homepage URL</label>
+                <input type="text" id="quickstart-url" class="quickstart-input" placeholder="Customer homepage, e.g. https://ncsasports.org" inputmode="url" spellcheck="false" autocomplete="url" aria-describedby="quickstart-error">
               </div>
               <div class="profile-set-panel">
                 <div class="profile-set-title">Profile set</div>
-                <div class="profile-set-help">Choose the ready-made views to create. You can refine any selected view after it is generated.</div>
+                <div class="profile-set-help">Choose the views to create. Set a view's decision goal below before generation, or update that view later.</div>
                 <div class="profile-set-choices" role="group" aria-label="Views to create">
                   <label class="profile-set-choice"><input type="checkbox" value="sales" checked> Sales</label>
                   <label class="profile-set-choice"><input type="checkbox" value="service" checked> Service</label>
@@ -356,13 +407,13 @@
                 </div>
               </div>
               <div class="strategy-panel">
-                <label class="strategy-label">Customize selected view</label>
+                <div class="strategy-label">Selected view requirements</div>
                 <div class="persona-switch" role="radiogroup" aria-label="Viewer persona">
-                  <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true">Sales</button>
-                  <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false">Service</button>
-                  <button type="button" id="persona-marketing" class="persona-option" onclick="setViewerLens('marketing')" role="radio" aria-checked="false">Marketing</button>
-                  <button type="button" id="persona-success" class="persona-option" onclick="setViewerLens('success')" role="radio" aria-checked="false">Success</button>
-                  <button type="button" id="persona-custom" class="persona-option" onclick="setViewerLens('custom')" role="radio" aria-checked="false">Custom</button>
+                  <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true" tabindex="0">Sales</button>
+                  <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false" tabindex="-1">Service</button>
+                  <button type="button" id="persona-marketing" class="persona-option" onclick="setViewerLens('marketing')" role="radio" aria-checked="false" tabindex="-1">Marketing</button>
+                  <button type="button" id="persona-success" class="persona-option" onclick="setViewerLens('success')" role="radio" aria-checked="false" tabindex="-1">Success</button>
+                  <button type="button" id="persona-custom" class="persona-option" onclick="setViewerLens('custom')" role="radio" aria-checked="false" tabindex="-1">Custom</button>
                 </div>
                 <div class="custom-role-field" id="custom-role-field" hidden>
                   <label for="strategy-custom-role">Who will use this profile? <span aria-hidden="true">*</span></label>
@@ -380,48 +431,50 @@
                   <textarea id="strategy-brief" aria-label="What should this person be able to decide or do?" placeholder="What should this person be able to decide or do?" oninput="onProfileStrategyChange()"></textarea>
                 </div>
                 <div class="strategy-blueprint" id="strategy-blueprint"></div>
-                <button type="button" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Personalize this view with AI →</button>
+                <p class="quickstart-note">These requirements apply to the selected view. Brand and customer identity are shared across the profile set.</p>
+                <button type="button" id="btn-personalize-view" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Update Sales view with AI →</button>
               </div>
-              <div class="quickstart-status" id="quickstart-status"></div>
-              <div class="quickstart-error" id="quickstart-error" style="display:none;"></div>
-              <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
-              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.</div>
-
-              <div class="quickstart-fallback-hint">
-                <span class="quickstart-fallback-icon">💡</span>
-                <span>
-                  <strong>Analyze failing?</strong>
-                  Grab an API key from the
-                  <a href="https://eng-ai-model-gateway-oidc.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl/" target="_blank" rel="noopener">LLM Gateway Express</a>
-                  and paste it in <strong>Advanced</strong> below.
-                </span>
-              </div>
-
-              <button class="quickstart-settings-toggle" onclick="toggleQuickStartSettings()">Advanced · use your own key or Worker</button>
+              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create selected profile views →</button>
+              <div class="quickstart-status" id="quickstart-status" role="status" aria-live="polite" aria-atomic="true"></div>
+              <div class="quickstart-error" id="quickstart-error" role="alert" style="display:none;"></div>
+              <div id="profile-set-progress" class="profile-set-progress" aria-label="Profile view progress"></div>
+              <button class="quickstart-settings-toggle" id="quickstart-settings-toggle" aria-expanded="false" aria-controls="quickstart-settings" onclick="toggleQuickStartSettings()">Advanced · connection settings</button>
               <div class="quickstart-settings" id="quickstart-settings">
-                <label>API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
+                <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
+                <div id="quickstart-note" class="quickstart-note">Generation uses this app's backend. You can optionally connect your own key or endpoint below.</div>
+                <div class="quickstart-fallback-hint">
+                  <span class="quickstart-fallback-icon">💡</span>
+                  <span>
+                    <strong>Need your own connection?</strong>
+                    Grab an API key from the
+                    <a href="https://eng-ai-model-gateway-oidc.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl/" target="_blank" rel="noopener">LLM Gateway Express</a>
+                    and paste it below.
+                  </span>
+                </div>
+
+                <label for="quickstart-api-key">API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
                 <div class="quickstart-byok-row" style="display:flex;gap:6px;margin-top:4px;">
                   <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared default backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
-                  <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" title="Clear stored key" style="margin-top:0;">Clear</button>
+                  <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" aria-label="Clear API key" style="margin-top:0;">Clear</button>
                 </div>
-                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker</span></label>
-                <input type="text" id="quickstart-scraper-url" placeholder="Default: https://loyalty-scraper.imansur.workers.dev" oninput="onScraperEndpointChange()">
+                <label for="quickstart-scraper-url">Backend Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— optional connection override</span></label>
+                <input type="text" id="quickstart-scraper-url" placeholder="Leave blank to use this app's backend" oninput="onScraperEndpointChange()">
               </div>
             </div>
           </div>
 
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 1 of 7</div>
-            <h2 class="wizard-title mb-1">Brand & Colors</h2>
-            <p class="wizard-sub mb-6">Customer brand identity and the color tokens applied across the profile.</p>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-1-title">Brand & Colors</h2>
+            <p class="wizard-sub mb-6">Brand styling is shared across the customer's views. Edit the selected view's content in the following sections.</p>
 
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">Brand Name <span class="text-red-500">*</span></label>
+                <label for="brand-name" class="block text-sm font-600 text-gray-700 mb-1">Brand Name <span class="text-red-500">*</span></label>
                 <input type="text" id="brand-name" placeholder="e.g. NCSA College Recruiting" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">Industry</label>
+                <label for="brand-industry" class="block text-sm font-600 text-gray-700 mb-1">Industry</label>
                 <select id="brand-industry" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none bg-white" onchange="onIndustryChange()">
                   <option value="recruiting">Sports Recruiting / Education</option>
                   <option value="retail">Retail / Fashion</option>
@@ -432,26 +485,28 @@
                 <p class="text-xs text-gray-400 mt-1">Switching industry reloads all defaults — save your work first.</p>
               </div>
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">App / Cloud Name</label>
+                <label for="app-name" class="block text-sm font-600 text-gray-700 mb-1">App / Cloud Name</label>
                 <input type="text" id="app-name" placeholder="Data Cloud" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                 <p class="text-xs text-gray-400 mt-1">Shown in the top-nav pill (e.g. "Data Cloud", "Marketing Cloud").</p>
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-600 text-gray-700 mb-1">Brand Logo</label>
-                  <div id="drop-logo" class="drop-zone-sf p-4 text-center cursor-pointer">
-                    <img id="preview-logo" src="" class="hidden w-14 h-14 object-contain rounded mx-auto mb-2">
+                  <label for="url-logo" class="block text-sm font-600 text-gray-700 mb-1">Brand Logo</label>
+                  <div id="drop-logo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload brand logo" data-upload-label="Upload brand logo">
+                    <img alt="" id="preview-logo" src="" class="hidden w-14 h-14 object-contain rounded mx-auto mb-2">
                     <p class="text-xs text-gray-500">📷 Drop or click</p>
                   </div>
                   <input type="text" id="url-logo" placeholder="Or paste logo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onLogoUrlChange()">
+                  <button type="button" class="upload-remove" onclick="document.getElementById('url-logo').value=''; onLogoUrlChange()">Remove brand logo</button>
                 </div>
                 <div>
-                  <label class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
-                  <div id="drop-user-avatar" class="drop-zone-sf p-4 text-center cursor-pointer">
-                    <img id="preview-user-avatar" src="" class="hidden w-14 h-14 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+                  <label for="url-user-avatar" class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
+                  <div id="drop-user-avatar" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload logged-in user avatar" data-upload-label="Upload logged-in user avatar">
+                    <img alt="" id="preview-user-avatar" src="" class="hidden w-14 h-14 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                     <p class="text-xs text-gray-500">📷 Drop or click</p>
                   </div>
                   <input type="text" id="url-user-avatar" placeholder="Or paste avatar URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onUserAvatarUrlChange()">
+                  <button type="button" class="upload-remove" onclick="document.getElementById('url-user-avatar').value=''; onUserAvatarUrlChange()">Remove user avatar</button>
                 </div>
               </div>
 
@@ -459,45 +514,45 @@
                 <h3 class="text-sm font-700 text-gray-800 mb-3">Colors</h3>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Primary</label>
+                    <label for="color-primary" class="block text-xs font-600 text-gray-600 mb-1">Primary</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-primary" value="#001E5B" onchange="onColorChange()">
-                      <input type="text" id="hex-primary" value="#001E5B" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('primary')">
+                      <input type="text" id="hex-primary" aria-label="Primary color hex code" value="#001E5B" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('primary')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Accent</label>
+                    <label for="color-accent" class="block text-xs font-600 text-gray-600 mb-1">Accent</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-accent" value="#066AFE" onchange="onColorChange()">
-                      <input type="text" id="hex-accent" value="#066AFE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('accent')">
+                      <input type="text" id="hex-accent" aria-label="Accent color hex code" value="#066AFE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('accent')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Secondary / Wash</label>
+                    <label for="color-secondary" class="block text-xs font-600 text-gray-600 mb-1">Secondary / Wash</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-secondary" value="#EAF5FE" onchange="onColorChange()">
-                      <input type="text" id="hex-secondary" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('secondary')">
+                      <input type="text" id="hex-secondary" aria-label="Secondary color hex code" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('secondary')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Bar Background</label>
+                    <label for="color-menu" class="block text-xs font-600 text-gray-600 mb-1">Menu Bar Background</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menu" value="#FFFFFF" onchange="onColorChange()">
-                      <input type="text" id="hex-menu" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
+                      <input type="text" id="hex-menu" aria-label="Menu bar background hex code" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
+                    <label for="color-menuText" class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menuText" value="#3E3E3C" onchange="onColorChange()">
-                      <input type="text" id="hex-menuText" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
+                      <input type="text" id="hex-menuText" aria-label="Menu text hex code" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
+                    <label for="color-pageBg" class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-pageBg" value="#EAF5FE" onchange="onColorChange()">
-                      <input type="text" id="hex-pageBg" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
+                      <input type="text" id="hex-pageBg" aria-label="Card canvas background hex code" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
                     </div>
                   </div>
                 </div>
@@ -509,14 +564,14 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
+                      <label for="left-col-w" class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
                       <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
                     </div>
                     <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
+                      <label for="middle-col-w" class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
                       <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
                     </div>
                     <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
@@ -531,15 +586,15 @@
         <div class="step-panel fade-in" data-step="1">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 2 of 7</div>
-            <h2 class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
             <p class="wizard-sub mb-6" id="step-2-sub">The customer's demographic, contact, and segment membership shown in the left panel.</p>
             <div class="mode-b2c">
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Customer ID</label><input type="text" id="profile-customerId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Email</label><input type="text" id="profile-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Phone</label><input type="text" id="profile-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-name" class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-city" class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-customerId" class="block text-xs font-600 text-gray-600 mb-1">Customer ID</label><input type="text" id="profile-customerId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-email" class="block text-xs font-600 text-gray-600 mb-1">Email</label><input type="text" id="profile-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-phone" class="block text-xs font-600 text-gray-600 mb-1">Phone</label><input type="text" id="profile-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div class="col-span-2 border-t border-gray-100 pt-3">
                 <label class="flex items-center gap-2 text-xs font-600 text-gray-600 mb-2">
                   <input type="checkbox" id="secondary-email-include" onchange="onFieldChange()">
@@ -547,26 +602,27 @@
                 </label>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Field Label</label>
+                    <label for="secondary-email-label" class="block text-xs font-600 text-gray-600 mb-1">Field Label</label>
                     <input type="text" id="secondary-email-label" placeholder="e.g. Parent's Email, Spouse's Email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Address</label>
+                    <label for="secondary-email-value" class="block text-xs font-600 text-gray-600 mb-1">Address</label>
                     <input type="text" id="secondary-email-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                   </div>
                 </div>
               </div>
-              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Address</label><textarea id="profile-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
-              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Segment Membership</label><textarea id="profile-segment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              <div class="col-span-2"><label for="profile-address" class="block text-xs font-600 text-gray-600 mb-1">Address</label><textarea id="profile-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              <div class="col-span-2"><label for="profile-segment" class="block text-xs font-600 text-gray-600 mb-1">Segment Membership</label><textarea id="profile-segment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
             </div>
 
             <div class="mt-4">
-              <label class="block text-xs font-600 text-gray-600 mb-1">Profile Photo <span class="text-gray-400 font-500">(optional)</span></label>
-              <div id="drop-photo" class="drop-zone-sf p-4 text-center cursor-pointer">
-                <img id="preview-photo" src="" class="hidden w-16 h-16 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+              <label for="url-photo" class="block text-xs font-600 text-gray-600 mb-1">Profile Photo <span class="text-gray-400 font-500">(optional)</span></label>
+              <div id="drop-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload profile photo" data-upload-label="Upload profile photo">
+                <img alt="" id="preview-photo" src="" class="hidden w-16 h-16 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                 <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
               </div>
               <input type="text" id="url-photo" placeholder="Or paste photo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onPhotoUrlChange()">
+              <button type="button" class="upload-remove" onclick="document.getElementById('url-photo').value=''; onPhotoUrlChange()">Remove profile photo</button>
             </div>
             </div>
 
@@ -574,7 +630,7 @@
               <div class="account-mode-note">Account profiles replace person-level contact details with firmographics, ownership, and account hierarchy. Brand styling from Step 1 still applies to the generated view.</div>
               <div class="mt-4">
                 <label for="url-account-photo" class="block text-xs font-600 text-gray-600 mb-1">Account Picture <span class="text-gray-400 font-500">(optional)</span></label>
-                <div id="drop-account-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload account picture" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
+                <div id="drop-account-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload account picture" data-upload-label="Upload account picture">
                   <img id="preview-account-photo" src="" alt="Account picture preview" class="hidden w-16 h-16 object-contain rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                   <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
                 </div>
@@ -585,19 +641,27 @@
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-3 mt-4">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+                <div><label for="account-name" class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-headquarters" class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-id" class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-industry" class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-type" class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-owner" class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-website" class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-employees" class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-tier" class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-parent" class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label for="account-address" class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
               </div>
             </div>
+            <section class="mt-5 border-t border-gray-100 pt-4" aria-labelledby="rail-fields-title">
+              <div class="flex items-center justify-between gap-3">
+                <h3 id="rail-fields-title" class="text-sm font-700 text-gray-800">Extra identity fields</h3>
+                <button type="button" onclick="addRailField()" class="btn-add-row px-3 py-1.5 text-xs">+ Add field</button>
+              </div>
+              <p class="text-xs text-gray-500 mt-2 mb-3">Optional facts in the left profile rail for this view, such as owner, renewal date, or preferred contact. Hidden fields stay editable here.</p>
+              <div id="rail-fields-container" class="space-y-3"></div>
+            </section>
           </div>
         </div>
 
@@ -606,18 +670,18 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 3 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-3-title">Insights</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-3-title">Insights</h2>
               <p class="wizard-sub mb-5" id="step-3-sub">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
             </div>
 
             <div class="mode-b2c border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Loyalty Insights</h3>
               <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Member ID</label><input type="text" id="loyalty-memberId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Tier</label><input type="text" id="loyalty-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Points</label><input type="text" id="loyalty-points" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Redeemed Points</label><input type="text" id="loyalty-redeemedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-memberId" class="block text-xs font-600 text-gray-600 mb-1">Member ID</label><input type="text" id="loyalty-memberId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-tier" class="block text-xs font-600 text-gray-600 mb-1">Loyalty Tier</label><input type="text" id="loyalty-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-points" class="block text-xs font-600 text-gray-600 mb-1">Loyalty Points</label><input type="text" id="loyalty-points" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label for="loyalty-redeemedPoints" class="block text-xs font-600 text-gray-600 mb-1">Redeemed Points</label><input type="text" id="loyalty-redeemedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               </div>
             </div>
 
@@ -625,22 +689,22 @@
               <h3 class="text-sm font-700 text-gray-800 mb-1">Account Overview Metrics</h3>
               <p class="text-xs text-gray-500 mb-3">These three scorecards anchor the account dashboard. Values are demo data until mapped to connected sources.</p>
               <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-revenue" class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-revenue-trend" class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-pipeline" class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-usage-score" class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-usage-trend" class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-active-users" class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-health-score" class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-health-trend" class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-support-cases" class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-renewal-date" class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-3-insights-heading">Vertical Insights</h3>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="insights-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="insights-container" class="space-y-2"></div>
               <button onclick="addInsight()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Insight</button>
             </div>
@@ -652,7 +716,7 @@
           <div class="wizard-card p-7 space-y-5">
             <div>
               <div class="wizard-eyebrow mb-2">Step 4 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-4-title">Affinities</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-4-title">Affinities</h2>
               <p class="wizard-sub mb-5" id="step-4-sub">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
             </div>
 
@@ -662,28 +726,28 @@
             </label>
 
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="affinities-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div></div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Label</label>
+                <label for="seriesA-label" class="block text-xs font-600 text-gray-600 mb-1">Series A Label</label>
                 <input type="text" id="seriesA-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Color</label>
+                <label for="seriesA-color" class="block text-xs font-600 text-gray-600 mb-1">Series A Color</label>
                 <div class="flex items-center gap-2">
                   <input type="color" id="seriesA-color" onchange="onFieldChange()">
-                  <input type="text" id="seriesA-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('A')">
+                  <input type="text" id="seriesA-color-hex" aria-label="Series A color hex code" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('A')">
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Label</label>
+                <label for="seriesB-label" class="block text-xs font-600 text-gray-600 mb-1">Series B Label</label>
                 <input type="text" id="seriesB-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Color</label>
+                <label for="seriesB-color" class="block text-xs font-600 text-gray-600 mb-1">Series B Color</label>
                 <div class="flex items-center gap-2">
                   <input type="color" id="seriesB-color" onchange="onFieldChange()">
-                  <input type="text" id="seriesB-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('B')">
+                  <input type="text" id="seriesB-color-hex" aria-label="Series B color hex code" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('B')">
                 </div>
               </div>
             </div>
@@ -700,19 +764,19 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 5 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
               <p class="wizard-sub mb-5" id="step-5-sub">The three stacked cards in the middle column.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-preferences-heading">Preferences</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="preferences-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="preferences-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="preferences-icon" placeholder="📈 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-preferences-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-preferences-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload preferences section icon" data-upload-label="Upload preferences section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -723,12 +787,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-events-heading">Events</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="events-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="events-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="events-icon" placeholder="📅 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-events-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-events-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload events section icon" data-upload-label="Upload events section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -739,12 +803,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-membership-heading">Membership Details</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="membership-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="membership-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="membership-icon" placeholder="🎫 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-membership-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-membership-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload membership section icon" data-upload-label="Upload membership section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -768,27 +832,28 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <div class="mode-b2c rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                <h3 class="text-sm font-700 text-gray-800 mb-1">Additional insight-card layout</h3>
-                <p class="text-xs text-gray-500 mb-3">The profile card stays fixed on the left. Drag non-profile cards between the middle and right columns, or keep them in the suggested library so the first screen remains presentation-ready.</p>
+              <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-1">Modules on this view &amp; suggested library</h3>
+                <p class="text-xs text-gray-500 mb-3">Keep the identity card on the left. Use Move to, Up, and Down to place and order additional cards, or drag between columns. Suggested and hidden cards stay available in the editor.</p>
                 <div id="module-composer" class="module-composer"></div>
+                <p id="module-composer-status" role="status" aria-live="polite" aria-atomic="true" class="text-xs text-blue-800 mt-2"></p>
               </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <div class="flex items-center justify-between mb-1">
-                <h3 class="text-sm font-700 text-gray-800">Custom Middle-Column Cards</h3>
+                <h3 class="text-sm font-700 text-gray-800">Custom cards · first collection</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Preferences. Use the layout above to move a card or keep it as a suggestion; every card remains available for a longer, scrollable profile when needed.</p>
+              <p class="text-xs text-gray-500 mb-3">Edit each card's contents here. Its placement is controlled in the module library above; visible additions can extend the profile vertically.</p>
               <div id="extra-cards-container" class="space-y-4"></div>
               <button onclick="addExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Custom Card</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <div class="flex items-center justify-between mb-1">
-                <h3 class="text-sm font-700 text-gray-800">Custom Right-Column Cards</h3>
+                <h3 class="text-sm font-700 text-gray-800">Custom cards · second collection</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Products &amp; Offers in the right column. Cards can be moved, stashed, or restored in the layout above.</p>
+              <p class="text-xs text-gray-500 mb-3">Cards added here start on the right. Move, hide, or restore them in the module library above without deleting their contents.</p>
               <div id="right-extra-cards-container" class="space-y-4"></div>
               <button onclick="addRightExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Right-Column Card</button>
             </div>
@@ -800,7 +865,7 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 6 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
               <p class="wizard-sub mb-5" id="step-6-sub">The right column: AI-powered recommendation cards and the engagement timeline.</p>
             </div>
 
@@ -819,14 +884,14 @@
               </div>
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-recs-heading">Einstein Recommendations</h3>
               <p class="text-xs text-gray-500 -mt-1 mb-3">Edit each recommendation’s label, message, call to action, and image below. Recommendation copy is always rendered dark on a white card for readability.</p>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="recs-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="recs-container" class="space-y-4"></div>
               <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-activity-heading">Engagement Activity</h3>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="activity-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="activity-container" class="space-y-3"></div>
               <button onclick="addActivity()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Activity Item</button>
             </div>
@@ -834,11 +899,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Top-Nav Links</h3>
               <div id="nav-links-container" class="flex flex-wrap gap-2 mb-2"></div>
+              <label for="new-nav-link" class="block text-xs font-600 text-gray-600 mb-1">New navigation label</label>
               <div class="flex gap-2">
                 <input type="text" id="new-nav-link" placeholder="Add nav link" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
                 <button onclick="addNavLink()" class="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-600 rounded-lg hover:bg-gray-200">Add</button>
               </div>
-              <label class="block text-xs font-600 text-gray-600 mt-4 mb-1">Active Tab Name (right-side pill)</label>
+              <label for="tab-name" class="block text-xs font-600 text-gray-600 mt-4 mb-1">Active Tab Name (right-side pill)</label>
               <input type="text" id="tab-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
             </div>
           </div>
@@ -848,7 +914,7 @@
         <div class="step-panel fade-in" data-step="6">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 7 of 7</div>
-            <h2 class="wizard-title mb-1">Preview & Export</h2>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-7-title">Preview & Export</h2>
             <p class="wizard-sub mb-5">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
 
             <section class="rounded-xl border border-blue-100 bg-blue-50/60 p-4 mb-5" aria-labelledby="persona-output-title">
@@ -869,9 +935,9 @@
                 Save Project
               </button>
             </div>
-            <div id="save-project-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
+            <div id="save-project-success" role="status" aria-live="polite" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
 
-            <div class="flex gap-3 mb-4">
+            <div class="flex flex-col sm:flex-row gap-3 mb-4">
               <button onclick="openPresentation()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
                 <span aria-hidden="true">▣</span>
                 Preview &amp; Present
@@ -885,7 +951,7 @@
                 Copy HTML
               </button>
             </div>
-            <div id="copy-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
+            <div id="copy-success" role="status" aria-live="polite" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
 
             <div class="flex gap-3 mb-3">
               <button onclick="exportForCloudy()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
@@ -893,7 +959,7 @@
                 Export for Cloudy
               </button>
             </div>
-            <div id="cloudy-hint" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
+            <div id="cloudy-hint" role="status" aria-live="polite" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
 
             <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
           </div>
@@ -918,7 +984,7 @@
             <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Desktop · 1300px</span>
           </div>
           <div class="preview-stage" id="preview-stage">
-            <iframe id="preview-iframe" sandbox="allow-scripts"></iframe>
+            <iframe id="preview-iframe" title="Live preview of the selected profile view" sandbox="allow-scripts"></iframe>
           </div>
         </div>
       </div>
@@ -926,22 +992,23 @@
     </div>
   </div>
 
-  <div id="save-project-modal" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center px-4" onclick="if(event.target===this) closeSaveProjectModal()">
+  <div id="save-project-modal" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-labelledby="save-project-title" tabindex="-1" onclick="if(event.target===this) closeSaveProjectModal()">
     <div class="bg-white rounded-xl shadow-lg max-w-sm w-full p-6">
-      <h3 class="text-base font-700 text-gray-800 mb-1">Save Project</h3>
+      <h3 id="save-project-title" class="text-base font-700 text-gray-800 mb-1">Save Project</h3>
       <p class="text-xs text-gray-500 mb-4">Give this project a name so you can find it later.</p>
+      <label for="save-project-name-input" class="block text-xs font-600 text-gray-600 mb-1">Project name</label>
       <input id="save-project-name-input" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" placeholder="e.g. Acme Corp — Recruiting" autocomplete="off" onkeydown="if(event.key==='Enter'){ event.preventDefault(); confirmSaveProject(false); }">
       <div id="save-project-modal-actions" class="flex gap-2"></div>
       <button onclick="closeSaveProjectModal()" class="mt-3 w-full text-xs text-gray-400 hover:text-gray-600">Cancel</button>
     </div>
   </div>
 
-  <div id="settings-modal" class="hidden fixed inset-0 bg-slate-950/45 z-[110] overflow-y-auto p-4 sm:p-8" onclick="if(event.target===this) closeSettings()">
+  <div id="settings-modal" class="hidden fixed inset-0 bg-slate-950/45 z-[110] overflow-y-auto p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1" onclick="if(event.target===this) closeSettings()">
     <div class="max-w-4xl mx-auto bg-slate-50 rounded-2xl shadow-2xl overflow-hidden">
       <div class="bg-gradient-to-r from-[#06235d] to-[#1378d6] px-6 sm:px-8 py-5 flex items-start justify-between gap-4 text-white">
         <div>
           <div class="text-[10px] font-700 tracking-[0.18em] uppercase text-cyan-200">Unified Profile Generator</div>
-          <h2 class="text-xl font-700 mt-1" style="color:#fff">Settings &amp; Integrations</h2>
+          <h2 id="settings-title" class="text-xl font-700 mt-1" style="color:#fff">Settings &amp; Integrations</h2>
           <p class="text-sm text-white/75 mt-1">Manage your saved-workspace access and API connections.</p>
         </div>
         <button onclick="closeSettings()" class="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/15 text-lg" aria-label="Close settings">×</button>
@@ -971,7 +1038,7 @@
               <button onclick="hideCreateApiKeyForm()" class="btn-secondary-sf px-4 py-2 text-xs">Cancel</button>
             </div>
             <label class="flex gap-2.5 items-start mt-3 text-xs text-slate-600 cursor-pointer"><input id="api-key-enable-generation" type="checkbox" class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600"><span><strong class="text-slate-700">Allow AI profile generation and saving.</strong> This grants this key permission to start asynchronous UPG generation jobs. Leave unchecked for a read-only profile connection.</span></label>
-            <p id="api-key-create-error" class="hidden text-xs text-red-600 mt-2"></p>
+            <p id="api-key-create-error" role="alert" class="hidden text-xs text-red-600 mt-2"></p>
           </div>
           <div id="api-key-reveal" class="hidden mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div class="text-sm font-700 text-emerald-800">API key created — copy it now, it won’t be shown again.</div>
@@ -1036,6 +1103,29 @@
           <p class="text-sm text-slate-600 mt-3">Configure the MCP connection with the same <code class="text-xs bg-white rounded px-1.5 py-0.5">X-API-Key</code>. The connected application should make server-to-server requests and keep the key out of slides, exports, and browser-delivered code.</p>
           <div class="mt-4 overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-500"><tr><th class="pb-2 pr-4">MCP tool</th><th class="pb-2">What it allows</th></tr></thead><tbody class="divide-y divide-cyan-100"><tr><td class="py-2 pr-4"><code class="text-xs">upg_list_profiles</code></td><td class="py-2">Find saved B2C or B2B profiles available to the key owner.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile</code></td><td class="py-2">Read profile data and presentation metadata.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_profile_export</code></td><td class="py-2">Get an export reference, or a small HTML export when explicitly requested.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_generate_profile</code></td><td class="py-2">Start an asynchronous, AI-generated UPG profile. Requires a generation-enabled key and user confirmation.</td></tr><tr><td class="py-2 pr-4"><code class="text-xs">upg_get_generation_status</code></td><td class="py-2">Check the job and retrieve the saved profile ID when generation completes.</td></tr></tbody></table></div>
           <div class="mt-4 rounded-lg border border-cyan-200 bg-white/80 p-4"><div class="text-sm font-700 text-slate-800">Asynchronous MCP generation flow</div><ol class="mt-2 space-y-1 text-sm leading-6 text-slate-600 list-decimal pl-5"><li>After user confirmation, call <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5">upg_generate_profile</code> with the customer URL, B2C/B2B type, persona, and optional decision brief.</li><li>Read <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5">job.id</code> from the result.</li><li>Call <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5">upg_get_generation_status</code> with that job ID until the job is complete.</li><li>Use <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5">upg_get_profile</code> or <code class="text-xs bg-slate-100 rounded px-1.5 py-0.5">upg_get_profile_export</code> with the completed profile ID, then let Holodeck insert it after confirmation.</li></ol></div>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 class="text-base font-700 text-slate-900">Profile sets, images, and safe recovery — API &amp; MCP</h3>
+          <p class="mt-3 text-sm leading-6 text-slate-600">Both interfaces use the same background generation pipeline, role-aware text and image prompts, and saved-project renderer. A key is your access pass; the API or MCP endpoint is the entrance. Your connected tool must also be able to reach the internal Salesforce-hosted app.</p>
+          <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600 list-disc pl-5">
+            <li>For multiple views, pass <code>views</code> with up to five unique personas. Each accepts <code>persona</code>, <code>objective</code>, <code>brief</code>, and optional <code>customRole</code>. A single <code>persona</code> still works.</li>
+            <li><code>includeImages</code> defaults to <code>true</code>. Set it to <code>false</code> for text-only generation. Inspect <code>job.result.visuals</code> before presenting: completed text may still have partial or failed images. Open the saved project in UPG to retry only its missing images.</li>
+            <li>Prevent duplicates by sending a stable <code>Idempotency-Key</code> HTTP header, or <code>idempotencyKey</code> MCP argument (16–200 letters, digits, underscores or hyphens). Reuse it only for an exact retry. Keep the returned job ID. A new key means a new generation request.</li>
+            <li>Poll status every 3–5 seconds, respect <code>Retry-After</code>, and stop on completed, failed, or interrupted. Polling never starts paid work. A replayed request may return <code>200</code> with its original job instead of creating another one.</li>
+            <li>Jobs survive server restarts. After an interruption, explicitly call <code>POST /integrations/v1/upg/generations/:id/resume</code>, or MCP <code>upg_resume_generation</code> with <code>jobId</code>. Resume continues the last saved stage; a provider call completed just before a crash may be repeated and charged again. Ask the user before resuming.</li>
+            <li>Export a particular view with <code>GET /integrations/v1/upg/profiles/:id/export?persona=service</code>, or the MCP export tool’s <code>persona</code> argument. Inline generated images and the saved account tab are preserved. Use <code>X-API-Key</code> when retrieving the export; never put a key in its URL.</li>
+          </ul>
+          <pre class="mt-4 rounded-lg bg-slate-900 text-slate-100 p-4 text-xs overflow-x-auto"><code>{
+  "url": "https://customer.example",
+  "profileType": "b2c",
+  "idempotencyKey": "holodeck_demo_20261007_001",
+  "includeImages": true,
+  "views": [
+    { "persona": "sales", "brief": "Include a call-coaching summary" },
+    { "persona": "service", "brief": "Help reschedule an assessment call" }
+  ]
+}</code></pre>
         </section>
 
         <section class="rounded-xl border border-slate-200 bg-white p-5">
@@ -1903,6 +1993,7 @@ function cloneProfileMode(profileType, key) {
     for (const key of ['extraCards', 'rightExtraCards']) {
       if (data[key] !== undefined && (!Array.isArray(data[key]) || data[key].some(card => !object(card) || !text(card.title) || !Array.isArray(card.items) || card.items.some(item => !object(item) || !text(item.label) || typeof item.value !== 'string')))) invalid('additional module has invalid fields');
     }
+    if (data.railFields !== undefined && (!Array.isArray(data.railFields) || data.railFields.length > 30 || data.railFields.some(field => !object(field) || !text(field.label) || typeof field.value !== 'string'))) invalid('profile-card fields must have a label and value');
     return data;
   }
   function validateSavedProfile(data) {
@@ -1921,6 +2012,7 @@ function cloneProfileMode(profileType, key) {
       if (data[key] != null && (!Array.isArray(data[key]) || data[key].some(card => !object(card) || !Array.isArray(card.items) || card.items.some(item => !object(item))))) throw new Error('This saved project has invalid additional modules.');
     }
     if (data.personaVariants != null && (!object(data.personaVariants) || Object.values(data.personaVariants).some(view => !object(view)))) throw new Error('This saved project has invalid persona views.');
+    if (data.railFields != null && (!Array.isArray(data.railFields) || data.railFields.some(field => !object(field) || typeof field.label !== 'string' || typeof field.value !== 'string'))) throw new Error('This saved project has invalid profile-card fields.');
     return data;
   }
   function textIdentity(data) {
@@ -1942,7 +2034,12 @@ function cloneProfileMode(profileType, key) {
       return `${url.hostname.toLowerCase().replace(/^www\./, '')}${url.port ? ':' + url.port : ''}${url.pathname.replace(/\/+$/, '')}`;
     } catch (_) { return ''; }
   }
-  return { validateAIProfile, validateSavedProfile, textIdentity, companyKey };
+  function canonicalJSON(value) {
+    const sorted = item => Array.isArray(item) ? item.map(sorted) : object(item)
+      ? Object.fromEntries(Object.keys(item).sort().map(key => [key, sorted(item[key])])) : item;
+    return JSON.stringify(sorted(value));
+  }
+  return { validateAIProfile, validateSavedProfile, textIdentity, companyKey, canonicalJSON };
 });
 
 
@@ -1950,13 +2047,22 @@ function cloneProfileMode(profileType, key) {
 // ============================================================
 // images.js — Image handling (drop, paste-URL, data-URL encoding)
 // ============================================================
-// The generator embeds images as data URLs in the exported HTML
-// so the standalone file works from any host without external
-// image dependencies. This module wires drop zones + URL inputs
-// to the app state.
+// Uploaded images are embedded as data URLs. Pasted remote image URLs
+// remain remote. This module wires drop zones + URL inputs to app state.
 // ============================================================
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3 MB safety cap
+const UPLOAD_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp', 'image/avif', 'image/bmp']);
+
+function imageUploadFeedback(zone, message, error = false) {
+  const feedback = document.getElementById(`${zone.id}-status`);
+  if (feedback) {
+    feedback.textContent = message;
+    feedback.dataset.error = String(error);
+  }
+  if (error) zone.setAttribute('aria-invalid', 'true');
+  else zone.removeAttribute('aria-invalid');
+}
 
 // Attach drag-drop + click-to-upload behavior to a drop zone.
 // - zoneId:    id of the outer drop-zone div
@@ -1965,13 +2071,69 @@ const MAX_IMAGE_BYTES = 3 * 1024 * 1024; // 3 MB safety cap
 function attachDropZone(zoneId, previewId, onChange) {
   const zone = document.getElementById(zoneId);
   const preview = document.getElementById(previewId);
-  if (!zone) return;
+  if (!zone || zone.dataset.uploadAttached === 'true') return;
+  zone.dataset.uploadAttached = 'true';
+  const label = zone.dataset.uploadLabel || zone.getAttribute('aria-label') || `Upload ${zoneId.replace(/^(drop|upload)-/, '').replace(/-/g, ' ')} image`;
+  zone.setAttribute('aria-label', label);
+  if (zone.tagName !== 'BUTTON') {
+    zone.setAttribute('role', 'button');
+    zone.tabIndex = 0;
+    zone.addEventListener('keydown', event => {
+      if (event.key === 'Enter' || event.key === ' ') {
+        event.preventDefault();
+        zone.click();
+      }
+    });
+  }
+
+  const feedback = document.createElement('p');
+  feedback.id = `${zoneId}-status`;
+  feedback.className = 'upload-feedback';
+  feedback.style.gridColumn = '1 / -1';
+  feedback.setAttribute('role', 'status');
+  feedback.setAttribute('aria-live', 'polite');
+  feedback.setAttribute('aria-atomic', 'true');
+  // Compact icon buttons share a row with their text input; keep feedback
+  // outside that row so an error does not squeeze the editing control.
+  const feedbackAnchor = zone.classList.contains('w-14') ? zone.parentElement : zone;
+  feedbackAnchor.insertAdjacentElement('afterend', feedback);
+  zone.setAttribute('aria-describedby', [zone.getAttribute('aria-describedby'), feedback.id].filter(Boolean).join(' '));
 
   const fileInput = document.createElement('input');
   fileInput.type = 'file';
-  fileInput.accept = 'image/*';
+  fileInput.accept = [...UPLOAD_IMAGE_TYPES].join(',');
+  fileInput.setAttribute('aria-label', label);
   fileInput.style.display = 'none';
-  zone.appendChild(fileInput);
+  feedback.insertAdjacentElement('afterend', fileInput);
+
+  let uploadSequence = 0;
+  function selectFile(file) {
+    if (!file) return;
+    const sequence = ++uploadSequence;
+    const owner = typeof state === 'undefined' ? null : state;
+    const lens = owner?.profileStrategy?.lens;
+    const mode = owner?.profileType;
+    const source = preview?.getAttribute('src');
+    const dataset = JSON.stringify(zone.dataset);
+    const fields = [...(zone.parentElement?.querySelectorAll('input:not([type="file"]), textarea') || [])].map(el => [el, el.value]);
+    const isCurrent = () => sequence === uploadSequence
+      && document.getElementById(zoneId) === zone
+      && JSON.stringify(zone.dataset) === dataset
+      && (typeof state === 'undefined' ? null : state) === owner
+      && owner?.profileStrategy?.lens === lens && owner?.profileType === mode
+      && preview?.getAttribute('src') === source
+      && fields.every(([el, value]) => el.value === value);
+    imageUploadFeedback(zone, 'Reading image…');
+    handleFile(file, preview, onChange, {
+      isCurrent,
+      onStale: () => {
+        if (sequence === uploadSequence && document.getElementById(zoneId) === zone) {
+          imageUploadFeedback(zone, 'Upload canceled because this view or image changed. Choose the file again.');
+        }
+      },
+      report: (message, error) => imageUploadFeedback(zone, message, error)
+    });
+  }
 
   zone.addEventListener('click', () => fileInput.click());
   zone.addEventListener('dragover', (e) => { e.preventDefault(); zone.classList.add('drag-active'); });
@@ -1979,33 +2141,46 @@ function attachDropZone(zoneId, previewId, onChange) {
   zone.addEventListener('drop', (e) => {
     e.preventDefault();
     zone.classList.remove('drag-active');
-    if (e.dataTransfer.files[0]) handleFile(e.dataTransfer.files[0], preview, onChange);
+    selectFile(e.dataTransfer?.files?.[0]);
   });
 
   fileInput.addEventListener('change', (e) => {
-    if (e.target.files[0]) handleFile(e.target.files[0], preview, onChange);
+    selectFile(e.target.files?.[0]);
+    fileInput.value = ''; // Permit selecting the same file again after a failure.
   });
 }
 
-function handleFile(file, preview, onChange) {
-  if (!file.type.startsWith('image/')) {
-    alert('Please choose an image file.');
+function handleFile(file, preview, onChange, options = {}) {
+  const isCurrent = options.isCurrent || (() => true);
+  const report = options.report || (() => {});
+  if (!UPLOAD_IMAGE_TYPES.has(file.type)) {
+    report('Choose a PNG, JPEG, GIF, WebP, AVIF, or BMP image. SVG files are not supported.', true);
     return;
   }
   if (file.size > MAX_IMAGE_BYTES) {
-    alert('Image is larger than 3 MB — please pick a smaller one for a lighter export.');
+    report('Image is larger than 3 MB. Choose a smaller image for a lighter export.', true);
     return;
   }
   const reader = new FileReader();
   reader.onload = (e) => {
-    const dataUrl = e.target.result;
+    if (!isCurrent()) { options.onStale?.(); return; }
+    const dataUrl = safeImageURL(e.target.result);
+    if (!dataUrl) {
+      report('This image could not be read safely. Choose another image.', true);
+      return;
+    }
+    report('Image updated.');
     if (preview) {
       preview.src = dataUrl;
       preview.classList.remove('hidden');
     }
     if (onChange) onChange(dataUrl);
   };
-  reader.readAsDataURL(file);
+  reader.onerror = reader.onabort = () => {
+    if (isCurrent()) report('The image could not be read. Choose the file again.', true);
+  };
+  try { reader.readAsDataURL(file); }
+  catch (_) { if (isCurrent()) report('The image could not be read. Choose the file again.', true); }
 }
 
 // Set an image preview directly from a URL string. Used when the
@@ -2013,13 +2188,17 @@ function handleFile(file, preview, onChange) {
 function setImagePreviewFromURL(previewId, url) {
   const preview = document.getElementById(previewId);
   if (!preview) return;
-  if (!url) {
-    preview.src = '';
+  const imageURL = safeImageURL(url);
+  const zone = preview.closest('[data-upload-attached]');
+  if (!imageURL) {
+    preview.removeAttribute('src');
     preview.classList.add('hidden');
+    if (zone) imageUploadFeedback(zone, url ? 'Use an HTTP(S) image URL or upload a supported image.' : '', Boolean(url));
     return;
   }
-  preview.src = url;
+  preview.src = imageURL;
   preview.classList.remove('hidden');
+  if (zone) imageUploadFeedback(zone, '');
 }
 
 // The starter profile uses two project-owned photographs. They display as
@@ -2073,6 +2252,34 @@ function esc(s) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+// Extra identity facts are owned by the selected view, not the shared brand.
+function renderProfileRailFields(fields, mode = 'b2c') {
+  if (!Array.isArray(fields)) return '';
+  return fields.filter(field => field && typeof field === 'object' && field.visible !== false).map(field => {
+    const label = esc(field.label || 'Custom field');
+    const value = esc(field.value ?? '');
+    const icon = raw(field.icon || '•');
+    if (mode === 'b2b') return `<div class="rail-field" data-rail-field-id="${esc(field.id)}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${value}</b></div>`;
+    return `<div class="profile-field" data-rail-field-id="${esc(field.id)}"><span class="profile-field-icon" aria-hidden="true">${icon}</span><span class="profile-field-label">${label}</span><span class="profile-field-value">${value}</span></div>`;
+  }).join('');
+}
+
+function renderLayoutStatusScript(state) {
+  const revision = JSON.stringify(String(state._renderRevision || '')).replace(/</g, '\\u003c');
+  return `<script>
+(function () {
+  function report() {
+    if (window.parent === window) return;
+    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: window.innerHeight }, '*');
+  }
+  window.upgReportLayout = report;
+  window.addEventListener('load', report, { once: true });
+  if (document.readyState === 'complete') report();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(report).catch(function () {});
+})();
+<\/script>`;
 }
 
 // All interpolated styles and image sources pass these narrow validators.
@@ -2783,6 +2990,7 @@ body {
       ${s.profile.secondaryEmailInclude && s.profile.secondaryEmail ? `<div class="profile-field"><span class="profile-field-icon">👤</span><span class="profile-field-label">${esc(s.profile.secondaryEmailLabel || "Secondary Email")}</span><span class="profile-field-value">${esc(s.profile.secondaryEmail)}</span></div>` : ''}
       <div class="profile-field"><span class="profile-field-icon">📱</span><span class="profile-field-label">Phone Number</span><span class="profile-field-value">${esc(s.profile.phone)}</span></div>
       <div class="profile-field"><span class="profile-field-icon">📍</span><span class="profile-field-label">Address</span><span class="profile-field-value">${esc(s.profile.address)}</span></div>
+      ${renderProfileRailFields(s.railFields)}
     </div>
 
     <div class="profile-segment">
@@ -2979,6 +3187,7 @@ body {
 
 </div>
 
+${renderLayoutStatusScript(s)}
 </body>
 </html>`;
 }
@@ -3102,7 +3311,7 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 <body>
 <header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
-<main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div></div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
+<main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
 <section class="account-workspace"><div class="account-tabs" role="tablist" aria-label="Account views">
 ${tabs.map(tab => `<button class="account-tab" id="tab-${tab}" type="button" role="tab" aria-selected="${tab === selectedTab}" tabindex="${tab === selectedTab ? '0' : '-1'}" aria-controls="account-${tab}" data-account-tab="${tab}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}
 </div><div class="account-views">
@@ -3126,6 +3335,7 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
       view.hidden = !active;
     });
     if (window.parent !== window) window.parent.postMessage({ type: 'upg:account-tab-change', tab: name, revision: ${tabRevision} }, '*');
+    if (window.upgReportLayout) window.upgReportLayout();
   }
   tabs.forEach(function (tab, index) {
     tab.addEventListener('click', function () { select(tab); });
@@ -3141,6 +3351,7 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
   });
 })();
 <\/script>
+${renderLayoutStatusScript(s)}
 </body></html>`;
 }
 
@@ -3403,6 +3614,8 @@ Profile strategy (this controls the generated working view):
 - Primary objective: ${strategy.objective}
 - Additional context from the presenter: ${strategy.brief || '(none)'}
 - Prioritize signals, supporting modules, and next-best actions that help this persona achieve the objective. Keep the same fictional person/account internally consistent. Website facts establish brand context; operational signals and scores are modeled demo data.
+- Additional profile-card fields requested by the presenter belong in optional "railFields": [{"label": "Events attended", "value": "3", "visible": true}]. Use them for identity/summary fields, and extraCards for multi-field topics such as call coaching. Do not copy the example values unless relevant.
+- Distinguish brand facts actually present in the source from modeled demo metrics. Do not portray modeled operational metrics as externally verified. Every next-best action must respond to a specific insight or recent activity and its image must depict that action in this company's business context.
 
 Generate the ${profileType} Unified Profile JSON per the schema.`;
   }
@@ -3441,7 +3654,7 @@ Custom role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not suppli
 Primary objective: ${strategy.objective}
 Additional requirements: ${strategy.brief || '(none)'}
 
-Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Produce 6 concise insights, 2 recommendation actions, 5-6 activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
+Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Optional railFields: [{"label": string, "value": string, "visible": true}] supplies additional profile-card fields requested for this view. Preserve shared identity and commercial facts; do not invent contradictory account-level metrics. Every recommended action must have a supporting insight or activity, distinct from other role blueprints. Operational metrics are modeled demo data, never verified source facts. Produce 6 concise insights, 2 recommendation actions, 6-8 varied activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
   }
 
   // Tolerant JSON parser — handles the three common ways AI models
@@ -4029,6 +4242,8 @@ Use the role's standard blueprint as the foundation, then add the stated require
     getModel, setModel,
     getScraperEndpoint, setScraperEndpoint, hasCustomScraperEndpoint, getDefaultScraperEndpoint,
     currentProvider,
+    buildImagePrompts,
+    buildRecommendationImagePrompts,
     warmSharedBackend: ensureSharedBackendConnection,
     generatePersonaRecommendationImages,
     embedBrandImage,
@@ -4037,6 +4252,194 @@ Use the role's standard blueprint as the foundation, then add the stated require
     analyzeCustomerURL
   };
 })();
+
+
+// ==== inlined from ./js/editor-support.js ====
+// Editor-only behavior. None of this is included in exported customer profiles.
+const dialogStack = [];
+function activateDialogFocus(id, close, initialFocusId) {
+  const dialog = document.getElementById(id);
+  if (!dialog || dialogStack.some(item => item.id === id)) return;
+  const entry = { id, dialog, close, prior: document.activeElement, selfInert: dialog.inert, inert: [] };
+  // A sibling modal opened over another dialog was inerted by its parent.
+  dialog.inert = false;
+  Array.from(document.body.children).forEach(element => {
+    if (element === dialog || element.contains(dialog)) return;
+    entry.inert.push([element, element.inert]); element.inert = true;
+  });
+  dialog.setAttribute('role', 'dialog'); dialog.setAttribute('aria-modal', 'true'); dialog.tabIndex = -1;
+  entry.keydown = event => {
+    if (dialogStack.at(-1) !== entry) return;
+    if (event.key === 'Escape') { event.preventDefault(); close(); return; }
+    if (event.key !== 'Tab') return;
+    const controls = [...dialog.querySelectorAll('button, input, select, textarea, a[href], iframe, [tabindex="0"]')]
+      .filter(el => !el.disabled && !el.closest('[hidden], .hidden') && el.getClientRects().length);
+    const first = controls[0] || dialog, last = controls.at(-1) || dialog;
+    if (!dialog.contains(document.activeElement) || (event.shiftKey && document.activeElement === first)) { event.preventDefault(); last.focus(); }
+    else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+  };
+  dialogStack.push(entry); document.addEventListener('keydown', entry.keydown);
+  (document.getElementById(initialFocusId) || dialog.querySelector('button, input, textarea') || dialog).focus();
+}
+function releaseDialogFocus(id) {
+  const index = dialogStack.findIndex(item => item.id === id);
+  if (index < 0) return;
+  const [entry] = dialogStack.splice(index, 1);
+  document.removeEventListener('keydown', entry.keydown);
+  entry.inert.forEach(([element, value]) => { element.inert = value; });
+  entry.dialog.inert = entry.selfInert;
+  if (entry.prior?.isConnected) entry.prior.focus();
+}
+
+// Labels are stable and contextual, including dynamically added row editors.
+function labelEditorControls() {
+  document.querySelectorAll('.step-panel input, .step-panel textarea, .step-panel select').forEach((input, index) => {
+    if (input.getAttribute('aria-label') || input.getAttribute('aria-labelledby') || input.labels?.length) return;
+    const row = input.closest('.row-card');
+    const panel = input.closest('.step-panel');
+    const context = row?.querySelector('strong')?.textContent || panel?.querySelector('h2')?.textContent || 'Profile';
+    input.setAttribute('aria-label', `${context}: ${input.placeholder || input.title || input.id || `field ${index + 1}`}`);
+  });
+  document.querySelectorAll('.step-panel button').forEach(button => {
+    if (button.textContent.trim() !== '×' || button.getAttribute('aria-label')) return;
+    const row = button.closest('.row-card') || button.parentElement;
+    const name = row?.querySelector('input')?.value || 'row';
+    button.setAttribute('aria-label', `Remove ${name}`);
+  });
+}
+
+function renderProfileProgress() {
+  const profileSet = ensureProfileSet();
+  const strategy = getProfileStrategy();
+  const label = getProfileStrategyLabel(strategy);
+  const textLabels = { queued: 'Waiting', generating: 'Writing', ready: 'Ready', edited: 'Edits kept', 'template-ready': 'Needs retry', failed: 'Needs retry' };
+  const visualLabels = { queued: 'waiting', generating: 'creating', ready: 'ready', pending: 'needs update', partial: 'partly ready', failed: 'needs retry' };
+  setText('selected-view-name', `Editing ${label}`);
+  setText('selected-view-status', `${textLabels[profileSet.statuses[strategy.lens]] || 'Editable sample'} · Images ${visualLabels[profileSet.visuals[strategy.lens]?.state] || 'editable'}`);
+  const personalize = document.getElementById('btn-personalize-view');
+  if (personalize) { personalize.textContent = `Update ${label} view with AI`; personalize.disabled = ['queued', 'generating'].includes(profileSet.statuses[strategy.lens]); }
+  const container = document.getElementById('profile-set-progress');
+  if (!container) return;
+  container.innerHTML = profileSet.selectedLenses.filter(lens => PERSONA_PRESETS[lens]).map(lens => {
+    const textState = profileSet.statuses[lens];
+    const visual = profileSet.visuals[lens] || {};
+    const textReady = ['ready', 'edited'].includes(textState);
+    const retry = textReady && ['failed', 'partial', 'pending'].includes(visual.state);
+    return `<div class="flex flex-wrap items-center gap-2 py-1 text-xs"><button type="button" class="underline" onclick="setViewerLens('${lens}')">${escHTML(PERSONA_PRESETS[lens].label)}</button><span>${textLabels[textState] || 'Sample'} · Images ${visualLabels[visual.state] || 'editable'}</span>${retry ? `<button type="button" class="underline" onclick="retryPersonaVisuals('${lens}')">Retry images only</button>` : ''}${['template-ready', 'failed'].includes(textState) ? `<button type="button" class="underline" onclick="retryPersonaText('${lens}')">Retry this view</button>` : ''}</div>`;
+  }).join('');
+}
+async function retryPersonaText(lens) { setViewerLens(lens); return onPersonalizeCurrentPersona(); }
+async function retryPersonaVisuals(lens) {
+  const view = personaView(state, lens);
+  if (!view || ['queued', 'generating'].includes(ensureProfileSet().statuses[lens])) return;
+  return generatePersonaRecommendationImagesForTarget(lens, view, { announce: true });
+}
+
+function renderRailFields() {
+  const container = document.getElementById('rail-fields-container');
+  if (!container) return;
+  state.railFields ||= [];
+  container.innerHTML = state.railFields.map((field, index) => `<div class="row-card grid grid-cols-12 gap-2 items-center">
+    <input aria-label="Profile field ${index + 1} label" class="col-span-4 border rounded p-2" value="${escAttr(field.label)}" oninput="updateRailField(${index},'label',this.value)">
+    <input aria-label="${escAttr(field.label || 'Profile field')} value" class="col-span-5 border rounded p-2" value="${escAttr(field.value)}" oninput="updateRailField(${index},'value',this.value)">
+    <label class="col-span-2 text-xs"><input type="checkbox" ${field.visible !== false ? 'checked' : ''} onchange="updateRailField(${index},'visible',this.checked)"> Show</label>
+    <button type="button" class="icon-btn danger" aria-label="Remove ${escAttr(field.label || 'profile field')}" onclick="removeRailField(${index})">×</button></div>`).join('');
+}
+function addRailField() {
+  state.railFields ||= []; state.railFields.push({ id: `field-${Date.now()}-${Math.random().toString(36).slice(2)}`, label: 'New field', value: '', visible: true });
+  renderRailFields(); refreshPreview();
+}
+function updateRailField(index, key, value) {
+  if (!['label', 'value', 'visible'].includes(key) || !state.railFields?.[index]) return;
+  state.railFields[index][key] = value; refreshPreview();
+}
+function removeRailField(index) { state.railFields.splice(index, 1); renderRailFields(); refreshPreview(); }
+
+// One recovery record per browser tab (survives reload), never credentials.
+// IndexedDB permits image-bearing drafts without blocking typing on localStorage.
+let draftReady = false, draftTimer = null, draftPending = null, draftWrite = Promise.resolve();
+let draftTabKey = '', draftDatabase = null, draftLastJSON = '';
+function draftProfileSnapshot() {
+  const keys = ['schemaVersion', 'brandName', 'appName', 'logo', 'userAvatar', 'colors', 'layout', 'navLinks', 'tabName', 'profile', 'loyalty', 'account', 'accountMetrics', 'profileType', 'profileStrategy', 'profileSet', 'personaVariants', '_industry', '_aiContext', ...PERSONA_VIEW_FIELDS];
+  return Object.fromEntries(keys.filter(key => state[key] !== undefined).map(key => [key, cloneViewData(state[key])]));
+}
+async function draftDB() {
+  if (draftDatabase) return draftDatabase;
+  if (!globalThis.indexedDB) throw new Error('Browser recovery storage is unavailable');
+  draftTabKey = sessionStorage.getItem('upg-draft-tab') || (globalThis.crypto?.randomUUID?.() || `tab-${Date.now()}-${Math.random()}`);
+  sessionStorage.setItem('upg-draft-tab', draftTabKey);
+  draftDatabase = await new Promise((resolve, reject) => {
+    const request = indexedDB.open('upg-recovery-v1', 1);
+    request.onupgradeneeded = () => request.result.createObjectStore('drafts');
+    request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    request.onblocked = () => reject(new Error('Recovery storage is busy in another tab'));
+  });
+  return draftDatabase;
+}
+async function draftStorage(action, value) {
+  const db = await draftDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction('drafts', action === 'get' ? 'readonly' : 'readwrite');
+    const request = tx.objectStore('drafts')[action](...(action === 'put' ? [value, draftTabKey] : [draftTabKey]));
+    tx.oncomplete = () => resolve(request.result); tx.onerror = () => reject(tx.error); tx.onabort = () => reject(tx.error);
+  });
+}
+function scheduleDraftRecovery() {
+  if (!draftReady || draftPending) return;
+  clearTimeout(draftTimer); draftTimer = setTimeout(() => persistDraftRecovery(), 900);
+}
+async function persistDraftRecovery() {
+  clearTimeout(draftTimer);
+  if (!draftReady || draftPending) return false;
+  snapshotPersonaView();
+  const record = { version: 1, profile: draftProfileSnapshot(), step: currentStep, sourceUrl: document.getElementById('quickstart-url')?.value || '',
+    owner: currentProjectOwner || window.SaasyAuth?.getEmail?.() || '', project: { id: currentProjectId, name: currentProjectName, revision: currentProjectRevision } };
+  const json = JSON.stringify(record);
+  // Serialize writes so slower older saves can never replace a newer draft.
+  const write = draftWrite.catch(() => {}).then(async () => {
+    // Compare against the last *completed* queued write, not the value that
+    // happened to be stored when this request was queued (A → B → A).
+    if (json === draftLastJSON) return true;
+    await draftStorage('put', record); draftLastJSON = json; setText('draft-status', 'Draft backed up in this browser tab · not saved online'); return true;
+  });
+  draftWrite = write;
+  try { return await write; } catch (_) { setText('draft-status', 'Local backup unavailable. Save online or download HTML before reloading.'); return false; }
+}
+async function initializeDraftRecovery() {
+  try {
+    const record = await draftStorage('get');
+    if (record?.version === 1 && record.profile) {
+      UPGContract.validateSavedProfile(record.profile); draftPending = record;
+      const status = document.getElementById('draft-status');
+      if (status) status.innerHTML = 'A draft from this browser tab is available. <button type="button" class="underline" onclick="restoreDraftRecovery()">Restore draft</button> · <button type="button" class="underline" onclick="discardDraftRecovery()">Discard backup</button>';
+    }
+    draftReady = true;
+  } catch (_) { setText('draft-status', 'Local recovery unavailable. Save online or download HTML to keep your work.'); }
+}
+function restoreDraftRecovery() {
+  if (!draftPending) return;
+  const email = window.SaasyAuth?.getEmail?.() || '';
+  if (draftPending.owner && draftPending.owner !== email) { alert('Sign in with the account that created this draft before restoring it.'); return; }
+  if (!confirm('Replace the current editor with the recovered draft?')) return;
+  const record = draftPending;
+  UPGContract.validateSavedProfile(record.profile);
+  Object.values(record.profile.personaVariants || {}).forEach(variant => UPGContract.validateSavedProfile(Object.assign({}, record.profile, variant)));
+  cancelDraftRequests(); state = cloneViewData(record.profile);
+  currentProjectId = record.project?.id || null; currentProjectName = record.project?.name || null;
+  currentProjectRevision = record.project?.revision || null; currentProjectOwner = record.owner || null;
+  for (const lens of Object.keys(ensureProfileSet().statuses)) {
+    if (['queued', 'generating'].includes(state.profileSet.statuses[lens])) state.profileSet.statuses[lens] = 'failed';
+    if (state.profileSet.visuals[lens]?.state === 'generating') state.profileSet.visuals[lens].state = 'partial';
+  }
+  draftPending = null; document.getElementById('quickstart-url').value = record.sourceUrl || '';
+  fillStaticFields(); syncProfileSetConfigUI(); renderAll(); goToStep(record.step || 0); refreshPreview();
+  setText('draft-status', 'Draft restored. Save online when ready.');
+}
+async function discardDraftRecovery() {
+  if (!confirm('Discard only this tab’s recovery backup? Your editor and online projects stay unchanged.')) return;
+  await draftWrite.catch(() => {}); await draftStorage('delete'); draftPending = null; draftLastJSON = '';
+  setText('draft-status', 'Previous backup discarded. New edits will be backed up in this tab.');
+}
 
 
 // ==== inlined from ./js/app.js ====
@@ -4176,9 +4579,9 @@ function applyPersonaPreset(target = state) {
   target.recommendations.title = content.recommendations;
   target.activity.title = content.activity;
   if (target.profileType === 'b2b') {
-    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, target.b2bSections || {}, content.sections);
+    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, content.sections, target.b2bSections || {});
   } else {
-    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, target.b2cSections || {}, content.sections);
+    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, content.sections, target.b2cSections || {});
   }
 }
 
@@ -4326,7 +4729,7 @@ function normalizeCustomModules(target = state) {
     if (!Array.isArray(target[key])) target[key] = [];
     const defaultPlacement = key === 'rightExtraCards' ? 'right' : 'middle';
     target[key].forEach((card, index) => {
-      if (!card.moduleId) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(card.moduleId || '')) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
       if (ids.has(card.moduleId)) card.moduleId = `${card.moduleId}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
       ids.add(card.moduleId);
       if (!['middle', 'right'].includes(card.placement)) card.placement = defaultPlacement;
@@ -4404,7 +4807,7 @@ function cloneViewData(value) {
 
 function personaView(owner, lens) {
   if (getProfileStrategy(owner).lens === lens) {
-    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key])])));
+    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key] ?? (key === 'railFields' ? [] : key === 'accountViewTab' ? 'overview' : undefined))])));
   }
   return cloneViewData(owner.personaVariants?.[lens]);
 }
@@ -4432,6 +4835,8 @@ function commitPersonaView(owner, lens, variant) {
 function snapshotPersonaView(target = state, lens = getProfileStrategy(target).lens) {
   if (!PERSONA_PRESETS[lens]) return;
   if (getProfileStrategy(target).lens !== lens) return;
+  target.railFields ||= [];
+  target.accountViewTab ||= 'overview';
   if (!target.personaVariants || typeof target.personaVariants !== 'object') target.personaVariants = {};
   const variant = {
     strategy: Object.assign({}, getProfileStrategy(target), { lens })
@@ -4446,6 +4851,8 @@ function restorePersonaView(target = state, lens) {
   if (saved) {
     PERSONA_VIEW_FIELDS.forEach(key => {
       if (saved[key] !== undefined) target[key] = cloneViewData(saved[key]);
+      else if (key === 'railFields') target[key] = [];
+      else if (key === 'accountViewTab') target[key] = 'overview';
     });
     target.profileStrategy = Object.assign(
       { lens, objective: PERSONA_PRESETS[lens].objective, brief: '', customRole: '' },
@@ -4462,6 +4869,8 @@ function restorePersonaView(target = state, lens) {
     brief: getPersonaBrief(target, lens),
     customRole: lens === 'custom' ? ensureProfileSet(target).customRole : ''
   };
+  target.railFields = [];
+  target.accountViewTab = 'overview';
   applyPersonaPreset(target);
   applyPersonaSampleTemplate(target);
   return false;
@@ -4472,7 +4881,7 @@ function updateProfileStrategyUI() {
   const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
   Object.keys(PERSONA_PRESETS).forEach(lens => {
     const button = document.getElementById(`persona-${lens}`);
-    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); }
+    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); button.tabIndex = strategy.lens === lens ? 0 : -1; }
   });
   const objective = document.getElementById('strategy-objective');
   const brief = document.getElementById('strategy-brief');
@@ -4516,6 +4925,7 @@ function updateProfileStrategyUI() {
   setText('step-6-recs-heading', content.recommendations);
   setText('step-6-activity-heading', content.activity);
   renderPersonaOutputSwitcher(strategy);
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
 }
 
 // Step 7 is a delivery surface, so it mirrors the persona picker without
@@ -4553,6 +4963,7 @@ function setViewerLens(lens) {
 function setPersonaVisualStatus(message) {
   const status = document.getElementById('quickstart-status');
   if (status) status.textContent = message;
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
 }
 
 // Recommendation visuals belong to each persona view, not the shared customer
@@ -4584,7 +4995,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
   const owner = state;
   const strategy = visualTargetStrategy(target, lens);
   const recommendations = Array.isArray(target?.recommendations?.items) ? target.recommendations.items : [];
-  const missing = recommendations.filter(item => item?.title && !item.image);
+  const missing = recommendations.filter((item, index) => item?.title && !item.image && (options.onlyIndex == null || index === options.onlyIndex));
   const profileSet = ensureProfileSet();
   const label = getProfileStrategyLabel(strategy);
   if (!missing.length) {
@@ -4610,7 +5021,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
       brandName: owner.brandName,
       industry: owner._industry || 'generic',
       profileType: owner.profileType,
-      recommendations: recommendations.map(item => ({ title: item.title, image: item.image || '' })),
+      recommendations: recommendations.map((item, index) => ({ title: item.title, image: options.onlyIndex != null && index !== options.onlyIndex ? (item.image || 'skip') : (item.image || '') })),
       strategy
     });
     if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
@@ -4637,7 +5048,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
     const remaining = currentItems.filter(item => item?.title && !item.image).length;
     const stateName = remaining === 0 ? 'ready' : changed ? 'partial' : 'failed';
     const message = remaining ? imageFailureMessage(response, remaining) : '';
-    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: missing.length - remaining };
+    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: currentItems.filter(item => item?.image).length };
     if (changed) commitPersonaView(owner, lens, view);
     if (getProfileStrategy().lens === lens) updateProfileStrategyUI();
     if (options.announce) setPersonaVisualStatus(stateName === 'ready' ? `✓ ${label} recommendation visuals are ready` : message);
@@ -4706,8 +5117,8 @@ function updateProfileModeUI() {
   document.body.classList.toggle('profile-mode-b2b', b2b);
   const b2cButton = document.getElementById('profile-type-b2c');
   const b2bButton = document.getElementById('profile-type-b2b');
-  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); }
-  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); }
+  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); b2cButton.tabIndex = b2b ? -1 : 0; }
+  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); b2bButton.tabIndex = b2b ? 0 : -1; }
 
   setText('quickstart-title', b2b ? 'Create an account profile set with AI' : 'Create a customer profile set with AI');
   setText('quickstart-sub', b2b
@@ -4809,6 +5220,9 @@ function renderPreviewDocument(profileState = state) {
 }
 
 function refreshPreview() {
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => renderPreviewNow(), 120);
 }
@@ -4822,13 +5236,23 @@ function getPresentationDocument() {
 }
 
 window.addEventListener('message', event => {
-  if (event.data?.type !== 'upg:account-tab-change' || !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
+  if (!['upg:account-tab-change', 'upg:layout-status'].includes(event.data?.type)) return;
+  if (event.data.type === 'upg:account-tab-change' && !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
   const preview = document.getElementById('preview-iframe');
   const presentation = document.getElementById('presentation-iframe');
   const context = event.source === preview?.contentWindow ? previewContext : event.source === presentation?.contentWindow ? presentationContext : null;
   if (!context || context.owner !== state || context.lens !== getProfileStrategy().lens || event.data.revision !== context.revision) return;
+  if (event.data.type === 'upg:layout-status') {
+    const { height, viewport } = event.data;
+    if (!Number.isFinite(height) || !Number.isFinite(viewport) || viewport <= 0) return;
+    setText('layout-fit-status', height > viewport + 2
+      ? 'Scrollable profile · Move optional modules to Suggested for a shorter screenshot.'
+      : 'Fits the first screen · Activity and recommendation lists can still scroll.');
+    return;
+  }
   state.accountViewTab = event.data.tab;
   snapshotPersonaView();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
   if (event.source === presentation?.contentWindow) refreshPreview();
 });
 
@@ -5215,7 +5639,7 @@ function renderExtraCards() {
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
-        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
+        <select aria-label="${escAttr(card.title || 'Middle-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
           <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
           <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
           <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
@@ -5276,7 +5700,7 @@ function renderRightExtraCards() {
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.rightExtraCards[${ci}].title=this.value; refreshPreview()">
-        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
+        <select aria-label="${escAttr(card.title || 'Right-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
           <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
           <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
           <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
@@ -5344,11 +5768,12 @@ function findCustomModule(moduleId) {
 }
 
 function moveCustomModule(moduleId, destination) {
+  if (!['middle', 'right', 'suggested', 'hidden'].includes(destination)) return;
   const found = findCustomModule(moduleId);
   if (!found) return;
   const [card] = state[found.bucket].splice(found.index, 1);
-  if (destination === 'suggested') {
-    card.visibility = 'suggested';
+  if (['suggested', 'hidden'].includes(destination)) {
+    card.visibility = destination;
     state[card.placement === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
   } else {
     card.placement = destination;
@@ -5357,6 +5782,24 @@ function moveCustomModule(moduleId, destination) {
   }
   renderAll();
   refreshPreview();
+  restoreModuleFocus(moduleId, 'move');
+  setText('module-composer-status', `${card.title} moved to ${destination}.`);
+}
+
+function restoreModuleFocus(moduleId, action) {
+  const row = [...document.querySelectorAll('[data-module-id]')].find(node => node.dataset.moduleId === moduleId);
+  row?.querySelector(`[data-module-action="${action}"]`)?.focus();
+}
+function reorderCustomModule(moduleId, delta) {
+  const found = findCustomModule(moduleId);
+  if (!found || ![-1, 1].includes(delta)) return;
+  const cards = state[found.bucket];
+  let next = found.index + delta;
+  while (next >= 0 && next < cards.length && cards[next].visibility !== found.card.visibility) next += delta;
+  if (next < 0 || next >= cards.length) return;
+  [cards[next], cards[found.index]] = [cards[found.index], cards[next]];
+  renderAll(); refreshPreview(); restoreModuleFocus(moduleId, delta < 0 ? 'up' : 'down');
+  setText('module-composer-status', `${found.card.title} moved ${delta < 0 ? 'up' : 'down'}.`);
 }
 
 function onModuleDragStart(event, moduleId) {
@@ -5386,16 +5829,18 @@ function renderModuleComposer() {
   const zones = {
     middle: modules.filter(card => card.visibility === 'visible' && card.placement === 'middle'),
     right: modules.filter(card => card.visibility === 'visible' && card.placement === 'right'),
-    suggested: modules.filter(card => card.visibility === 'suggested')
+    suggested: modules.filter(card => card.visibility !== 'visible')
   };
   const zone = (key, title, description) => `
     <div class="module-composer-zone" ondragover="allowModuleDrop(event)" ondragleave="clearModuleDrop(event)" ondrop="dropModule(event, '${key}')">
       <div class="module-composer-zone-title">${title}</div>
       <p>${description}</p>
       ${zones[key].length ? zones[key].map(card => `
-        <div class="module-composer-card" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
+        <div class="module-composer-card" data-module-id="${escAttr(card.moduleId)}" style="flex-wrap:wrap" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
           <span class="module-composer-grip">⠿</span><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
-          ${key === 'suggested' ? `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'middle')">Show</button>` : `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'suggested')">Stash</button>`}
+          <select data-module-action="move" aria-label="Move ${escAttr(card.title)}" onchange="moveCustomModule('${escAttr(card.moduleId)}',this.value)">${[['middle','Middle column'],['right','Right column'],['suggested','Suggested library'],['hidden','Hidden']].map(([value, label]) => `<option value="${value}" ${value === (card.visibility === 'visible' ? card.placement : card.visibility) ? 'selected' : ''}>${label}</option>`).join('')}</select>
+          <button type="button" data-module-action="up" aria-label="Move ${escAttr(card.title)} up" onclick="reorderCustomModule('${escAttr(card.moduleId)}',-1)">↑</button>
+          <button type="button" data-module-action="down" aria-label="Move ${escAttr(card.title)} down" onclick="reorderCustomModule('${escAttr(card.moduleId)}',1)">↓</button>
         </div>`).join('') : `<div class="module-composer-empty">Drop a card here</div>`}
     </div>`;
   container.innerHTML = `${zone('middle', 'Middle column', 'Below preferences')}${zone('right', 'Right column', 'Below products / offers')}${zone('suggested', 'Suggested library', 'Available but not on the first screen')}`;
@@ -5411,10 +5856,12 @@ function renderRecs() {
             <input type="text" value="${escAttr(rec.eyebrow)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Eyebrow (e.g. Next Best Action:)" oninput="state.recommendations.items[${i}].eyebrow=this.value; refreshPreview()">
             <input type="text" value="${escAttr(rec.cta)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Button text" oninput="state.recommendations.items[${i}].cta=this.value; refreshPreview()">
           </div>
-          <input type="text" value="${escAttr(rec.title)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="state.recommendations.items[${i}].title=this.value; refreshPreview()">
-          <input type="text" value="${escAttr(rec.image)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none font-mono" placeholder="Image URL" oninput="state.recommendations.items[${i}].image=this.value; refreshPreview()">
+          <input type="text" value="${escAttr(rec.title)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="updateRecommendationTitle(${i},this.value)">
+          <input type="text" value="${escAttr(/^data:/i.test(rec.image || '') ? '' : rec.image)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none font-mono" placeholder="Image URL" oninput="setRecommendationImage(${i},this.value,'manual')">
+          <p id="rec-image-status-${i}" class="text-xs text-slate-500">${escHTML(recommendationImageLabel(rec))}</p>
+          <button type="button" class="text-xs underline" onclick="regenerateRecommendationImage(${i})">Generate image for this action</button>
           <div id="rec-drop-${i}" class="drop-zone-sf p-3 text-center cursor-pointer">
-            ${rec.image ? `<img src="${escAttr(rec.image)}" class="w-full h-20 object-cover rounded mb-2">` : ''}
+            ${rec.image ? `<img src="${escAttr(safeImageURL(rec.image))}" alt="Recommendation image" class="w-full h-20 object-cover rounded mb-2">` : ''}
             <p class="text-[11px] text-gray-500">📷 Drop image or click to upload</p>
           </div>
         </div>
@@ -5422,13 +5869,38 @@ function renderRecs() {
       </div>
     </div>`).join('');
   // Wire drop zones after render
-  state.recommendations.items.forEach((_, i) => {
+  const owner = state;
+  state.recommendations.items.forEach((item, i) => {
     attachDropZone(`rec-drop-${i}`, null, (dataUrl) => {
-      state.recommendations.items[i].image = dataUrl;
+      if (state !== owner || state.recommendations.items[i] !== item) return;
+      setRecommendationImage(i, dataUrl, 'uploaded');
       renderRecs();
       refreshPreview();
     });
   });
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+}
+function recommendationImageLabel(rec) {
+  if (!rec.image) return 'Image missing — retry generation or upload an image.';
+  if (rec.imageForTitle && rec.imageForTitle !== rec.title) return 'Action changed — review this image or generate a new one.';
+  return rec.imageSource === 'generated' ? 'AI-generated for this action' : rec.imageSource === 'uploaded' ? 'Your uploaded image' : 'Provided image';
+}
+function updateRecommendationTitle(index, title) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.title = title; setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+function setRecommendationImage(index, image, source) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.image = image; item.imageSource = source; item.imageForTitle = item.title;
+  const items = state.recommendations.items;
+  ensureProfileSet().visuals[getProfileStrategy().lens] = { state: items.every(row => row.image) ? 'ready' : 'partial', count: items.filter(row => row.image).length };
+  setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+async function regenerateRecommendationImage(index) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  if (item.image && !confirm('Replace this action’s image with a new AI-generated image?')) return;
+  item.image = ''; item.imageSource = 'pending'; renderRecs(); refreshPreview();
+  await generatePersonaRecommendationImagesForTarget(getProfileStrategy().lens, state, { announce: true, onlyIndex: index });
 }
 function addRec() { state.recommendations.items.push({ eyebrow: 'Recommended:', title: 'New Recommendation', cta: 'Suggest', image: '' }); renderRecs(); refreshPreview(); }
 function removeRec(i) { state.recommendations.items.splice(i, 1); renderRecs(); refreshPreview(); }
@@ -5482,12 +5954,16 @@ function goToStep(n) {
     const i = +d.dataset.step;
     d.classList.toggle('active', i === currentStep);
     d.classList.toggle('completed', i < currentStep);
+    if (i === currentStep) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
   });
   document.getElementById('btn-prev').classList.toggle('hidden', currentStep === 0);
-  document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Done' : 'Next →';
+  document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Preview & Present' : 'Next →';
+  const heading = document.querySelector('.step-panel.active h2');
+  if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  if (typeof labelEditorControls === 'function') labelEditorControls();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); }
+function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); else openPresentation(); }
 function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
 
 // ─── URL & IMAGE INPUTS ─────────────────────────────────────
@@ -5587,15 +6063,16 @@ async function buildIntegrationArtifact(profile = captureOutputSnapshot()) {
     profileType,
     persona: strategy.lens,
     personaLabel: getProfileStrategyLabel(strategy),
+    availablePersonas: Object.keys(profile.personaVariants || { [strategy.lens]: {} }),
     subject,
     brand: {
       name: profile.brandName || '',
       appName: profile.appName || '',
-      logo: profile.logo || '',
+      logo: /^data:/i.test(profile.logo || '') ? '' : (profile.logo || ''),
       colors: Object.assign({}, profile.colors || {})
     },
     renderedHtml: canPersistRender ? rawHtml : '',
-    renderStatus: canPersistRender ? 'ready' : 'requires_hosted_render'
+    renderStatus: canPersistRender ? 'ready' : 'renderable'
   };
 }
 
@@ -5620,7 +6097,7 @@ function openPresentation() {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#0f172a;display:flex;flex-direction:column;padding:12px;';
   overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;padding:0 4px 10px;font:600 13px Salesforce Sans,system-ui,sans-serif;"><span>Unified Profile Presentation</span><div style="display:flex;gap:8px;"><button id="presentation-fullscreen" type="button" style="border:1px solid #64748b;border-radius:6px;background:#1e293b;color:#fff;padding:7px 10px;cursor:pointer;">Full screen</button><button id="presentation-close" type="button" style="border:1px solid #64748b;border-radius:6px;background:#fff;color:#0f172a;padding:7px 10px;cursor:pointer;">Close</button></div></div><div id="presentation-canvas" style="flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;"><div id="presentation-stage" style="position:relative;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.35);"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="position:absolute;top:0;left:0;width:1300px;height:860px;border:0;transform-origin:0 0;"></iframe></div></div>`;
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+  const close = () => { releaseDialogFocus('presentation-overlay'); overlay.remove(); };
   overlay.querySelector('#presentation-close').addEventListener('click', close);
   overlay.querySelector('#presentation-fullscreen').addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -5628,8 +6105,7 @@ function openPresentation() {
   });
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
   document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
-  const onKey = event => { if (event.key === 'Escape' && document.getElementById('presentation-overlay')) { close(); document.removeEventListener('keydown', onKey); } };
-  document.addEventListener('keydown', onKey);
+  activateDialogFocus('presentation-overlay', close, 'presentation-close');
   requestAnimationFrame(fitPresentationScale);
   setTimeout(fitPresentationScale, 100);
 }
@@ -5697,14 +6173,14 @@ function showCopyModal(html) {
       <div style="background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
         <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-weight:700;font-size:15px;color:#0f172a;">Copy Profile HTML</div>
-          <button id="copy-modal-close-x" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
+          <button id="copy-modal-close-x" aria-label="Close copy dialog" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
         </div>
         <div style="padding:12px 20px;font-size:13px;color:#475569;">Select-all is already applied. Click <b>Copy</b> below, or press ⌘/Ctrl+C.</div>
         <div style="padding:0 20px 12px;flex:1;overflow:hidden;display:flex;">
           <textarea id="copy-modal-textarea" readonly spellcheck="false" style="width:100%;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid #cbd5e1;border-radius:8px;padding:10px;resize:none;background:#f8fafc;color:#0f172a;"></textarea>
         </div>
         <div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-          <div id="copy-modal-status" class="text-sm font-600"></div>
+          <div id="copy-modal-status" role="status" aria-live="polite" class="text-sm font-600"></div>
           <div style="display:flex;gap:8px;">
             <button id="copy-modal-close" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;">Close</button>
             <button id="copy-modal-copy" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:#0176d3;color:#fff;cursor:pointer;">Copy</button>
@@ -5712,7 +6188,7 @@ function showCopyModal(html) {
         </div>
       </div>`;
     document.body.appendChild(modal);
-    const close = () => modal.remove();
+    const close = () => { releaseDialogFocus('copy-modal'); modal.remove(); };
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     modal.querySelector('#copy-modal-close').addEventListener('click', close);
     modal.querySelector('#copy-modal-close-x').addEventListener('click', close);
@@ -5720,12 +6196,9 @@ function showCopyModal(html) {
       const ta = document.getElementById('copy-modal-textarea');
       tryCopyToClipboard(ta ? ta.value : html, ta);
     });
-    document.addEventListener('keydown', function onEsc(e) {
-      if (e.key === 'Escape' && document.getElementById('copy-modal')) {
-        close();
-        document.removeEventListener('keydown', onEsc);
-      }
-    });
+    modal.setAttribute('aria-label', 'Copy profile HTML');
+    modal.querySelector('#copy-modal-textarea').setAttribute('aria-label', 'Exported profile HTML');
+    activateDialogFocus('copy-modal', close, 'copy-modal-textarea');
   }
   const ta = document.getElementById('copy-modal-textarea');
   if (ta) {
@@ -5782,6 +6255,10 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base.colors.menu = '#FFFFFF';
   base.colors.menuText = '#000000';
 
+  // Missing AI fields are unknown, never facts inherited from the demo seed.
+  ['profile', 'loyalty', 'account', 'accountMetrics'].forEach(key => {
+    if (base[key]) base[key] = Object.fromEntries(Object.keys(base[key]).map(field => [field, field === 'secondaryEmailInclude' ? false : '']));
+  });
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
@@ -5819,6 +6296,7 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
     base.rightExtraCards = (base.rightExtraCards || []).concat(aiCards);
   }
   normalizeCustomModules(base);
+  base.railFields = cloneViewData(ai.railFields || []);
   // The AI supplies the content, while the selected viewer lens owns the
   // information hierarchy and section names shown to the presenter.
   applyPersonaPreset(base);
@@ -5844,6 +6322,13 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
 
 function mergePersonaOverlay(target, overlay) {
   UPGContract.validateAIProfile(overlay, { profileType: target.profileType, overlay: true });
+  if (Array.isArray(overlay.railFields)) {
+    target.railFields ||= [];
+    overlay.railFields.forEach(field => {
+      const existing = target.railFields.find(item => item.label.toLowerCase() === field.label.toLowerCase());
+      if (!existing) target.railFields.push(Object.assign({}, cloneViewData(field), { id: `ai-field-${Date.now()}-${Math.random().toString(36).slice(2)}`, visible: true }));
+    });
+  }
   ['insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(key => {
     if (overlay[key] && typeof overlay[key] === 'object') target[key] = Object.assign({}, target[key] || {}, cloneViewData(overlay[key]));
   });
@@ -5884,6 +6369,7 @@ function createPersonaVariantFromOverlay(lens, overlay, strategy, owner = state)
 }
 
 function renderAll() {
+  if (typeof renderRailFields === 'function') renderRailFields();
   renderInsights();
   renderAffinityGroups();
   renderPreferences();
@@ -5895,6 +6381,8 @@ function renderAll() {
   renderRecs();
   renderActivity();
   renderNavLinks();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof labelEditorControls === 'function') labelEditorControls();
 }
 
 // ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
@@ -5905,6 +6393,7 @@ let currentProjectRevision = null;
 let currentProjectOwner = null;
 let projectSaveInFlight = false;
 let projectSaveAttemptKey = null;
+let projectSaveAttempt = null;
 
 function resetProjectIdentity() {
   currentProjectId = null;
@@ -5912,6 +6401,7 @@ function resetProjectIdentity() {
   currentProjectRevision = null;
   currentProjectOwner = null;
   projectSaveAttemptKey = null;
+  projectSaveAttempt = null;
 }
 
 function syncAuthUI() {
@@ -5994,6 +6484,7 @@ async function openSettings() {
   }
   closeAccountMenu();
   document.getElementById('settings-modal')?.classList.remove('hidden');
+  activateDialogFocus('settings-modal', closeSettings);
   const email = SaasyAuth.getEmail() || '';
   const label = document.getElementById('settings-account-email');
   const initial = document.getElementById('settings-account-initial');
@@ -6003,6 +6494,8 @@ async function openSettings() {
 }
 
 function closeSettings() {
+  closeApiMcpGuide();
+  releaseDialogFocus('settings-modal');
   document.getElementById('settings-modal')?.classList.add('hidden');
   hideCreateApiKeyForm();
   dismissCreatedApiKey();
@@ -6015,9 +6508,11 @@ function openApiMcpGuide() {
   if (restBase) restBase.textContent = origin;
   if (endpoint) endpoint.textContent = origin.startsWith('http') ? `${origin}/mcp` : origin;
   document.getElementById('api-mcp-guide-modal')?.classList.remove('hidden');
+  activateDialogFocus('api-mcp-guide-modal', closeApiMcpGuide);
 }
 
 function closeApiMcpGuide() {
+  releaseDialogFocus('api-mcp-guide-modal');
   document.getElementById('api-mcp-guide-modal')?.classList.add('hidden');
 }
 
@@ -6138,15 +6633,17 @@ function openSaveProjectModal() {
   input.value = currentProjectName || state.brandName || '';
   const actions = document.getElementById('save-project-modal-actions');
   actions.innerHTML = currentProjectId
-    ? `<button data-save-action onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
+    ? `<button data-save-action onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save a separate copy</button>
        <button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
     : `<button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
   document.getElementById('save-project-modal').classList.remove('hidden');
+  activateDialogFocus('save-project-modal', closeSaveProjectModal, 'save-project-name-input');
   setTimeout(() => input.focus(), 0);
 }
 
 function closeSaveProjectModal() {
   if (projectSaveInFlight) return;
+  releaseDialogFocus('save-project-modal');
   document.getElementById('save-project-modal').classList.add('hidden');
   projectSaveAttemptKey = null;
 }
@@ -6207,6 +6704,13 @@ async function saveProjectWithSessionRecovery(options, ownerEmail = SaasyAuth.ge
   try {
     return await SaasyAuth.saveProject(options);
   } catch (error) {
+    // An update may have committed before its response was lost. Recognize
+    // that exact content on a revision conflict without overwriting newer edits.
+    if ((error.code || error.message) === 'revision_conflict' && options.id && SaasyAuth.loadProject && (!ownerEmail || SaasyAuth.getEmail?.() === ownerEmail)) {
+      const saved = await SaasyAuth.loadProject(options.id);
+      if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
+      if (saved.tool === SAASY_TOOL && saved.name === options.name && (saved.source_url || '') === (options.sourceUrl || '') && UPGContract.canonicalJSON(saved.payload) === UPGContract.canonicalJSON(options.payload)) return saved;
+    }
     if (!isRejectedSession(error)) throw error;
 
     // The shared auth widget clears an invalid local JWT on a 401. Ask Magic
@@ -6239,18 +6743,26 @@ async function confirmSaveProject(asNew) {
     const input = document.getElementById('save-project-name-input');
     const name = input.value.trim() || state.brandName || 'Untitled Profile';
     const id = asNew ? null : currentProjectId;
-    const idempotencyKey = projectSaveAttemptKey || (projectSaveAttemptKey = createProjectSaveAttemptKey());
     const sourceUrl = getProjectSourceUrl();
     const payload = buildProjectPayloadForSave();
-    payload.integrationArtifact = await buildIntegrationArtifact(payload);
-    const project = await saveProjectWithSessionRecovery({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl, expectedRevision: id ? currentProjectRevision : undefined }, ownerEmail);
+    delete payload.integrationArtifact;
+    const signature = JSON.stringify({ payload, id, name, sourceUrl, ownerEmail, asNew });
+    if (!projectSaveAttempt || projectSaveAttempt.signature !== signature) {
+      const idempotencyKey = createProjectSaveAttemptKey();
+      payload.integrationArtifact = await buildIntegrationArtifact(payload);
+      if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > MAX_SAVED_PROJECT_BYTES) throw new Error('project_payload_too_large');
+      projectSaveAttempt = { signature, options: { tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl, saveAsCopy: !!asNew, expectedRevision: id ? currentProjectRevision : undefined } };
+    }
+    const project = await saveProjectWithSessionRecovery(projectSaveAttempt.options, ownerEmail);
     if (state === saveOwner) {
       currentProjectId = project.id;
       currentProjectName = project.name;
       currentProjectRevision = project.revision || null;
       currentProjectOwner = ownerEmail;
+      if (typeof persistDraftRecovery === 'function') await persistDraftRecovery();
     }
     projectSaveInFlight = false;
+    projectSaveAttempt = null;
     closeSaveProjectModal();
     const s = document.getElementById('save-project-success');
     s.classList.remove('hidden');
@@ -6317,7 +6829,7 @@ async function deleteProjectFromList(id, row) {
   try {
     await SaasyAuth.deleteProject(id);
     row.remove();
-    if (id === currentProjectId) { currentProjectId = null; currentProjectName = null; }
+    if (id === currentProjectId) resetProjectIdentity();
   } catch (e) {
     alert('Could not delete project: ' + e.message);
   }
@@ -6325,11 +6837,19 @@ async function deleteProjectFromList(id, row) {
 
 async function loadProjectAndHydrate(id) {
   try {
+    if (typeof draftReady !== 'undefined' && draftReady && !confirm('Load this online project and replace the current editor? Download or save a copy first if you need to keep current edits.')) return;
     const owner = state;
+    readStaticFields();
+    const expectedDraft = JSON.stringify(state);
+    const expectedSourceUrl = document.getElementById('quickstart-url')?.value;
+    const expectedEmail = SaasyAuth.getEmail?.();
     const project = await SaasyAuth.loadProject(id);
     if (project.tool !== SAASY_TOOL) throw new Error('This project belongs to a different tool and cannot be opened in UPG.');
     UPGContract.validateSavedProfile(project.payload);
     if (state !== owner) return;
+    readStaticFields();
+    if (SaasyAuth.getEmail?.() !== expectedEmail) throw new Error('Your signed-in account changed. Select the project again from the correct account.');
+    if (JSON.stringify(state) !== expectedDraft || document.getElementById('quickstart-url')?.value !== expectedSourceUrl) throw new Error('The editor changed while this project was loading. Your edits were kept; load it again when you are ready.');
     const hydrated = cloneViewData(project.payload);
     if (hydrated.personaVariants) Object.values(hydrated.personaVariants).forEach(variant => {
       UPGContract.validateSavedProfile(Object.assign({}, hydrated, variant));
@@ -6340,6 +6860,7 @@ async function loadProjectAndHydrate(id) {
     currentProjectName = project.name;
     currentProjectRevision = project.revision || null;
     currentProjectOwner = SaasyAuth.getEmail?.();
+    document.getElementById('quickstart-url').value = project.source_url || state._aiContext?.sourceUrl || '';
     document.getElementById('brand-industry').value = state._industry || 'recruiting';
     fillStaticFields();
     renderAll();
@@ -6396,7 +6917,8 @@ function friendlyError(err) {
   return map[code] || err.message || String(err);
 }
 
-function refreshSharedBackendConnection() {
+async function refreshSharedBackendConnection() {
+  if (typeof persistDraftRecovery === 'function' && !(await persistDraftRecovery()) && !confirm('Local recovery is unavailable. Reload anyway? Save online or download HTML first to keep your work.')) return;
   window.location.reload();
 }
 
@@ -6418,6 +6940,7 @@ function nudgeToAdvancedIfDefaultFailed(code) {
   if (!code || !code.startsWith('default_')) return;
   const panel = document.getElementById('quickstart-settings');
   if (panel && !panel.classList.contains('open')) panel.classList.add('open');
+  if (panel) document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', 'true');
 }
 
 async function onPersonalizeCurrentPersona() {
@@ -6447,6 +6970,9 @@ async function onPersonalizeCurrentPersona() {
   const requestId = (personaTextRequests.get(strategy.lens) || 0) + 1;
   personaTextRequests.set(strategy.lens, requestId);
   const current = () => state === owner && personaTextRequests.get(strategy.lens) === requestId;
+  const previousStatus = ensureProfileSet(owner).statuses[strategy.lens];
+  owner.profileSet.statuses[strategy.lens] = 'generating';
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
   status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
   try {
     const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
@@ -6460,6 +6986,7 @@ async function onPersonalizeCurrentPersona() {
     });
     if (!current()) return;
     if (personaFingerprint(owner, strategy.lens) !== before) {
+      owner.profileSet.statuses[strategy.lens] = 'edited';
       status.textContent = 'Your view changed while AI was working. Those edits were kept. Choose Update view again to apply your latest requirements.';
       return;
     }
@@ -6474,9 +7001,12 @@ async function onPersonalizeCurrentPersona() {
     status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
   } catch (error) {
     if (!current()) return;
+    owner.profileSet.statuses[strategy.lens] = previousStatus === 'ready' ? 'edited' : 'failed';
     showQuickStartError(error);
     nudgeToAdvancedIfDefaultFailed(error.code);
     status.textContent = '';
+  } finally {
+    if (current() && typeof renderProfileProgress === 'function') renderProfileProgress();
   }
 }
 
@@ -6518,7 +7048,7 @@ async function onQuickStartAnalyze() {
   btn.disabled = true;
   status.innerHTML = '<div class="spinner"></div> Starting…';
 
-  const setStatus = (label) => { if (runId === generationRunId) status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; };
+  const setStatus = (label) => { if (runId === generationRunId) { status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; if (typeof renderProfileProgress === 'function') renderProfileProgress(); } };
 
   try {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
@@ -6631,7 +7161,8 @@ async function onQuickStartAnalyze() {
 }
 
 function toggleQuickStartSettings() {
-  document.getElementById('quickstart-settings').classList.toggle('open');
+  const open = document.getElementById('quickstart-settings').classList.toggle('open');
+  document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
 function refreshProviderBadge() {
@@ -6680,6 +7211,16 @@ function bootstrap() {
   fillStaticFields();
   syncProfileSetConfigUI();
   renderAll();
+  initializeDraftRecovery();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistDraftRecovery(); });
+  document.addEventListener('keydown', event => {
+    const radio = event.target.closest?.('[role="radio"]');
+    const group = radio?.closest('[role="radiogroup"]');
+    if (!group || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const radios = [...group.querySelectorAll('[role="radio"]')]; const index = radios.indexOf(radio);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? radios.length - 1 : (index + (['ArrowLeft','ArrowUp'].includes(event.key) ? -1 : 1) + radios.length) % radios.length;
+    event.preventDefault(); radios.forEach((item, i) => { item.tabIndex = i === next ? 0 : -1; }); radios[next].click(); radios[next].focus();
+  });
   if (typeof hydrateBundledStarterImages === 'function') {
     hydrateBundledStarterImages(state).then(() => refreshPreview());
   }

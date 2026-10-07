@@ -15,6 +15,34 @@ function esc(s) {
     .replace(/"/g, '&quot;');
 }
 
+// Extra identity facts are owned by the selected view, not the shared brand.
+function renderProfileRailFields(fields, mode = 'b2c') {
+  if (!Array.isArray(fields)) return '';
+  return fields.filter(field => field && typeof field === 'object' && field.visible !== false).map(field => {
+    const label = esc(field.label || 'Custom field');
+    const value = esc(field.value ?? '');
+    const icon = raw(field.icon || '•');
+    if (mode === 'b2b') return `<div class="rail-field" data-rail-field-id="${esc(field.id)}"><i aria-hidden="true">${icon}</i><span>${label}</span><b>${value}</b></div>`;
+    return `<div class="profile-field" data-rail-field-id="${esc(field.id)}"><span class="profile-field-icon" aria-hidden="true">${icon}</span><span class="profile-field-label">${label}</span><span class="profile-field-value">${value}</span></div>`;
+  }).join('');
+}
+
+function renderLayoutStatusScript(state) {
+  const revision = JSON.stringify(String(state._renderRevision || '')).replace(/</g, '\\u003c');
+  return `<script>
+(function () {
+  function report() {
+    if (window.parent === window) return;
+    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: window.innerHeight }, '*');
+  }
+  window.upgReportLayout = report;
+  window.addEventListener('load', report, { once: true });
+  if (document.readyState === 'complete') report();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(report).catch(function () {});
+})();
+</script>`;
+}
+
 // All interpolated styles and image sources pass these narrow validators.
 // Render a safe copy: producing a preview must never rewrite the saved draft.
 function renderColor(value, fallback = '#066afe') {
@@ -723,6 +751,7 @@ body {
       ${s.profile.secondaryEmailInclude && s.profile.secondaryEmail ? `<div class="profile-field"><span class="profile-field-icon">👤</span><span class="profile-field-label">${esc(s.profile.secondaryEmailLabel || "Secondary Email")}</span><span class="profile-field-value">${esc(s.profile.secondaryEmail)}</span></div>` : ''}
       <div class="profile-field"><span class="profile-field-icon">📱</span><span class="profile-field-label">Phone Number</span><span class="profile-field-value">${esc(s.profile.phone)}</span></div>
       <div class="profile-field"><span class="profile-field-icon">📍</span><span class="profile-field-label">Address</span><span class="profile-field-value">${esc(s.profile.address)}</span></div>
+      ${renderProfileRailFields(s.railFields)}
     </div>
 
     <div class="profile-segment">
@@ -919,6 +948,7 @@ body {
 
 </div>
 
+${renderLayoutStatusScript(s)}
 </body>
 </html>`;
 }
@@ -1042,7 +1072,7 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 <body>
 <header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
-<main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div></div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
+<main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
 <section class="account-workspace"><div class="account-tabs" role="tablist" aria-label="Account views">
 ${tabs.map(tab => `<button class="account-tab" id="tab-${tab}" type="button" role="tab" aria-selected="${tab === selectedTab}" tabindex="${tab === selectedTab ? '0' : '-1'}" aria-controls="account-${tab}" data-account-tab="${tab}">${tab[0].toUpperCase() + tab.slice(1)}</button>`).join('')}
 </div><div class="account-views">
@@ -1066,6 +1096,7 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
       view.hidden = !active;
     });
     if (window.parent !== window) window.parent.postMessage({ type: 'upg:account-tab-change', tab: name, revision: ${tabRevision} }, '*');
+    if (window.upgReportLayout) window.upgReportLayout();
   }
   tabs.forEach(function (tab, index) {
     tab.addEventListener('click', function () { select(tab); });
@@ -1081,5 +1112,6 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
   });
 })();
 </script>
+${renderLayoutStatusScript(s)}
 </body></html>`;
 }

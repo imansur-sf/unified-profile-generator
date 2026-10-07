@@ -1,11 +1,11 @@
 const express = require('express');
 const path = require('path');
-const fs = require('fs');
-const vm = require('vm');
 const crypto = require('crypto');
 const { fetchPublicResource, validatePublicUrl } = require('./lib/safe-fetch');
 const { parsePublicOrigin, parseTrustedProxies, requestOrigin: resolveRequestOrigin } = require('./lib/request-boundary');
-const profileContract = require('./js/profile-contract');
+const { buildState, renderSavedProfile, integrationArtifact, LENSES } = require('./lib/profile-runtime');
+const { runGenerationPipeline } = require('./lib/generation-pipeline');
+const { createGenerationWorker } = require('./lib/generation-worker');
 const app = express();
 const PUBLIC_ORIGIN = parsePublicOrigin(process.env.PUBLIC_ORIGIN || '');
 app.set('trust proxy', parseTrustedProxies(process.env.TRUST_PROXY || ''));
@@ -20,11 +20,7 @@ const MCP_ALLOWED_ORIGINS = new Set((process.env.MCP_ALLOWED_ORIGINS || '').spli
 const MCP_MAX_TEXT_CHARS = 60000;
 const MCP_MAX_EXPORT_CHARS = 200000;
 const MCP_PROTOCOL_VERSIONS = ['2025-03-26', '2025-06-18', '2025-11-25', '2026-07-28'];
-const GENERATION_JOB_TTL_MS = 24 * 60 * 60 * 1000;
 const GENERATION_TIMEOUT_MS = 90000;
-const MAX_GENERATION_JOBS = 500;
-const generationJobs = new Map();
-let generationRenderer = null;
 const MAX_SCRAPE_BYTES = 3000000;
 const SCRAPE_TIMEOUT_MS = 15000;
 const USER_AGENT = 'Mozilla/5.0 (compatible; UnifiedProfileGenerator/1.0)';
@@ -50,8 +46,11 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use(['/saasy-auth.js', '/auth', '/projects', '/api-keys'], proxySaasyAccounts);
+app.use(['/integrations', '/mcp', '/.well-known/mcp.json'], requireConfiguredPublicOrigin);
 app.post('/integrations/v1/upg/generations', handleCreateGeneration);
 app.get('/integrations/v1/upg/generations/:id', handleGetGeneration);
+app.post('/integrations/v1/upg/generations/:id/resume', handleResumeGeneration);
+app.get('/integrations/v1/upg/profiles/:id/export', handleProfileExport);
 app.use('/integrations', proxySaasyAccounts);
 app.get('/.well-known/mcp.json', (req, res) => {
   let origin;
@@ -64,8 +63,8 @@ app.get('/.well-known/mcp.json', (req, res) => {
     endpoint: `${origin}/mcp`,
     authentication: { type: 'api-key', header: 'X-API-Key', keyPrefix: 'upg_' },
     protocolVersions: MCP_PROTOCOL_VERSIONS,
-    capabilities: { tools: ['upg_list_profiles', 'upg_get_profile', 'upg_get_profile_export', 'upg_generate_profile', 'upg_get_generation_status'] },
-    generation: { asynchronous: true, requiredScopes: ['generations:write', 'profiles:write'] }
+    capabilities: { tools: MCP_TOOLS.map(tool => tool.name) },
+    generation: { asynchronous: true, durable: true, explicitResume: true, requiredScopes: ['generations:write', 'profiles:write'] }
   });
 });
 app.post('/mcp', validateMcpOrigin, handleMcpRequest);
@@ -73,7 +72,7 @@ app.get('/mcp', (req, res) => {
   res.status(405).set('Allow', 'POST').json({ error: 'method_not_allowed', message: 'Use POST with MCP JSON-RPC messages.' });
 });
 app.get('/api/health', (req, res) => {
-  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'GET /api/brand-image', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY) });
+  res.json({ ok: true, service: 'unified-profile-generator', version: 1, endpoints: ['GET /api/scrape', 'GET /api/brand-image', 'POST /api/llm', 'POST /api/generate-images', 'GET /api/health'], llm_configured: Boolean(GEMINI_API_KEY), public_origin_configured: Boolean(PUBLIC_ORIGIN), integrations_configured: process.env.NODE_ENV !== 'production' || Boolean(PUBLIC_ORIGIN) });
 });
 app.get('/api/scrape', async (req, res) => {
   const target = req.query.url;
@@ -146,20 +145,23 @@ app.post('/api/generate-images', async (req, res) => {
   const output = results.map((r, i) => { if (r.status === 'fulfilled') return r.value; return { slot: prompts[i].slot, error: r.reason?.message || 'generation_failed' }; });
   res.json({ results: output });
 });
-async function generateImage(prompt) {
-  const geminiUrl = `https://generativelanguage.googleapis.com/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
+async function generateImage(prompt, signal) {
+  const geminiUrl = `${GEMINI_API_BASE_URL}/v1beta/models/${IMAGE_GEN_MODEL}:generateContent?key=${GEMINI_API_KEY}`;
   const geminiBody = { contents: [{ parts: [{ text: prompt }] }], generationConfig: { responseModalities: ['IMAGE'] } };
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), IMAGE_GEN_TIMEOUT_MS);
-  const upstream = await fetch(geminiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody), signal: controller.signal });
-  clearTimeout(timeout);
-  if (!upstream.ok) { const body = await upstream.text().catch(() => ''); throw new Error(`Gemini ${upstream.status}: ${body.slice(0, 200)}`); }
-  const data = await upstream.json();
-  const parts = data?.candidates?.[0]?.content?.parts || [];
-  const imagePart = parts.find(p => p.inlineData);
-  if (!imagePart) throw new Error('No image in Gemini response');
-  const mime = imagePart.inlineData.mimeType || 'image/jpeg';
-  return { imageData: `data:${mime};base64,${imagePart.inlineData.data}` };
+  const abort = () => controller.abort();
+  signal?.throwIfAborted();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, IMAGE_GEN_TIMEOUT_MS);
+  try {
+    const upstream = await fetch(geminiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(geminiBody), signal: controller.signal });
+    if (!upstream.ok) throw generationError('image_generation_failed');
+    const data = JSON.parse(await readBoundedText(upstream, 8 * 1024 * 1024));
+    const imagePart = data?.candidates?.[0]?.content?.parts?.find(p => p.inlineData);
+    const mime = imagePart?.inlineData?.mimeType;
+    if (!/^image\/(png|jpeg|webp|gif)$/.test(mime || '') || !/^[a-z0-9+/]+=*$/i.test(imagePart?.inlineData?.data || '')) throw generationError('invalid_image_response');
+    return { imageData: `data:${mime};base64,${imagePart.inlineData.data}` };
+  } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
 }
 
 function brandImageError(code, status) {
@@ -268,6 +270,7 @@ const MCP_TOOLS = [
       type: 'object',
       properties: {
         profileId: { type: 'string', description: 'The profile ID returned by upg_list_profiles.' },
+        persona: { type: 'string', enum: ['sales', 'service', 'marketing', 'success', 'custom'], description: 'Optional saved persona view to export. Defaults to the active saved view; preserves its saved tab and images.' },
         includeHtml: { type: 'boolean', description: 'Return HTML directly when it is 200,000 characters or less. Defaults to false.' }
       },
       required: ['profileId'],
@@ -289,9 +292,12 @@ const MCP_TOOLS = [
         customRole: { type: 'string', description: 'Required when persona is custom.' },
         brief: { type: 'string', description: 'Optional business context or requirements.' },
         projectName: { type: 'string', description: 'Optional name for the saved UPG project.' },
+        idempotencyKey: { type: 'string', pattern: '^[A-Za-z0-9_-]{16,200}$', description: 'Stable unique request key (16–200 letters, digits, underscores or hyphens). Reuse only for the exact same generation request.' },
+        includeImages: { type: 'boolean', description: 'Generate shared portrait and persona-specific recommendation images. Defaults to true; incurs image-generation usage.' },
+        views: { type: 'array', minItems: 1, maxItems: 5, description: 'Optional distinct persona views. Replaces the single persona strategy.', items: { type: 'object', properties: { persona: { type: 'string', enum: ['sales', 'service', 'marketing', 'success', 'custom'] }, objective: { type: 'string' }, brief: { type: 'string' }, customRole: { type: 'string' } }, required: ['persona'], additionalProperties: false } },
         tier: { type: 'string', enum: ['fast', 'balanced', 'powerful'], description: 'AI generation quality tier. Defaults to balanced.' }
       },
-      required: ['url', 'profileType', 'persona'],
+      required: ['url', 'profileType'],
       additionalProperties: false
     },
     annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
@@ -302,6 +308,13 @@ const MCP_TOOLS = [
     description: 'Check the state of an asynchronous UPG profile generation job. When completed, use the returned profile ID to retrieve or export the saved profile.',
     inputSchema: { type: 'object', properties: { jobId: { type: 'string', description: 'Generation job ID returned by upg_generate_profile.' } }, required: ['jobId'], additionalProperties: false },
     annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+  },
+  {
+    name: 'upg_resume_generation',
+    title: 'Resume an interrupted Unified Profile Generator job',
+    description: 'Explicitly resume a queued, failed, or interrupted job from its last durable checkpoint using the same job ID. Ask for confirmation: a provider call that finished just before interruption may be repeated and charged again. Reading status never resumes work.',
+    inputSchema: { type: 'object', properties: { jobId: { type: 'string' } }, required: ['jobId'], additionalProperties: false },
+    annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
   }
 ];
 async function handleMcpRequest(req, res) {
@@ -349,17 +362,12 @@ async function callMcpTool(req, name, args) {
   if (name === 'upg_list_profiles') return mcpIntegrationJson(req, '/integrations/v1/upg/profiles');
   if (name === 'upg_generate_profile') {
     const result = await createGenerationJob(req, args);
-    return result.status === 202 ? mcpToolResult(result.body) : mcpToolError(result.body?.error || 'UPG could not start generation.');
+    return result.status < 300 ? mcpToolResult(result.body) : mcpToolError(result.body?.error || 'UPG could not start generation.');
   }
-  if (name === 'upg_get_generation_status') {
+  if (name === 'upg_get_generation_status' || name === 'upg_resume_generation') {
     const jobId = typeof args.jobId === 'string' ? args.jobId.trim() : '';
-    if (!jobId) return mcpToolError('jobId is required.');
-    const connectionResponse = await callAccountsIntegration(req, '/integrations/v1/upg/connection');
-    const connection = await readAccountsJson(connectionResponse);
-    if (!connectionResponse.ok) return mcpToolError(integrationErrorMessage(connectionResponse, connection));
-    const job = generationJobs.get(jobId);
-    if (!job || job.email !== connection.email) return mcpToolError('The generation job was not found.');
-    return mcpToolResult({ job: publicGenerationJob(job) });
+    const result = name === 'upg_resume_generation' ? await resumeGeneration(req, jobId) : await getGeneration(req, jobId);
+    return result.status < 300 ? mcpToolResult(result.body) : mcpToolError(result.body.error);
   }
   const profileId = typeof args.profileId === 'string' ? args.profileId.trim() : '';
   if (!profileId) return mcpToolError('profileId is required.');
@@ -375,19 +383,20 @@ async function callMcpTool(req, name, args) {
     return mcpToolResult(output);
   }
   if (name === 'upg_get_profile_export') {
-    const response = await callAccountsIntegration(req, `/integrations/v1/upg/profiles/${encodeURIComponent(profileId)}/export`);
-    const html = await response.text();
-    if (!response.ok) return mcpToolError(integrationErrorMessage(response, parseJsonSafely(html)));
+    const result = await getProfileExport(req, profileId, args.persona);
+    if (result.status !== 200) return mcpToolError(result.body.error);
+    const { html, persona } = result.body;
     const output = {
       profileId,
       mimeType: 'text/html',
-      exportPath: `/integrations/v1/upg/profiles/${encodeURIComponent(profileId)}/export`,
+      persona,
+      exportPath: `/integrations/v1/upg/profiles/${encodeURIComponent(profileId)}/export?persona=${encodeURIComponent(persona)}`,
       htmlCharacters: html.length,
-      note: 'Use the same X-API-Key to retrieve exportPath through the UPG REST API.'
+      note: 'Retrieve exportPath from this UPG server with the same X-API-Key request header. Never put the key in a URL. The HTML preserves saved images and the selected persona’s saved tab.'
     };
     if (args.includeHtml === true) {
-      if (html.length > MCP_MAX_EXPORT_CHARS) return mcpToolError(`The export is ${html.length.toLocaleString()} characters and exceeds the MCP direct-export limit. Retrieve exportPath through the REST API instead.`);
-      output.html = html;
+      if (html.length > MCP_MAX_EXPORT_CHARS) output.htmlOmitted = 'The image-bearing export exceeds the direct MCP text limit. Retrieve exportPath instead.';
+      else output.html = html;
     }
     return mcpToolResult(output);
   }
@@ -403,18 +412,42 @@ async function callAccountsIntegration(req, path, options = {}) {
 }
 async function callAccountsWithApiKey(apiKey, path, options = {}) {
   if (!apiKey) return new Response(JSON.stringify({ error: 'missing_api_key' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20000);
   try {
     const headers = { 'X-API-Key': apiKey, Accept: 'application/json, text/html;q=0.9' };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
-    return await fetch(`${SAASY_ACCOUNTS_URL}${path}`, {
+    if (options.idempotencyKey) headers['Idempotency-Key'] = options.idempotencyKey;
+    const response = await fetch(`${SAASY_ACCOUNTS_URL}${path}`, {
       method: options.method || 'GET',
       headers,
-      body: options.body === undefined ? undefined : JSON.stringify(options.body)
+      body: options.body === undefined ? undefined : JSON.stringify(options.body), signal: controller.signal, redirect: 'error'
     });
+    const body = await readBoundedText(response, 24 * 1024 * 1024);
+    return new Response(body, { status: response.status, headers: response.headers });
   } catch (err) {
-    console.error('MCP accounts integration failed:', err.message);
     return new Response(JSON.stringify({ error: 'integration_unavailable' }), { status: 502, headers: { 'Content-Type': 'application/json' } });
+  } finally { clearTimeout(timeout); }
+}
+async function readBoundedText(response, limit) {
+  if (!response.body?.getReader) {
+    const text = await response.text();
+    if (Buffer.byteLength(text) > limit) throw generationError('upstream_response_too_large');
+    return text;
   }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > limit) throw generationError('upstream_response_too_large');
+      chunks.push(Buffer.from(value));
+    }
+    return Buffer.concat(chunks).toString('utf8');
+  } finally { await reader.cancel().catch(() => {}); }
 }
 async function readAccountsJson(response) { return parseJsonSafely(await response.text()); }
 function parseJsonSafely(value) { try { return JSON.parse(value); } catch { return { error: value || 'upstream_error' }; } }
@@ -442,66 +475,111 @@ async function handleCreateGeneration(req, res) {
 
 async function createGenerationJob(req, body) {
   const apiKey = String(req.get('x-api-key') || '').trim();
-  const authResponse = await callAccountsWithApiKey(apiKey, '/integrations/v1/upg/generation-authorize', { method: 'POST', body: {} });
-  const auth = await readAccountsJson(authResponse);
-  if (!authResponse.ok) return { status: authResponse.status, body: { error: integrationErrorMessage(authResponse, auth) } };
   const input = normalizeGenerationRequest(body);
   if (input.error) return { status: 400, body: { error: input.error } };
-  let origin;
-  try { origin = requestOrigin(req); } catch (_) { return { status: 400, body: { error: 'invalid_request_origin' } }; }
-  pruneGenerationJobs();
-  if (generationJobs.size >= MAX_GENERATION_JOBS) return { status: 429, body: { error: 'generation_capacity_reached', message: 'Please try again shortly.' } };
-  const job = {
-    id: `gen_${crypto.randomUUID().replace(/-/g, '')}`,
-    email: auth.email,
-    status: 'queued',
-    phase: 'queued',
-    createdAt: new Date().toISOString(),
-    updatedAt: new Date().toISOString(),
-    input: generationJobInput(input),
-    profile: null,
-    error: null
-  };
-  generationJobs.set(job.id, job);
-  void runGenerationJob(job, input, apiKey, origin);
-  return { status: 202, body: { job: publicGenerationJob(job) } };
+  try { requestOrigin(req); } catch (_) { return { status: 400, body: { error: 'invalid_request_origin' } }; }
+  if (!GEMINI_API_KEY) return { status: 503, body: { error: 'llm_not_configured' } };
+  const headerKey = req.get('idempotency-key');
+  if (headerKey && body?.idempotencyKey && headerKey !== body.idempotencyKey) return { status: 400, body: { error: 'idempotency_key_mismatch' } };
+  const idempotencyKey = headerKey || body?.idempotencyKey || crypto.randomUUID();
+  if (typeof idempotencyKey !== 'string' || !/^[A-Za-z0-9_-]{16,200}$/.test(idempotencyKey)) return { status: 400, body: { error: 'invalid_idempotency_key' } };
+  try {
+    const created = await requestGenerationStore(apiKey, '', { method: 'POST', idempotencyKey, body: { input } });
+    let job = created.job;
+    let startError;
+    if (created.created) {
+      const started = await generationWorker.start(job.id, apiKey);
+      if (started.status < 300) job = started.body.job;
+      else startError = started.body.error;
+    }
+    return { status: created.created ? 202 : 200, body: { job: publicGenerationJob(job), created: created.created, idempotencyKey, ...(startError ? { startError, message: 'The request is saved. Explicitly resume this job to start its worker.' } : {}) } };
+  } catch (error) { return jobErrorResult(error); }
 }
 
 async function handleGetGeneration(req, res) {
-  const connectionResponse = await callAccountsIntegration(req, '/integrations/v1/upg/connection');
-  const connection = await readAccountsJson(connectionResponse);
-  if (!connectionResponse.ok) return res.status(connectionResponse.status).json({ error: integrationErrorMessage(connectionResponse, connection) });
-  const job = generationJobs.get(req.params.id);
-  if (!job || job.email !== connection.email) return res.status(404).json({ error: 'generation_not_found' });
-  res.set('Cache-Control', 'no-store').json({ job: publicGenerationJob(job) });
+  const result = await getGeneration(req, req.params.id);
+  res.status(result.status).set('Cache-Control', 'no-store').json(result.body);
 }
+async function getGeneration(req, id) {
+  if (!/^gen_[0-9a-f]{32}$/.test(id || '')) return { status: 400, body: { error: 'invalid_job_id' } };
+  try {
+    const result = await requestGenerationStore(String(req.get('x-api-key') || '').trim(), id);
+    return { status: 200, body: { job: publicGenerationJob(result.job) } };
+  } catch (error) { return jobErrorResult(error); }
+}
+async function handleResumeGeneration(req, res) {
+  const result = await resumeGeneration(req, req.params.id);
+  res.status(result.status).set('Cache-Control', 'no-store').json(result.body);
+}
+async function resumeGeneration(req, id) {
+  if (!/^gen_[0-9a-f]{32}$/.test(id || '')) return { status: 400, body: { error: 'invalid_job_id' } };
+  // The accounts owner check must precede local busy/capacity shortcuts. All
+  // generated UPG generation keys include profiles:read for status/resume.
+  const existing = await getGeneration(req, id);
+  if (existing.status !== 200 || existing.body.job.status === 'completed') return existing;
+  if (!GEMINI_API_KEY) return { status: 503, body: { error: 'llm_not_configured' } };
+  const result = await generationWorker.start(id, String(req.get('x-api-key') || '').trim());
+  if (result.body.job) result.body.job = publicGenerationJob(result.body.job);
+  if (result.body.error === 'job_completed') return { status: 200, body: { job: result.body.job } };
+  return result;
+}
+function jobErrorResult(error) { return { status: error.status || 502, body: { error: error.code || 'integration_unavailable', ...(error.job ? { job: publicGenerationJob(error.job) } : {}) } }; }
+
+async function requestGenerationStore(apiKey, suffix, options = {}) {
+  // Only storage calls are retried, with identical fenced bodies. Paid model calls
+  // are never retried automatically. Accounts makes these transitions idempotent.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const response = await callAccountsWithApiKey(apiKey, `/integrations/v1/upg/jobs${suffix ? '/' + suffix : ''}`, options);
+    const body = await readAccountsJson(response);
+    if (response.ok) return body;
+    if (response.status >= 500 && attempt === 0) continue;
+    throw Object.assign(new Error(body.error || 'integration_unavailable'), { code: body.error || 'integration_unavailable', status: response.status, job: body.job });
+  }
+}
+
+const generationWorker = createGenerationWorker({
+  request: requestGenerationStore,
+  pipeline: options => runGenerationPipeline(options, {
+    fetchSource: fetchGenerationSource, generateText: generateProfileText, generateImage,
+    fetchLogo: async url => { const image = await fetchBrandImage(url); return `data:${image.mime};base64,${image.data.toString('base64')}`; }
+  }),
+  onError: code => console.error('UPG generation stopped:', code)
+});
 
 function normalizeGenerationRequest(body) {
   const rawUrl = String(body?.url || '').trim();
   let url;
   try { url = validatePublicUrl(/^https?:\/\//i.test(rawUrl) ? rawUrl : `https://${rawUrl}`); } catch { return { error: 'invalid_url' }; }
   if (!rawUrl) return { error: 'invalid_url' };
+  if (body?.profileType !== undefined && !['b2b', 'b2c'].includes(body.profileType)) return { error: 'invalid_profile_type' };
+  if (body?.includeImages !== undefined && typeof body.includeImages !== 'boolean') return { error: 'invalid_include_images' };
   const profileType = body?.profileType === 'b2b' ? 'b2b' : 'b2c';
-  const lens = ['sales', 'service', 'marketing', 'success', 'custom'].includes(body?.persona) ? body.persona : 'sales';
-  const objective = String(body?.objective || defaultObjective(lens)).trim().slice(0, 80) || defaultObjective(lens);
-  const customRole = String(body?.customRole || '').trim().slice(0, 120);
-  const brief = String(body?.brief || '').trim().slice(0, 2000);
-  if (lens === 'custom' && !customRole) return { error: 'custom_role_required' };
+  const candidates = body?.views === undefined ? [body || {}] : body.views;
+  if (!Array.isArray(candidates) || !candidates.length || candidates.length > 5) return { error: 'invalid_views' };
+  const views = [];
+  for (const candidate of candidates) {
+    if (!candidate || typeof candidate !== 'object') return { error: 'invalid_views' };
+    const lens = candidate.persona || 'sales';
+    if (!LENSES.includes(lens) || views.some(view => view.lens === lens)) return { error: 'invalid_or_duplicate_persona' };
+    const objective = String(candidate.objective || defaultObjective(lens)).trim().slice(0, 80) || defaultObjective(lens);
+    const customRole = String(candidate.customRole || '').trim().slice(0, 120);
+    const brief = String(candidate.brief || '').trim().slice(0, 2000);
+    if (lens === 'custom' && !customRole) return { error: 'custom_role_required' };
+    views.push({ lens, objective, customRole, brief });
+  }
   return {
-    url: url.toString(), profileType, lens, objective, customRole, brief,
+    url: url.toString(), profileType, ...views[0], views, includeImages: body?.includeImages !== false,
     projectName: String(body?.projectName || '').trim().slice(0, 160),
     tier: ['fast', 'balanced', 'powerful'].includes(body?.tier) ? body.tier : 'balanced'
   };
 }
 
-function generationJobInput(input) {
-  return { url: input.url, profileType: input.profileType, persona: input.lens, objective: input.objective, customRole: input.customRole || undefined, brief: input.brief || undefined };
-}
-
 function publicGenerationJob(job) {
   return {
-    id: job.id, status: job.status, phase: job.phase, createdAt: job.createdAt, updatedAt: job.updatedAt,
-    input: job.input, profile: job.profile, error: job.error
+    ...job, input: { ...job.input, persona: job.input?.lens || job.input?.persona },
+    profile: job.projectId ? { id: job.projectId, name: job.input?.projectName || undefined } : null,
+    statusPath: `/integrations/v1/upg/generations/${job.id}`,
+    resumePath: `/integrations/v1/upg/generations/${job.id}/resume`
   };
 }
 
@@ -509,47 +587,7 @@ function defaultObjective(lens) {
   return ({ sales: 'convert', service: 'resolve', marketing: 'engage', success: 'retain', custom: 'engage' })[lens] || 'convert';
 }
 
-function setGenerationPhase(job, phase) {
-  job.status = 'running';
-  job.phase = phase;
-  job.updatedAt = new Date().toISOString();
-}
-
-async function runGenerationJob(job, input, apiKey, origin) {
-  try {
-    setGenerationPhase(job, 'fetching_customer_context');
-    let source;
-    try { source = await fetchGenerationSource(input.url); }
-    catch (err) { source = { url: input.url, title: '', description: '', headings: '', bodyText: '', scrapeFallback: err.code || 'scrape_failed' }; }
-    setGenerationPhase(job, 'generating_profile');
-    const text = await generateProfileJson(source, input);
-    const ai = parseGenerationJson(text);
-    const generated = buildGeneratedProfile(ai, input, origin);
-    setGenerationPhase(job, 'saving_profile');
-    const saveResponse = await callAccountsWithApiKey(apiKey, '/integrations/v1/upg/profiles', { method: 'POST', body: generated });
-    const save = await readAccountsJson(saveResponse);
-    if (!saveResponse.ok) throw generationError(save?.error || `save_failed_${saveResponse.status}`);
-    job.status = 'completed';
-    job.phase = 'completed';
-    job.profile = save.profile;
-    job.updatedAt = new Date().toISOString();
-  } catch (err) {
-    job.status = 'failed';
-    job.phase = 'failed';
-    job.error = { code: err.code || 'generation_failed', message: safeGenerationError(err) };
-    job.updatedAt = new Date().toISOString();
-    console.error(`UPG generation ${job.id} failed:`, err.message);
-  }
-}
-
 function generationError(code, message) { const err = new Error(message || code); err.code = code; return err; }
-function safeGenerationError(err) {
-  if (err.code === 'llm_not_configured') return 'AI generation is not configured for this UPG environment.';
-  if (err.code === 'generation_timeout') return 'Generation took too long. Please try again.';
-  if (err.code === 'invalid_ai_response') return 'The AI response could not be turned into a profile. Please try again.';
-  if (err.code === 'insufficient_scope') return 'This API key needs profile-generation permission. Create a new key with generation enabled.';
-  return 'UPG could not complete this generation. Please try again.';
-}
 
 async function fetchGenerationSource(url) {
   try {
@@ -569,129 +607,77 @@ function extractGenerationContext(html, url) {
   const title = extractHtmlTag(html, 'title');
   const description = extractMetaContent(html, 'name', 'description') || extractMetaContent(html, 'property', 'og:description');
   const headings = Array.from(html.matchAll(/<h[1-3][^>]*>([\s\S]*?)<\/h[1-3]>/gi)).map(match => cleanHtmlText(match[1])).filter(Boolean).slice(0, 20).join('\n');
-  return { url, title, description, headings, bodyText: cleanHtmlText(html).slice(0, 8000) };
+  const navLinkCandidates = Array.from(html.matchAll(/<a\b[^>]*>([\s\S]*?)<\/a>/gi)).map(match => cleanHtmlText(match[1])).filter(value => value && value.length <= 60).slice(0, 30);
+  const icon = html.match(/<link\b(?=[^>]*\brel=["'][^"']*icon[^"']*["'])(?=[^>]*\bhref=["']([^"']+)["'])[^>]*>/i);
+  let favicon = '';
+  try { favicon = validatePublicUrl(new URL(icon?.[1] || '/favicon.ico', url).href).href; } catch (_) {}
+  return { url, title, description, headings, navLinkCandidates: [...new Set(navLinkCandidates)], siteName: extractMetaContent(html, 'property', 'og:site_name'), favicon, bodyText: cleanHtmlText(html).slice(0, 8000) };
 }
 
 function extractHtmlTag(html, tag) { const match = html.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)<\\/${tag}>`, 'i')); return match ? cleanHtmlText(match[1]) : ''; }
 function extractMetaContent(html, attribute, value) { const pattern = new RegExp(`<meta[^>]*${attribute}=["']${value}["'][^>]*content=["']([^"']*)["'][^>]*>|<meta[^>]*content=["']([^"']*)["'][^>]*${attribute}=["']${value}["'][^>]*>`, 'i'); const match = html.match(pattern); return match ? cleanHtmlText(match[1] || match[2]) : ''; }
 function cleanHtmlText(value) { return String(value || '').replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]+>/gi, ' ').replace(/&nbsp;/gi, ' ').replace(/&amp;/gi, '&').replace(/&#39;|&apos;/gi, "'").replace(/&quot;/gi, '"').replace(/\s+/g, ' ').trim(); }
 
-async function generateProfileJson(source, input) {
+async function generateProfileText({ prompt, system, tier, signal }) {
   if (!GEMINI_API_KEY) throw generationError('llm_not_configured');
-  const system = 'You are a Salesforce Data Cloud demo profile architect. Return only valid JSON. Never claim modeled scores, purchase signals, or recommendations were sourced from the website. Keep all card copy readable as dark text on white cards.';
-  const subjectSchema = input.profileType === 'b2b'
-    ? 'account{name,headquarters,accountId,industry,type,owner,website,employees,address,tier,parentAccount},accountMetrics{revenue,revenueTrend,pipeline,usageScore,usageTrend,activeUsers,healthScore,healthTrend,supportCases,renewalDate,utilization}'
-    : 'profile{name,city,customerId,email,phone,address,segment},loyalty{title,memberId,tier,points,redeemedPoints}';
-  const prompt = `Create a complete, fictional but plausible ${input.profileType === 'b2b' ? 'B2B account' : 'B2C individual'} Unified Profile for the website below.\n\nProfile strategy:\n- Viewer persona: ${input.lens}\n- Objective: ${input.objective}\n- Custom role: ${input.customRole || 'n/a'}\n- Decision brief: ${input.brief || 'n/a'}\n\nWebsite context:\n- URL: ${source.url}\n- Title: ${source.title}\n- Description: ${source.description}\n- Headings: ${source.headings}\n- Text: ${source.bodyText}\n\nReturn JSON with these fields: brandName, industry (recruiting|retail|healthcare|financial|generic), appName, tabName, colors{primary,secondary}, ${subjectSchema}, insights{items:[{icon,label,value}]}, affinities{groups:[{name,items:[{label,a,b}]}]}, preferences{items:[{label,value}]}, events{items:[{name,date,confirmation}]}, membership{items:[{label,value}]}, recommendations{items:[{eyebrow,title,cta}]}, activity{items:[{icon,title,body,time}]}, extraCards:[{title,icon,items:[{label,value}]}], rightExtraCards:[{title,icon,items:[{label,value}]}]. Include 6 insights, two affinity groups, 4 preferences, 2 events, 2 membership rows, two recommendations, and 5 activity items. Keep labels concise.`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), GENERATION_TIMEOUT_MS);
+  const abort = () => controller.abort();
+  signal?.throwIfAborted();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, GENERATION_TIMEOUT_MS);
   try {
-    const model = TIER_MODELS[input.tier] || DEFAULT_MODEL;
+    const model = TIER_MODELS[tier] || DEFAULT_MODEL;
     const upstream = await fetch(`${GEMINI_API_BASE_URL}/v1beta/models/${model}:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { maxOutputTokens: 8000 } }), signal: controller.signal
     });
     if (!upstream.ok) throw generationError(upstream.status === 401 || upstream.status === 403 ? 'llm_auth_failed' : 'llm_failed');
-    const data = await upstream.json();
+    const data = JSON.parse(await readBoundedText(upstream, 1024 * 1024));
     const text = data?.candidates?.[0]?.content?.parts?.filter(part => part.text).map(part => part.text).join('') || '';
     if (!text) throw generationError('invalid_ai_response');
     return text;
   } catch (err) {
     if (err.name === 'AbortError') throw generationError('generation_timeout');
     throw err;
-  } finally { clearTimeout(timeout); }
+  } finally { clearTimeout(timeout); signal?.removeEventListener('abort', abort); }
 }
 
-function parseGenerationJson(text) {
-  const candidate = String(text || '').replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/i, '').trim();
-  try { return JSON.parse(candidate); }
-  catch {
-    const start = candidate.indexOf('{');
-    const end = candidate.lastIndexOf('}');
-    if (start >= 0 && end > start) { try { return JSON.parse(candidate.slice(start, end + 1)); } catch (_) {} }
-    throw generationError('invalid_ai_response');
-  }
+// Retained as a small synchronous entry point for validation and integrations
+// that already have modeled text. Async jobs use the same builder via the pipeline.
+function buildGeneratedProfile(ai, input) {
+  const strategy = { lens: input.lens || 'sales', objective: input.objective || 'convert', brief: input.brief || '', customRole: input.customRole || '' };
+  const state = buildState(ai, { ...input, views: input.views || [strategy] }, strategy);
+  state.integrationArtifact = integrationArtifact(state);
+  return { name: input.projectName || `${state.brandName} — ${state.integrationArtifact.subject}`.slice(0, 160), payload: state, sourceUrl: input.url };
 }
 
-function getGenerationRenderer() {
-  if (generationRenderer) return generationRenderer;
-  const context = vm.createContext({ console });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'js', 'defaults.js'), 'utf8'), context, { filename: 'defaults.js' });
-  vm.runInContext(fs.readFileSync(path.join(__dirname, 'js', 'generator.js'), 'utf8'), context, { filename: 'generator.js' });
-  generationRenderer = {
-    cloneProfileMode: vm.runInContext('cloneProfileMode', context),
-    generateProfileHTML: vm.runInContext('generateProfileHTML', context)
-  };
-  return generationRenderer;
+async function getProfileExport(req, id, persona) {
+  if (!/^\d+$/.test(id || '')) return { status: 400, body: { error: 'invalid_profile_id' } };
+  if (persona !== undefined && !LENSES.includes(persona)) return { status: 400, body: { error: 'invalid_persona' } };
+  try {
+    const origin = requestOrigin(req);
+    const response = await callAccountsIntegration(req, `/integrations/v1/upg/profiles/${encodeURIComponent(id)}/export-state`);
+    const data = await readAccountsJson(response);
+    if (!response.ok) return { status: response.status, body: { error: integrationErrorMessage(response, data) } };
+    return { status: 200, body: { ...renderSavedProfile(data.payload, { persona, origin }), profile: data.profile } };
+  } catch (error) { return { status: error.status || 422, body: { error: error.code || 'profile_not_renderable' } }; }
 }
-
-function buildGeneratedProfile(ai, input, origin) {
-  profileContract.validateAIProfile(ai, { profileType: input.profileType });
-  const renderer = getGenerationRenderer();
-  const industry = ['recruiting', 'retail', 'healthcare', 'financial', 'generic'].includes(ai?.industry) ? ai.industry : 'generic';
-  const state = renderer.cloneProfileMode(input.profileType, industry);
-  state._industry = industry;
-  state.profileStrategy = { lens: input.lens, objective: input.objective, brief: input.brief, customRole: input.customRole };
-  state.brandName = textValue(ai?.brandName, state.brandName);
-  state.appName = input.profileType === 'b2b' ? 'Data Cloud' : textValue(ai?.appName, state.appName);
-  state.tabName = textValue(ai?.tabName, state.tabName);
-  state.colors = Object.assign({}, state.colors, pickColors(ai?.colors));
-  state.colors.accent = '#FFFFFF'; state.colors.menu = '#FFFFFF'; state.colors.menuText = '#000000';
-  for (const key of ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity']) {
-    if (ai?.[key] && typeof ai[key] === 'object' && !Array.isArray(ai[key])) state[key] = Object.assign({}, state[key], ai[key]);
-  }
-  if (input.profileType === 'b2b') {
-    if (ai?.account && typeof ai.account === 'object') state.account = Object.assign({}, state.account, ai.account);
-    if (ai?.accountMetrics && typeof ai.accountMetrics === 'object') state.accountMetrics = Object.assign({}, state.accountMetrics, ai.accountMetrics);
-    state.tabName = textValue(ai?.tabName, state.account.name || state.tabName);
-  }
-  state.extraCards = normalizeGeneratedCards(ai?.extraCards, 'middle');
-  state.rightExtraCards = normalizeGeneratedCards(ai?.rightExtraCards, 'right');
-  applyServerPersonaTitles(state);
-  const profileType = input.profileType;
-  const subject = profileType === 'b2b' ? (state.account?.name || state.tabName || 'Account') : (state.profile?.name || state.tabName || 'Unified Profile');
-  const renderedHtml = renderer.generateProfileHTML(state).replace(/(src=["'])assets\/([^"']+)/g, (_, before, assetPath) => `${before}${origin}/assets/${assetPath}`);
-  const canPersistRender = renderedHtml.length <= 350000 && !/src=["']data:/i.test(renderedHtml);
-  state.integrationArtifact = {
-    schemaVersion: 'upg.profile.v1', generatedAt: new Date().toISOString(), profileType, persona: input.lens,
-    personaLabel: serverPersonaLabel(input.lens, input.customRole), subject,
-    brand: { name: state.brandName || '', appName: state.appName || '', logo: state.logo || '', colors: Object.assign({}, state.colors || {}) },
-    renderedHtml: canPersistRender ? renderedHtml : '', renderStatus: canPersistRender ? 'ready' : 'requires_hosted_render'
-  };
-  const name = input.projectName || `${state.brandName || 'Customer'} — ${subject}`.slice(0, 160);
-  return { name, payload: state };
+async function handleProfileExport(req, res) {
+  const result = await getProfileExport(req, req.params.id, req.query.persona);
+  if (result.status !== 200) return res.status(result.status).json(result.body);
+  res.set({
+    'Content-Type': 'text/html; charset=utf-8',
+    'Content-Disposition': `attachment; filename="upg-${req.params.id}-${result.body.persona}.html"`,
+    'X-Content-Type-Options': 'nosniff', 'Cache-Control': 'no-store',
+    'Content-Security-Policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https:"
+  });
+  res.send(result.body.html);
 }
-
-function textValue(value, fallback) { return typeof value === 'string' && value.trim() ? value.trim().slice(0, 500) : fallback; }
-function pickColors(colors) {
-  const valid = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value.trim());
-  const next = {};
-  if (valid(colors?.primary)) next.primary = colors.primary.trim();
-  if (valid(colors?.secondary)) next.secondary = colors.secondary.trim();
-  return next;
-}
-function normalizeGeneratedCards(cards, placement) {
-  if (!Array.isArray(cards)) return [];
-  return cards.slice(0, 3).filter(card => card && typeof card === 'object').map((card, index) => ({
-    title: textValue(card.title, 'Additional insight'), icon: textValue(card.icon, '✦').slice(0, 12),
-    items: Array.isArray(card.items) ? card.items.slice(0, 5).map(item => ({ label: textValue(item?.label, 'Detail'), value: textValue(item?.value, '—') })) : [],
-    moduleId: `ai-${placement}-${index + 1}`, placement, visibility: 'suggested'
-  }));
-}
-function applyServerPersonaTitles(state) {
-  const labels = {
-    sales: ['Purchase & Engagement Signals', 'Buying Preferences', 'Recent Commercial Touchpoints', 'Products & Offers', 'Einstein Sales Recommendations', 'Sales & Engagement Activity'],
-    service: ['Churn Risk Indicators', 'Service Preferences', 'Case & Service Timeline', 'Entitlements & Coverage', 'Einstein Service Recommendations', 'Service & Support Activity'],
-    marketing: ['Content & Channel Affinities', 'Channel & Consent Preferences', 'Journey & Campaign Timeline', 'Program Enrollment', 'Next Best Content', 'Journey Engagement Activity'],
-    success: ['Adoption & Health Signals', 'Success Preferences', 'Milestones & Touchpoints', 'Products & Adoption', 'Next Best Success Actions', 'Success & Adoption Activity'],
-    custom: ['Behavior & Context Signals', 'Relevant Preferences', 'Recent Touchpoints', 'Programs & Relationships', 'Recommended Actions', 'Relevant Activity']
-  }[state.profileStrategy.lens] || [];
-  if (!labels.length) return;
-  [state.affinities, state.preferences, state.events, state.membership, state.recommendations, state.activity].forEach((section, index) => { if (section) section.title = labels[index]; });
-}
-function serverPersonaLabel(lens, customRole) { return lens === 'custom' ? (customRole || 'Custom profile') : ({ sales: 'Sales', service: 'Service', marketing: 'Marketing', success: 'Customer Success' })[lens] || 'Sales'; }
 function requestOrigin(req) { return resolveRequestOrigin(req, PUBLIC_ORIGIN); }
-function pruneGenerationJobs() { const cutoff = Date.now() - GENERATION_JOB_TTL_MS; for (const [id, job] of generationJobs) if (new Date(job.updatedAt).getTime() < cutoff) generationJobs.delete(id); }
+function requireConfiguredPublicOrigin(req, res, next) {
+  if (process.env.NODE_ENV === 'production' && !PUBLIC_ORIGIN) return res.status(503).json({ error: 'public_origin_required', message: 'Set PUBLIC_ORIGIN to this UPG application’s canonical HTTPS origin to enable API and MCP integrations.' });
+  next();
+}
 function checkRateLimit(ip) { const now = Date.now(); let bucket = rateBuckets.get(ip); if (!bucket || now >= bucket.resetAt) { bucket = { count: 0, resetAt: now + RATE_LIMIT_WINDOW_MS }; rateBuckets.set(ip, bucket); } bucket.count++; if (rateBuckets.size > 5000) { for (const [k, v] of rateBuckets) if (v.resetAt < now) rateBuckets.delete(k); } if (bucket.count > RATE_LIMIT_MAX) return { ok: false, retryAfterMs: Math.max(0, bucket.resetAt - now) }; return { ok: true }; }
 
 module.exports = { app };

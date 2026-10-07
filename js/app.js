@@ -134,9 +134,9 @@ function applyPersonaPreset(target = state) {
   target.recommendations.title = content.recommendations;
   target.activity.title = content.activity;
   if (target.profileType === 'b2b') {
-    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, target.b2bSections || {}, content.sections);
+    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, content.sections, target.b2bSections || {});
   } else {
-    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, target.b2cSections || {}, content.sections);
+    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, content.sections, target.b2cSections || {});
   }
 }
 
@@ -284,7 +284,7 @@ function normalizeCustomModules(target = state) {
     if (!Array.isArray(target[key])) target[key] = [];
     const defaultPlacement = key === 'rightExtraCards' ? 'right' : 'middle';
     target[key].forEach((card, index) => {
-      if (!card.moduleId) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(card.moduleId || '')) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
       if (ids.has(card.moduleId)) card.moduleId = `${card.moduleId}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
       ids.add(card.moduleId);
       if (!['middle', 'right'].includes(card.placement)) card.placement = defaultPlacement;
@@ -362,7 +362,7 @@ function cloneViewData(value) {
 
 function personaView(owner, lens) {
   if (getProfileStrategy(owner).lens === lens) {
-    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key])])));
+    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key] ?? (key === 'railFields' ? [] : key === 'accountViewTab' ? 'overview' : undefined))])));
   }
   return cloneViewData(owner.personaVariants?.[lens]);
 }
@@ -390,6 +390,8 @@ function commitPersonaView(owner, lens, variant) {
 function snapshotPersonaView(target = state, lens = getProfileStrategy(target).lens) {
   if (!PERSONA_PRESETS[lens]) return;
   if (getProfileStrategy(target).lens !== lens) return;
+  target.railFields ||= [];
+  target.accountViewTab ||= 'overview';
   if (!target.personaVariants || typeof target.personaVariants !== 'object') target.personaVariants = {};
   const variant = {
     strategy: Object.assign({}, getProfileStrategy(target), { lens })
@@ -404,6 +406,8 @@ function restorePersonaView(target = state, lens) {
   if (saved) {
     PERSONA_VIEW_FIELDS.forEach(key => {
       if (saved[key] !== undefined) target[key] = cloneViewData(saved[key]);
+      else if (key === 'railFields') target[key] = [];
+      else if (key === 'accountViewTab') target[key] = 'overview';
     });
     target.profileStrategy = Object.assign(
       { lens, objective: PERSONA_PRESETS[lens].objective, brief: '', customRole: '' },
@@ -420,6 +424,8 @@ function restorePersonaView(target = state, lens) {
     brief: getPersonaBrief(target, lens),
     customRole: lens === 'custom' ? ensureProfileSet(target).customRole : ''
   };
+  target.railFields = [];
+  target.accountViewTab = 'overview';
   applyPersonaPreset(target);
   applyPersonaSampleTemplate(target);
   return false;
@@ -430,7 +436,7 @@ function updateProfileStrategyUI() {
   const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
   Object.keys(PERSONA_PRESETS).forEach(lens => {
     const button = document.getElementById(`persona-${lens}`);
-    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); }
+    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); button.tabIndex = strategy.lens === lens ? 0 : -1; }
   });
   const objective = document.getElementById('strategy-objective');
   const brief = document.getElementById('strategy-brief');
@@ -474,6 +480,7 @@ function updateProfileStrategyUI() {
   setText('step-6-recs-heading', content.recommendations);
   setText('step-6-activity-heading', content.activity);
   renderPersonaOutputSwitcher(strategy);
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
 }
 
 // Step 7 is a delivery surface, so it mirrors the persona picker without
@@ -511,6 +518,7 @@ function setViewerLens(lens) {
 function setPersonaVisualStatus(message) {
   const status = document.getElementById('quickstart-status');
   if (status) status.textContent = message;
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
 }
 
 // Recommendation visuals belong to each persona view, not the shared customer
@@ -542,7 +550,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
   const owner = state;
   const strategy = visualTargetStrategy(target, lens);
   const recommendations = Array.isArray(target?.recommendations?.items) ? target.recommendations.items : [];
-  const missing = recommendations.filter(item => item?.title && !item.image);
+  const missing = recommendations.filter((item, index) => item?.title && !item.image && (options.onlyIndex == null || index === options.onlyIndex));
   const profileSet = ensureProfileSet();
   const label = getProfileStrategyLabel(strategy);
   if (!missing.length) {
@@ -568,7 +576,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
       brandName: owner.brandName,
       industry: owner._industry || 'generic',
       profileType: owner.profileType,
-      recommendations: recommendations.map(item => ({ title: item.title, image: item.image || '' })),
+      recommendations: recommendations.map((item, index) => ({ title: item.title, image: options.onlyIndex != null && index !== options.onlyIndex ? (item.image || 'skip') : (item.image || '') })),
       strategy
     });
     if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
@@ -595,7 +603,7 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
     const remaining = currentItems.filter(item => item?.title && !item.image).length;
     const stateName = remaining === 0 ? 'ready' : changed ? 'partial' : 'failed';
     const message = remaining ? imageFailureMessage(response, remaining) : '';
-    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: missing.length - remaining };
+    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: currentItems.filter(item => item?.image).length };
     if (changed) commitPersonaView(owner, lens, view);
     if (getProfileStrategy().lens === lens) updateProfileStrategyUI();
     if (options.announce) setPersonaVisualStatus(stateName === 'ready' ? `✓ ${label} recommendation visuals are ready` : message);
@@ -664,8 +672,8 @@ function updateProfileModeUI() {
   document.body.classList.toggle('profile-mode-b2b', b2b);
   const b2cButton = document.getElementById('profile-type-b2c');
   const b2bButton = document.getElementById('profile-type-b2b');
-  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); }
-  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); }
+  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); b2cButton.tabIndex = b2b ? -1 : 0; }
+  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); b2bButton.tabIndex = b2b ? 0 : -1; }
 
   setText('quickstart-title', b2b ? 'Create an account profile set with AI' : 'Create a customer profile set with AI');
   setText('quickstart-sub', b2b
@@ -767,6 +775,9 @@ function renderPreviewDocument(profileState = state) {
 }
 
 function refreshPreview() {
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => renderPreviewNow(), 120);
 }
@@ -780,13 +791,23 @@ function getPresentationDocument() {
 }
 
 window.addEventListener('message', event => {
-  if (event.data?.type !== 'upg:account-tab-change' || !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
+  if (!['upg:account-tab-change', 'upg:layout-status'].includes(event.data?.type)) return;
+  if (event.data.type === 'upg:account-tab-change' && !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
   const preview = document.getElementById('preview-iframe');
   const presentation = document.getElementById('presentation-iframe');
   const context = event.source === preview?.contentWindow ? previewContext : event.source === presentation?.contentWindow ? presentationContext : null;
   if (!context || context.owner !== state || context.lens !== getProfileStrategy().lens || event.data.revision !== context.revision) return;
+  if (event.data.type === 'upg:layout-status') {
+    const { height, viewport } = event.data;
+    if (!Number.isFinite(height) || !Number.isFinite(viewport) || viewport <= 0) return;
+    setText('layout-fit-status', height > viewport + 2
+      ? 'Scrollable profile · Move optional modules to Suggested for a shorter screenshot.'
+      : 'Fits the first screen · Activity and recommendation lists can still scroll.');
+    return;
+  }
   state.accountViewTab = event.data.tab;
   snapshotPersonaView();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
   if (event.source === presentation?.contentWindow) refreshPreview();
 });
 
@@ -1173,7 +1194,7 @@ function renderExtraCards() {
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
-        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
+        <select aria-label="${escAttr(card.title || 'Middle-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
           <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
           <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
           <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
@@ -1234,7 +1255,7 @@ function renderRightExtraCards() {
     <div class="row-card">
       <div class="flex items-center gap-2 mb-2">
         <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.rightExtraCards[${ci}].title=this.value; refreshPreview()">
-        <select class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
+        <select aria-label="${escAttr(card.title || 'Right-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
           <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
           <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
           <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
@@ -1302,11 +1323,12 @@ function findCustomModule(moduleId) {
 }
 
 function moveCustomModule(moduleId, destination) {
+  if (!['middle', 'right', 'suggested', 'hidden'].includes(destination)) return;
   const found = findCustomModule(moduleId);
   if (!found) return;
   const [card] = state[found.bucket].splice(found.index, 1);
-  if (destination === 'suggested') {
-    card.visibility = 'suggested';
+  if (['suggested', 'hidden'].includes(destination)) {
+    card.visibility = destination;
     state[card.placement === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
   } else {
     card.placement = destination;
@@ -1315,6 +1337,24 @@ function moveCustomModule(moduleId, destination) {
   }
   renderAll();
   refreshPreview();
+  restoreModuleFocus(moduleId, 'move');
+  setText('module-composer-status', `${card.title} moved to ${destination}.`);
+}
+
+function restoreModuleFocus(moduleId, action) {
+  const row = [...document.querySelectorAll('[data-module-id]')].find(node => node.dataset.moduleId === moduleId);
+  row?.querySelector(`[data-module-action="${action}"]`)?.focus();
+}
+function reorderCustomModule(moduleId, delta) {
+  const found = findCustomModule(moduleId);
+  if (!found || ![-1, 1].includes(delta)) return;
+  const cards = state[found.bucket];
+  let next = found.index + delta;
+  while (next >= 0 && next < cards.length && cards[next].visibility !== found.card.visibility) next += delta;
+  if (next < 0 || next >= cards.length) return;
+  [cards[next], cards[found.index]] = [cards[found.index], cards[next]];
+  renderAll(); refreshPreview(); restoreModuleFocus(moduleId, delta < 0 ? 'up' : 'down');
+  setText('module-composer-status', `${found.card.title} moved ${delta < 0 ? 'up' : 'down'}.`);
 }
 
 function onModuleDragStart(event, moduleId) {
@@ -1344,16 +1384,18 @@ function renderModuleComposer() {
   const zones = {
     middle: modules.filter(card => card.visibility === 'visible' && card.placement === 'middle'),
     right: modules.filter(card => card.visibility === 'visible' && card.placement === 'right'),
-    suggested: modules.filter(card => card.visibility === 'suggested')
+    suggested: modules.filter(card => card.visibility !== 'visible')
   };
   const zone = (key, title, description) => `
     <div class="module-composer-zone" ondragover="allowModuleDrop(event)" ondragleave="clearModuleDrop(event)" ondrop="dropModule(event, '${key}')">
       <div class="module-composer-zone-title">${title}</div>
       <p>${description}</p>
       ${zones[key].length ? zones[key].map(card => `
-        <div class="module-composer-card" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
+        <div class="module-composer-card" data-module-id="${escAttr(card.moduleId)}" style="flex-wrap:wrap" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
           <span class="module-composer-grip">⠿</span><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
-          ${key === 'suggested' ? `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'middle')">Show</button>` : `<button type="button" onclick="moveCustomModule('${escAttr(card.moduleId)}', 'suggested')">Stash</button>`}
+          <select data-module-action="move" aria-label="Move ${escAttr(card.title)}" onchange="moveCustomModule('${escAttr(card.moduleId)}',this.value)">${[['middle','Middle column'],['right','Right column'],['suggested','Suggested library'],['hidden','Hidden']].map(([value, label]) => `<option value="${value}" ${value === (card.visibility === 'visible' ? card.placement : card.visibility) ? 'selected' : ''}>${label}</option>`).join('')}</select>
+          <button type="button" data-module-action="up" aria-label="Move ${escAttr(card.title)} up" onclick="reorderCustomModule('${escAttr(card.moduleId)}',-1)">↑</button>
+          <button type="button" data-module-action="down" aria-label="Move ${escAttr(card.title)} down" onclick="reorderCustomModule('${escAttr(card.moduleId)}',1)">↓</button>
         </div>`).join('') : `<div class="module-composer-empty">Drop a card here</div>`}
     </div>`;
   container.innerHTML = `${zone('middle', 'Middle column', 'Below preferences')}${zone('right', 'Right column', 'Below products / offers')}${zone('suggested', 'Suggested library', 'Available but not on the first screen')}`;
@@ -1369,10 +1411,12 @@ function renderRecs() {
             <input type="text" value="${escAttr(rec.eyebrow)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Eyebrow (e.g. Next Best Action:)" oninput="state.recommendations.items[${i}].eyebrow=this.value; refreshPreview()">
             <input type="text" value="${escAttr(rec.cta)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Button text" oninput="state.recommendations.items[${i}].cta=this.value; refreshPreview()">
           </div>
-          <input type="text" value="${escAttr(rec.title)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="state.recommendations.items[${i}].title=this.value; refreshPreview()">
-          <input type="text" value="${escAttr(rec.image)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none font-mono" placeholder="Image URL" oninput="state.recommendations.items[${i}].image=this.value; refreshPreview()">
+          <input type="text" value="${escAttr(rec.title)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="updateRecommendationTitle(${i},this.value)">
+          <input type="text" value="${escAttr(/^data:/i.test(rec.image || '') ? '' : rec.image)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none font-mono" placeholder="Image URL" oninput="setRecommendationImage(${i},this.value,'manual')">
+          <p id="rec-image-status-${i}" class="text-xs text-slate-500">${escHTML(recommendationImageLabel(rec))}</p>
+          <button type="button" class="text-xs underline" onclick="regenerateRecommendationImage(${i})">Generate image for this action</button>
           <div id="rec-drop-${i}" class="drop-zone-sf p-3 text-center cursor-pointer">
-            ${rec.image ? `<img src="${escAttr(rec.image)}" class="w-full h-20 object-cover rounded mb-2">` : ''}
+            ${rec.image ? `<img src="${escAttr(safeImageURL(rec.image))}" alt="Recommendation image" class="w-full h-20 object-cover rounded mb-2">` : ''}
             <p class="text-[11px] text-gray-500">📷 Drop image or click to upload</p>
           </div>
         </div>
@@ -1380,13 +1424,38 @@ function renderRecs() {
       </div>
     </div>`).join('');
   // Wire drop zones after render
-  state.recommendations.items.forEach((_, i) => {
+  const owner = state;
+  state.recommendations.items.forEach((item, i) => {
     attachDropZone(`rec-drop-${i}`, null, (dataUrl) => {
-      state.recommendations.items[i].image = dataUrl;
+      if (state !== owner || state.recommendations.items[i] !== item) return;
+      setRecommendationImage(i, dataUrl, 'uploaded');
       renderRecs();
       refreshPreview();
     });
   });
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+}
+function recommendationImageLabel(rec) {
+  if (!rec.image) return 'Image missing — retry generation or upload an image.';
+  if (rec.imageForTitle && rec.imageForTitle !== rec.title) return 'Action changed — review this image or generate a new one.';
+  return rec.imageSource === 'generated' ? 'AI-generated for this action' : rec.imageSource === 'uploaded' ? 'Your uploaded image' : 'Provided image';
+}
+function updateRecommendationTitle(index, title) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.title = title; setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+function setRecommendationImage(index, image, source) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.image = image; item.imageSource = source; item.imageForTitle = item.title;
+  const items = state.recommendations.items;
+  ensureProfileSet().visuals[getProfileStrategy().lens] = { state: items.every(row => row.image) ? 'ready' : 'partial', count: items.filter(row => row.image).length };
+  setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+async function regenerateRecommendationImage(index) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  if (item.image && !confirm('Replace this action’s image with a new AI-generated image?')) return;
+  item.image = ''; item.imageSource = 'pending'; renderRecs(); refreshPreview();
+  await generatePersonaRecommendationImagesForTarget(getProfileStrategy().lens, state, { announce: true, onlyIndex: index });
 }
 function addRec() { state.recommendations.items.push({ eyebrow: 'Recommended:', title: 'New Recommendation', cta: 'Suggest', image: '' }); renderRecs(); refreshPreview(); }
 function removeRec(i) { state.recommendations.items.splice(i, 1); renderRecs(); refreshPreview(); }
@@ -1440,12 +1509,16 @@ function goToStep(n) {
     const i = +d.dataset.step;
     d.classList.toggle('active', i === currentStep);
     d.classList.toggle('completed', i < currentStep);
+    if (i === currentStep) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
   });
   document.getElementById('btn-prev').classList.toggle('hidden', currentStep === 0);
-  document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Done' : 'Next →';
+  document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Preview & Present' : 'Next →';
+  const heading = document.querySelector('.step-panel.active h2');
+  if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  if (typeof labelEditorControls === 'function') labelEditorControls();
   window.scrollTo({ top: 0, behavior: 'smooth' });
 }
-function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); }
+function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); else openPresentation(); }
 function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
 
 // ─── URL & IMAGE INPUTS ─────────────────────────────────────
@@ -1545,15 +1618,16 @@ async function buildIntegrationArtifact(profile = captureOutputSnapshot()) {
     profileType,
     persona: strategy.lens,
     personaLabel: getProfileStrategyLabel(strategy),
+    availablePersonas: Object.keys(profile.personaVariants || { [strategy.lens]: {} }),
     subject,
     brand: {
       name: profile.brandName || '',
       appName: profile.appName || '',
-      logo: profile.logo || '',
+      logo: /^data:/i.test(profile.logo || '') ? '' : (profile.logo || ''),
       colors: Object.assign({}, profile.colors || {})
     },
     renderedHtml: canPersistRender ? rawHtml : '',
-    renderStatus: canPersistRender ? 'ready' : 'requires_hosted_render'
+    renderStatus: canPersistRender ? 'ready' : 'renderable'
   };
 }
 
@@ -1578,7 +1652,7 @@ function openPresentation() {
   overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#0f172a;display:flex;flex-direction:column;padding:12px;';
   overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;padding:0 4px 10px;font:600 13px Salesforce Sans,system-ui,sans-serif;"><span>Unified Profile Presentation</span><div style="display:flex;gap:8px;"><button id="presentation-fullscreen" type="button" style="border:1px solid #64748b;border-radius:6px;background:#1e293b;color:#fff;padding:7px 10px;cursor:pointer;">Full screen</button><button id="presentation-close" type="button" style="border:1px solid #64748b;border-radius:6px;background:#fff;color:#0f172a;padding:7px 10px;cursor:pointer;">Close</button></div></div><div id="presentation-canvas" style="flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;"><div id="presentation-stage" style="position:relative;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.35);"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="position:absolute;top:0;left:0;width:1300px;height:860px;border:0;transform-origin:0 0;"></iframe></div></div>`;
   document.body.appendChild(overlay);
-  const close = () => overlay.remove();
+  const close = () => { releaseDialogFocus('presentation-overlay'); overlay.remove(); };
   overlay.querySelector('#presentation-close').addEventListener('click', close);
   overlay.querySelector('#presentation-fullscreen').addEventListener('click', () => {
     if (document.fullscreenElement) document.exitFullscreen();
@@ -1586,8 +1660,7 @@ function openPresentation() {
   });
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
   document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
-  const onKey = event => { if (event.key === 'Escape' && document.getElementById('presentation-overlay')) { close(); document.removeEventListener('keydown', onKey); } };
-  document.addEventListener('keydown', onKey);
+  activateDialogFocus('presentation-overlay', close, 'presentation-close');
   requestAnimationFrame(fitPresentationScale);
   setTimeout(fitPresentationScale, 100);
 }
@@ -1655,14 +1728,14 @@ function showCopyModal(html) {
       <div style="background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
         <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
           <div style="font-weight:700;font-size:15px;color:#0f172a;">Copy Profile HTML</div>
-          <button id="copy-modal-close-x" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
+          <button id="copy-modal-close-x" aria-label="Close copy dialog" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
         </div>
         <div style="padding:12px 20px;font-size:13px;color:#475569;">Select-all is already applied. Click <b>Copy</b> below, or press ⌘/Ctrl+C.</div>
         <div style="padding:0 20px 12px;flex:1;overflow:hidden;display:flex;">
           <textarea id="copy-modal-textarea" readonly spellcheck="false" style="width:100%;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid #cbd5e1;border-radius:8px;padding:10px;resize:none;background:#f8fafc;color:#0f172a;"></textarea>
         </div>
         <div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:12px;">
-          <div id="copy-modal-status" class="text-sm font-600"></div>
+          <div id="copy-modal-status" role="status" aria-live="polite" class="text-sm font-600"></div>
           <div style="display:flex;gap:8px;">
             <button id="copy-modal-close" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;">Close</button>
             <button id="copy-modal-copy" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:#0176d3;color:#fff;cursor:pointer;">Copy</button>
@@ -1670,7 +1743,7 @@ function showCopyModal(html) {
         </div>
       </div>`;
     document.body.appendChild(modal);
-    const close = () => modal.remove();
+    const close = () => { releaseDialogFocus('copy-modal'); modal.remove(); };
     modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
     modal.querySelector('#copy-modal-close').addEventListener('click', close);
     modal.querySelector('#copy-modal-close-x').addEventListener('click', close);
@@ -1678,12 +1751,9 @@ function showCopyModal(html) {
       const ta = document.getElementById('copy-modal-textarea');
       tryCopyToClipboard(ta ? ta.value : html, ta);
     });
-    document.addEventListener('keydown', function onEsc(e) {
-      if (e.key === 'Escape' && document.getElementById('copy-modal')) {
-        close();
-        document.removeEventListener('keydown', onEsc);
-      }
-    });
+    modal.setAttribute('aria-label', 'Copy profile HTML');
+    modal.querySelector('#copy-modal-textarea').setAttribute('aria-label', 'Exported profile HTML');
+    activateDialogFocus('copy-modal', close, 'copy-modal-textarea');
   }
   const ta = document.getElementById('copy-modal-textarea');
   if (ta) {
@@ -1740,6 +1810,10 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
   base.colors.menu = '#FFFFFF';
   base.colors.menuText = '#000000';
 
+  // Missing AI fields are unknown, never facts inherited from the demo seed.
+  ['profile', 'loyalty', 'account', 'accountMetrics'].forEach(key => {
+    if (base[key]) base[key] = Object.fromEntries(Object.keys(base[key]).map(field => [field, field === 'secondaryEmailInclude' ? false : '']));
+  });
   ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
     if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
   });
@@ -1777,6 +1851,7 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
     base.rightExtraCards = (base.rightExtraCards || []).concat(aiCards);
   }
   normalizeCustomModules(base);
+  base.railFields = cloneViewData(ai.railFields || []);
   // The AI supplies the content, while the selected viewer lens owns the
   // information hierarchy and section names shown to the presenter.
   applyPersonaPreset(base);
@@ -1802,6 +1877,13 @@ function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType 
 
 function mergePersonaOverlay(target, overlay) {
   UPGContract.validateAIProfile(overlay, { profileType: target.profileType, overlay: true });
+  if (Array.isArray(overlay.railFields)) {
+    target.railFields ||= [];
+    overlay.railFields.forEach(field => {
+      const existing = target.railFields.find(item => item.label.toLowerCase() === field.label.toLowerCase());
+      if (!existing) target.railFields.push(Object.assign({}, cloneViewData(field), { id: `ai-field-${Date.now()}-${Math.random().toString(36).slice(2)}`, visible: true }));
+    });
+  }
   ['insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(key => {
     if (overlay[key] && typeof overlay[key] === 'object') target[key] = Object.assign({}, target[key] || {}, cloneViewData(overlay[key]));
   });
@@ -1842,6 +1924,7 @@ function createPersonaVariantFromOverlay(lens, overlay, strategy, owner = state)
 }
 
 function renderAll() {
+  if (typeof renderRailFields === 'function') renderRailFields();
   renderInsights();
   renderAffinityGroups();
   renderPreferences();
@@ -1853,6 +1936,8 @@ function renderAll() {
   renderRecs();
   renderActivity();
   renderNavLinks();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof labelEditorControls === 'function') labelEditorControls();
 }
 
 // ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
@@ -1863,6 +1948,7 @@ let currentProjectRevision = null;
 let currentProjectOwner = null;
 let projectSaveInFlight = false;
 let projectSaveAttemptKey = null;
+let projectSaveAttempt = null;
 
 function resetProjectIdentity() {
   currentProjectId = null;
@@ -1870,6 +1956,7 @@ function resetProjectIdentity() {
   currentProjectRevision = null;
   currentProjectOwner = null;
   projectSaveAttemptKey = null;
+  projectSaveAttempt = null;
 }
 
 function syncAuthUI() {
@@ -1952,6 +2039,7 @@ async function openSettings() {
   }
   closeAccountMenu();
   document.getElementById('settings-modal')?.classList.remove('hidden');
+  activateDialogFocus('settings-modal', closeSettings);
   const email = SaasyAuth.getEmail() || '';
   const label = document.getElementById('settings-account-email');
   const initial = document.getElementById('settings-account-initial');
@@ -1961,6 +2049,8 @@ async function openSettings() {
 }
 
 function closeSettings() {
+  closeApiMcpGuide();
+  releaseDialogFocus('settings-modal');
   document.getElementById('settings-modal')?.classList.add('hidden');
   hideCreateApiKeyForm();
   dismissCreatedApiKey();
@@ -1973,9 +2063,11 @@ function openApiMcpGuide() {
   if (restBase) restBase.textContent = origin;
   if (endpoint) endpoint.textContent = origin.startsWith('http') ? `${origin}/mcp` : origin;
   document.getElementById('api-mcp-guide-modal')?.classList.remove('hidden');
+  activateDialogFocus('api-mcp-guide-modal', closeApiMcpGuide);
 }
 
 function closeApiMcpGuide() {
+  releaseDialogFocus('api-mcp-guide-modal');
   document.getElementById('api-mcp-guide-modal')?.classList.add('hidden');
 }
 
@@ -2096,15 +2188,17 @@ function openSaveProjectModal() {
   input.value = currentProjectName || state.brandName || '';
   const actions = document.getElementById('save-project-modal-actions');
   actions.innerHTML = currentProjectId
-    ? `<button data-save-action onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save as New</button>
+    ? `<button data-save-action onclick="confirmSaveProject(true)" class="btn-secondary-sf flex-1 py-2 text-xs">Save a separate copy</button>
        <button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Update</button>`
     : `<button data-save-action onclick="confirmSaveProject(false)" class="btn-primary-sf flex-1 py-2 text-xs">Save</button>`;
   document.getElementById('save-project-modal').classList.remove('hidden');
+  activateDialogFocus('save-project-modal', closeSaveProjectModal, 'save-project-name-input');
   setTimeout(() => input.focus(), 0);
 }
 
 function closeSaveProjectModal() {
   if (projectSaveInFlight) return;
+  releaseDialogFocus('save-project-modal');
   document.getElementById('save-project-modal').classList.add('hidden');
   projectSaveAttemptKey = null;
 }
@@ -2165,6 +2259,13 @@ async function saveProjectWithSessionRecovery(options, ownerEmail = SaasyAuth.ge
   try {
     return await SaasyAuth.saveProject(options);
   } catch (error) {
+    // An update may have committed before its response was lost. Recognize
+    // that exact content on a revision conflict without overwriting newer edits.
+    if ((error.code || error.message) === 'revision_conflict' && options.id && SaasyAuth.loadProject && (!ownerEmail || SaasyAuth.getEmail?.() === ownerEmail)) {
+      const saved = await SaasyAuth.loadProject(options.id);
+      if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
+      if (saved.tool === SAASY_TOOL && saved.name === options.name && (saved.source_url || '') === (options.sourceUrl || '') && UPGContract.canonicalJSON(saved.payload) === UPGContract.canonicalJSON(options.payload)) return saved;
+    }
     if (!isRejectedSession(error)) throw error;
 
     // The shared auth widget clears an invalid local JWT on a 401. Ask Magic
@@ -2197,18 +2298,26 @@ async function confirmSaveProject(asNew) {
     const input = document.getElementById('save-project-name-input');
     const name = input.value.trim() || state.brandName || 'Untitled Profile';
     const id = asNew ? null : currentProjectId;
-    const idempotencyKey = projectSaveAttemptKey || (projectSaveAttemptKey = createProjectSaveAttemptKey());
     const sourceUrl = getProjectSourceUrl();
     const payload = buildProjectPayloadForSave();
-    payload.integrationArtifact = await buildIntegrationArtifact(payload);
-    const project = await saveProjectWithSessionRecovery({ tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl, expectedRevision: id ? currentProjectRevision : undefined }, ownerEmail);
+    delete payload.integrationArtifact;
+    const signature = JSON.stringify({ payload, id, name, sourceUrl, ownerEmail, asNew });
+    if (!projectSaveAttempt || projectSaveAttempt.signature !== signature) {
+      const idempotencyKey = createProjectSaveAttemptKey();
+      payload.integrationArtifact = await buildIntegrationArtifact(payload);
+      if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > MAX_SAVED_PROJECT_BYTES) throw new Error('project_payload_too_large');
+      projectSaveAttempt = { signature, options: { tool: SAASY_TOOL, name, payload, id, idempotencyKey, sourceUrl, saveAsCopy: !!asNew, expectedRevision: id ? currentProjectRevision : undefined } };
+    }
+    const project = await saveProjectWithSessionRecovery(projectSaveAttempt.options, ownerEmail);
     if (state === saveOwner) {
       currentProjectId = project.id;
       currentProjectName = project.name;
       currentProjectRevision = project.revision || null;
       currentProjectOwner = ownerEmail;
+      if (typeof persistDraftRecovery === 'function') await persistDraftRecovery();
     }
     projectSaveInFlight = false;
+    projectSaveAttempt = null;
     closeSaveProjectModal();
     const s = document.getElementById('save-project-success');
     s.classList.remove('hidden');
@@ -2275,7 +2384,7 @@ async function deleteProjectFromList(id, row) {
   try {
     await SaasyAuth.deleteProject(id);
     row.remove();
-    if (id === currentProjectId) { currentProjectId = null; currentProjectName = null; }
+    if (id === currentProjectId) resetProjectIdentity();
   } catch (e) {
     alert('Could not delete project: ' + e.message);
   }
@@ -2283,11 +2392,19 @@ async function deleteProjectFromList(id, row) {
 
 async function loadProjectAndHydrate(id) {
   try {
+    if (typeof draftReady !== 'undefined' && draftReady && !confirm('Load this online project and replace the current editor? Download or save a copy first if you need to keep current edits.')) return;
     const owner = state;
+    readStaticFields();
+    const expectedDraft = JSON.stringify(state);
+    const expectedSourceUrl = document.getElementById('quickstart-url')?.value;
+    const expectedEmail = SaasyAuth.getEmail?.();
     const project = await SaasyAuth.loadProject(id);
     if (project.tool !== SAASY_TOOL) throw new Error('This project belongs to a different tool and cannot be opened in UPG.');
     UPGContract.validateSavedProfile(project.payload);
     if (state !== owner) return;
+    readStaticFields();
+    if (SaasyAuth.getEmail?.() !== expectedEmail) throw new Error('Your signed-in account changed. Select the project again from the correct account.');
+    if (JSON.stringify(state) !== expectedDraft || document.getElementById('quickstart-url')?.value !== expectedSourceUrl) throw new Error('The editor changed while this project was loading. Your edits were kept; load it again when you are ready.');
     const hydrated = cloneViewData(project.payload);
     if (hydrated.personaVariants) Object.values(hydrated.personaVariants).forEach(variant => {
       UPGContract.validateSavedProfile(Object.assign({}, hydrated, variant));
@@ -2298,6 +2415,7 @@ async function loadProjectAndHydrate(id) {
     currentProjectName = project.name;
     currentProjectRevision = project.revision || null;
     currentProjectOwner = SaasyAuth.getEmail?.();
+    document.getElementById('quickstart-url').value = project.source_url || state._aiContext?.sourceUrl || '';
     document.getElementById('brand-industry').value = state._industry || 'recruiting';
     fillStaticFields();
     renderAll();
@@ -2354,7 +2472,8 @@ function friendlyError(err) {
   return map[code] || err.message || String(err);
 }
 
-function refreshSharedBackendConnection() {
+async function refreshSharedBackendConnection() {
+  if (typeof persistDraftRecovery === 'function' && !(await persistDraftRecovery()) && !confirm('Local recovery is unavailable. Reload anyway? Save online or download HTML first to keep your work.')) return;
   window.location.reload();
 }
 
@@ -2376,6 +2495,7 @@ function nudgeToAdvancedIfDefaultFailed(code) {
   if (!code || !code.startsWith('default_')) return;
   const panel = document.getElementById('quickstart-settings');
   if (panel && !panel.classList.contains('open')) panel.classList.add('open');
+  if (panel) document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', 'true');
 }
 
 async function onPersonalizeCurrentPersona() {
@@ -2405,6 +2525,9 @@ async function onPersonalizeCurrentPersona() {
   const requestId = (personaTextRequests.get(strategy.lens) || 0) + 1;
   personaTextRequests.set(strategy.lens, requestId);
   const current = () => state === owner && personaTextRequests.get(strategy.lens) === requestId;
+  const previousStatus = ensureProfileSet(owner).statuses[strategy.lens];
+  owner.profileSet.statuses[strategy.lens] = 'generating';
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
   status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
   try {
     const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
@@ -2418,6 +2541,7 @@ async function onPersonalizeCurrentPersona() {
     });
     if (!current()) return;
     if (personaFingerprint(owner, strategy.lens) !== before) {
+      owner.profileSet.statuses[strategy.lens] = 'edited';
       status.textContent = 'Your view changed while AI was working. Those edits were kept. Choose Update view again to apply your latest requirements.';
       return;
     }
@@ -2432,9 +2556,12 @@ async function onPersonalizeCurrentPersona() {
     status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
   } catch (error) {
     if (!current()) return;
+    owner.profileSet.statuses[strategy.lens] = previousStatus === 'ready' ? 'edited' : 'failed';
     showQuickStartError(error);
     nudgeToAdvancedIfDefaultFailed(error.code);
     status.textContent = '';
+  } finally {
+    if (current() && typeof renderProfileProgress === 'function') renderProfileProgress();
   }
 }
 
@@ -2476,7 +2603,7 @@ async function onQuickStartAnalyze() {
   btn.disabled = true;
   status.innerHTML = '<div class="spinner"></div> Starting…';
 
-  const setStatus = (label) => { if (runId === generationRunId) status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; };
+  const setStatus = (label) => { if (runId === generationRunId) { status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; if (typeof renderProfileProgress === 'function') renderProfileProgress(); } };
 
   try {
     if (!window.LocalAI) throw new Error('LocalAI module not loaded');
@@ -2589,7 +2716,8 @@ async function onQuickStartAnalyze() {
 }
 
 function toggleQuickStartSettings() {
-  document.getElementById('quickstart-settings').classList.toggle('open');
+  const open = document.getElementById('quickstart-settings').classList.toggle('open');
+  document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', String(open));
 }
 
 function refreshProviderBadge() {
@@ -2638,6 +2766,16 @@ function bootstrap() {
   fillStaticFields();
   syncProfileSetConfigUI();
   renderAll();
+  initializeDraftRecovery();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistDraftRecovery(); });
+  document.addEventListener('keydown', event => {
+    const radio = event.target.closest?.('[role="radio"]');
+    const group = radio?.closest('[role="radiogroup"]');
+    if (!group || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const radios = [...group.querySelectorAll('[role="radio"]')]; const index = radios.indexOf(radio);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? radios.length - 1 : (index + (['ArrowLeft','ArrowUp'].includes(event.key) ? -1 : 1) + radios.length) % radios.length;
+    event.preventDefault(); radios.forEach((item, i) => { item.tabIndex = i === next ? 0 : -1; }); radios[next].click(); radios[next].focus();
+  });
   if (typeof hydrateBundledStarterImages === 'function') {
     hydrateBundledStarterImages(state).then(() => refreshPreview());
   }

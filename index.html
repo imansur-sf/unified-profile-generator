@@ -240,6 +240,41 @@
     .font-700 { font-weight: 700; }
 
     input[type="range"] { accent-color: var(--sf-blue-m); }
+    .editor-context { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 12px; margin: 18px auto 0; padding: 14px 18px; border: 1px solid #cad8eb; border-radius: 12px; background: #fff; }
+    .editor-context-label { color: #526479; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+    .editor-context-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .editor-note { margin: 8px 0 0; color: #526479; font-size: 12px; line-height: 1.45; }
+    .upload-feedback { margin: 6px 0; font-size: 12px; color: #34516d; }
+    .upload-feedback:empty { margin: 0; }
+    .upload-feedback[data-error="true"] { color: #b42318; }
+    .upload-remove { margin-top: 6px; color: #0b5cab; background: transparent; border: 0; text-decoration: underline; font-size: 12px; cursor: pointer; }
+    .drop-zone-sf { display: block; width: 100%; color: inherit; font: inherit; }
+    .drop-zone-sf.w-14 { width: 3.5rem; }
+    .drop-zone-sf:focus-visible, button:focus-visible, [role="radio"]:focus-visible { outline: 3px solid #0b5cab; outline-offset: 3px; }
+    .quickstart button:focus-visible { outline-color: #fff; }
+    .module-composer-card { flex-wrap: wrap; cursor: default; }
+    .module-composer-card strong { flex-basis: 100%; white-space: normal; }
+    .module-composer-card select { max-width: 100%; padding: 5px; font-size: 11px; }
+    .module-composer-card button { min-height: 30px; }
+    .profile-set-progress { display: grid; gap: 8px; margin-top: 12px; font-size: 12px; }
+    #wizard-col, #preview-col { min-width: 0; }
+    #preview-col { display: block; }
+    #main-layout { flex-direction: column; }
+    @media (min-width: 1024px) { #main-layout { flex-direction: row; } }
+    @media (max-width: 640px) {
+      .app-topbar > div { flex-wrap: wrap; padding: 6px 12px; gap: 6px; }
+      .quickstart-row { flex-direction: column; }
+      .quickstart-input { min-width: 0; width: 100%; }
+      .persona-switch, .profile-set-choices { grid-template-columns: repeat(2, minmax(0,1fr)); }
+      .strategy-fields { grid-template-columns: 1fr; }
+      .wizard-card { padding: 18px; }
+      .step-connector { flex: 1; min-width: 0; max-width: 24px; }
+      .step-dot { flex: 0 0 32px; width: 32px; height: 32px; }
+      .editor-context-actions { width: 100%; }
+      .editor-context-actions button { flex: 1; }
+      #preview-col { position: static; width: 100%; }
+    }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
   </style>
 </head>
 <body class="min-h-screen">
@@ -277,7 +312,7 @@
         <div id="my-projects-panel" class="hidden absolute right-0 top-full mt-2 w-80 bg-white rounded-xl shadow-lg border border-gray-200 text-left z-50 overflow-hidden">
           <div class="px-4 py-3 border-b border-gray-100 flex items-center justify-between">
             <span class="text-xs font-700 uppercase tracking-wide text-gray-500">My Projects</span>
-            <button onclick="closeMyProjects()" class="text-gray-400 hover:text-gray-600 text-sm">✕</button>
+            <button onclick="closeMyProjects()" class="text-gray-400 hover:text-gray-600 text-sm" aria-label="Close My Projects">✕</button>
           </div>
           <div id="my-projects-list" class="max-h-72 overflow-y-auto divide-y divide-gray-100"></div>
         </div>
@@ -288,25 +323,41 @@
   <!-- STEP INDICATORS -->
   <div class="stepper-shell">
     <div class="max-w-[1400px] mx-auto px-4 py-4">
-      <div class="flex items-center justify-center gap-1" id="step-indicators">
-        <button onclick="goToStep(0)" class="step-dot active w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="0">1</button>
+      <div class="flex items-center justify-center gap-1" id="step-indicators" role="navigation" aria-label="Profile editing sections">
+        <button onclick="goToStep(0)" class="step-dot active w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="0" aria-label="Step 1: Brand and customer" aria-current="step">1</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(1)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="1">2</button>
+        <button onclick="goToStep(1)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="1" aria-label="Step 2: Identity">2</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(2)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="2">3</button>
+        <button onclick="goToStep(2)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="2" aria-label="Step 3: Insights">3</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(3)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="3">4</button>
+        <button onclick="goToStep(3)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="3" aria-label="Step 4: Affinities">4</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(4)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="4">5</button>
+        <button onclick="goToStep(4)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="4" aria-label="Step 5: Modules">5</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(5)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="5">6</button>
+        <button onclick="goToStep(5)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="5" aria-label="Step 6: Recommendations and activity">6</button>
         <div class="step-connector w-10"></div>
-        <button onclick="goToStep(6)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="6">7</button>
+        <button onclick="goToStep(6)" class="step-dot w-9 h-9 rounded-full text-xs flex items-center justify-center" data-step="6" aria-label="Step 7: Preview and export">7</button>
       </div>
     </div>
   </div>
 
   <!-- MAIN LAYOUT: Wizard + Preview -->
+  <div class="max-w-[1400px] mx-auto px-4">
+    <section class="editor-context" id="selected-view-bar" aria-label="Current view and output actions">
+      <div>
+        <div class="editor-context-label">Editing selected view</div>
+        <strong id="selected-view-name">Sales</strong>
+        <span id="selected-view-status" role="status" aria-live="polite" aria-atomic="true"></span>
+        <p id="draft-status" class="editor-note" role="status" aria-live="polite">Unsaved draft</p>
+        <p id="layout-fit-status" class="editor-note" role="status" aria-live="polite">Checking first-screen fit…</p>
+      </div>
+      <div class="editor-context-actions">
+        <button type="button" class="btn-secondary-sf text-sm" onclick="goToStep(6)">Save &amp; export</button>
+        <button type="button" class="btn-primary-sf text-sm" onclick="openPresentation()">Preview &amp; present</button>
+      </div>
+    </section>
+    <p class="editor-note" id="demo-data-note"><strong>Demo data:</strong> Starter and AI-generated profiles contain simulated customer facts for presentations. Review and edit them before use; they do not represent live CRM records.</p>
+  </div>
   <div class="max-w-[1400px] mx-auto px-4 py-6">
     <div class="flex gap-6" id="main-layout">
 
@@ -323,20 +374,20 @@
               <div class="quickstart-title" id="quickstart-title">Create a customer profile set with AI</div>
               <div class="quickstart-sub" id="quickstart-sub">Paste the customer's homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.</div>
               <div class="profile-type-switch" role="radiogroup" aria-label="Profile type">
-                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true">
+                <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true" tabindex="0">
                   <strong>Individual · B2C</strong><span>Generate a person-level unified profile.</span>
                 </button>
-                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false">
+                <button type="button" id="profile-type-b2b" class="profile-type-option" onclick="setProfileType('b2b')" role="radio" aria-checked="false" tabindex="-1">
                   <strong>Account · B2B</strong><span>Generate a company-level account profile.</span>
                 </button>
               </div>
               <div class="quickstart-row">
-                <input type="text" id="quickstart-url" class="quickstart-input" placeholder="https://ncsasports.org" spellcheck="false" autocomplete="off">
-                <button id="quickstart-btn" class="quickstart-btn" onclick="onQuickStartAnalyze()">Create profile set →</button>
+                <label for="quickstart-url" class="sr-only">Customer homepage URL</label>
+                <input type="text" id="quickstart-url" class="quickstart-input" placeholder="Customer homepage, e.g. https://ncsasports.org" inputmode="url" spellcheck="false" autocomplete="url" aria-describedby="quickstart-error">
               </div>
               <div class="profile-set-panel">
                 <div class="profile-set-title">Profile set</div>
-                <div class="profile-set-help">Choose the ready-made views to create. You can refine any selected view after it is generated.</div>
+                <div class="profile-set-help">Choose the views to create. Set a view's decision goal below before generation, or update that view later.</div>
                 <div class="profile-set-choices" role="group" aria-label="Views to create">
                   <label class="profile-set-choice"><input type="checkbox" value="sales" checked> Sales</label>
                   <label class="profile-set-choice"><input type="checkbox" value="service" checked> Service</label>
@@ -352,13 +403,13 @@
                 </div>
               </div>
               <div class="strategy-panel">
-                <label class="strategy-label">Customize selected view</label>
+                <div class="strategy-label">Selected view requirements</div>
                 <div class="persona-switch" role="radiogroup" aria-label="Viewer persona">
-                  <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true">Sales</button>
-                  <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false">Service</button>
-                  <button type="button" id="persona-marketing" class="persona-option" onclick="setViewerLens('marketing')" role="radio" aria-checked="false">Marketing</button>
-                  <button type="button" id="persona-success" class="persona-option" onclick="setViewerLens('success')" role="radio" aria-checked="false">Success</button>
-                  <button type="button" id="persona-custom" class="persona-option" onclick="setViewerLens('custom')" role="radio" aria-checked="false">Custom</button>
+                  <button type="button" id="persona-sales" class="persona-option active" onclick="setViewerLens('sales')" role="radio" aria-checked="true" tabindex="0">Sales</button>
+                  <button type="button" id="persona-service" class="persona-option" onclick="setViewerLens('service')" role="radio" aria-checked="false" tabindex="-1">Service</button>
+                  <button type="button" id="persona-marketing" class="persona-option" onclick="setViewerLens('marketing')" role="radio" aria-checked="false" tabindex="-1">Marketing</button>
+                  <button type="button" id="persona-success" class="persona-option" onclick="setViewerLens('success')" role="radio" aria-checked="false" tabindex="-1">Success</button>
+                  <button type="button" id="persona-custom" class="persona-option" onclick="setViewerLens('custom')" role="radio" aria-checked="false" tabindex="-1">Custom</button>
                 </div>
                 <div class="custom-role-field" id="custom-role-field" hidden>
                   <label for="strategy-custom-role">Who will use this profile? <span aria-hidden="true">*</span></label>
@@ -376,48 +427,50 @@
                   <textarea id="strategy-brief" aria-label="What should this person be able to decide or do?" placeholder="What should this person be able to decide or do?" oninput="onProfileStrategyChange()"></textarea>
                 </div>
                 <div class="strategy-blueprint" id="strategy-blueprint"></div>
-                <button type="button" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Personalize this view with AI →</button>
+                <p class="quickstart-note">These requirements apply to the selected view. Brand and customer identity are shared across the profile set.</p>
+                <button type="button" id="btn-personalize-view" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Update Sales view with AI →</button>
               </div>
-              <div class="quickstart-status" id="quickstart-status"></div>
-              <div class="quickstart-error" id="quickstart-error" style="display:none;"></div>
-              <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
-              <div id="quickstart-note" class="quickstart-note">Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.</div>
-
-              <div class="quickstart-fallback-hint">
-                <span class="quickstart-fallback-icon">💡</span>
-                <span>
-                  <strong>Analyze failing?</strong>
-                  Grab an API key from the
-                  <a href="https://eng-ai-model-gateway-oidc.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl/" target="_blank" rel="noopener">LLM Gateway Express</a>
-                  and paste it in <strong>Advanced</strong> below.
-                </span>
-              </div>
-
-              <button class="quickstart-settings-toggle" onclick="toggleQuickStartSettings()">Advanced · use your own key or Worker</button>
+              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create selected profile views →</button>
+              <div class="quickstart-status" id="quickstart-status" role="status" aria-live="polite" aria-atomic="true"></div>
+              <div class="quickstart-error" id="quickstart-error" role="alert" style="display:none;"></div>
+              <div id="profile-set-progress" class="profile-set-progress" aria-label="Profile view progress"></div>
+              <button class="quickstart-settings-toggle" id="quickstart-settings-toggle" aria-expanded="false" aria-controls="quickstart-settings" onclick="toggleQuickStartSettings()">Advanced · connection settings</button>
               <div class="quickstart-settings" id="quickstart-settings">
-                <label>API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
+                <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>
+                <div id="quickstart-note" class="quickstart-note">Generation uses this app's backend. You can optionally connect your own key or endpoint below.</div>
+                <div class="quickstart-fallback-hint">
+                  <span class="quickstart-fallback-icon">💡</span>
+                  <span>
+                    <strong>Need your own connection?</strong>
+                    Grab an API key from the
+                    <a href="https://eng-ai-model-gateway-oidc.sfproxy.devx-preprod.aws-esvc1-useast2.aws.sfdc.cl/" target="_blank" rel="noopener">LLM Gateway Express</a>
+                    and paste it below.
+                  </span>
+                </div>
+
+                <label for="quickstart-api-key">API Key <span style="font-weight:400;color:rgba(255,255,255,0.55);">— sk-ant-… (Anthropic) or sk-… (SF LLM Gateway)</span></label>
                 <div class="quickstart-byok-row" style="display:flex;gap:6px;margin-top:4px;">
                   <input type="password" id="quickstart-api-key" placeholder="Leave blank to use the shared default backend" spellcheck="false" autocomplete="off" oninput="onLocalAIKeyChange()" style="flex:1;">
-                  <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" title="Clear stored key" style="margin-top:0;">Clear</button>
+                  <button class="quickstart-byok-clear" onclick="clearLocalAIKey()" aria-label="Clear API key" style="margin-top:0;">Clear</button>
                 </div>
-                <label>Scraper / Worker Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— override the default Cloudflare Worker</span></label>
-                <input type="text" id="quickstart-scraper-url" placeholder="Default: https://loyalty-scraper.imansur.workers.dev" oninput="onScraperEndpointChange()">
+                <label for="quickstart-scraper-url">Backend Endpoint <span style="font-weight:400;color:rgba(255,255,255,0.55);">— optional connection override</span></label>
+                <input type="text" id="quickstart-scraper-url" placeholder="Leave blank to use this app's backend" oninput="onScraperEndpointChange()">
               </div>
             </div>
           </div>
 
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 1 of 7</div>
-            <h2 class="wizard-title mb-1">Brand & Colors</h2>
-            <p class="wizard-sub mb-6">Customer brand identity and the color tokens applied across the profile.</p>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-1-title">Brand & Colors</h2>
+            <p class="wizard-sub mb-6">Brand styling is shared across the customer's views. Edit the selected view's content in the following sections.</p>
 
             <div class="space-y-4">
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">Brand Name <span class="text-red-500">*</span></label>
+                <label for="brand-name" class="block text-sm font-600 text-gray-700 mb-1">Brand Name <span class="text-red-500">*</span></label>
                 <input type="text" id="brand-name" placeholder="e.g. NCSA College Recruiting" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">Industry</label>
+                <label for="brand-industry" class="block text-sm font-600 text-gray-700 mb-1">Industry</label>
                 <select id="brand-industry" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none bg-white" onchange="onIndustryChange()">
                   <option value="recruiting">Sports Recruiting / Education</option>
                   <option value="retail">Retail / Fashion</option>
@@ -428,26 +481,28 @@
                 <p class="text-xs text-gray-400 mt-1">Switching industry reloads all defaults — save your work first.</p>
               </div>
               <div>
-                <label class="block text-sm font-600 text-gray-700 mb-1">App / Cloud Name</label>
+                <label for="app-name" class="block text-sm font-600 text-gray-700 mb-1">App / Cloud Name</label>
                 <input type="text" id="app-name" placeholder="Data Cloud" class="w-full px-4 py-2.5 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                 <p class="text-xs text-gray-400 mt-1">Shown in the top-nav pill (e.g. "Data Cloud", "Marketing Cloud").</p>
               </div>
               <div class="grid grid-cols-2 gap-4">
                 <div>
-                  <label class="block text-sm font-600 text-gray-700 mb-1">Brand Logo</label>
-                  <div id="drop-logo" class="drop-zone-sf p-4 text-center cursor-pointer">
-                    <img id="preview-logo" src="" class="hidden w-14 h-14 object-contain rounded mx-auto mb-2">
+                  <label for="url-logo" class="block text-sm font-600 text-gray-700 mb-1">Brand Logo</label>
+                  <div id="drop-logo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload brand logo" data-upload-label="Upload brand logo">
+                    <img alt="" id="preview-logo" src="" class="hidden w-14 h-14 object-contain rounded mx-auto mb-2">
                     <p class="text-xs text-gray-500">📷 Drop or click</p>
                   </div>
                   <input type="text" id="url-logo" placeholder="Or paste logo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onLogoUrlChange()">
+                  <button type="button" class="upload-remove" onclick="document.getElementById('url-logo').value=''; onLogoUrlChange()">Remove brand logo</button>
                 </div>
                 <div>
-                  <label class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
-                  <div id="drop-user-avatar" class="drop-zone-sf p-4 text-center cursor-pointer">
-                    <img id="preview-user-avatar" src="" class="hidden w-14 h-14 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+                  <label for="url-user-avatar" class="block text-sm font-600 text-gray-700 mb-1">Logged-in User Avatar <span class="text-gray-400 font-500">(top-right)</span></label>
+                  <div id="drop-user-avatar" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload logged-in user avatar" data-upload-label="Upload logged-in user avatar">
+                    <img alt="" id="preview-user-avatar" src="" class="hidden w-14 h-14 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                     <p class="text-xs text-gray-500">📷 Drop or click</p>
                   </div>
                   <input type="text" id="url-user-avatar" placeholder="Or paste avatar URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onUserAvatarUrlChange()">
+                  <button type="button" class="upload-remove" onclick="document.getElementById('url-user-avatar').value=''; onUserAvatarUrlChange()">Remove user avatar</button>
                 </div>
               </div>
 
@@ -455,45 +510,45 @@
                 <h3 class="text-sm font-700 text-gray-800 mb-3">Colors</h3>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Primary</label>
+                    <label for="color-primary" class="block text-xs font-600 text-gray-600 mb-1">Primary</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-primary" value="#001E5B" onchange="onColorChange()">
-                      <input type="text" id="hex-primary" value="#001E5B" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('primary')">
+                      <input type="text" id="hex-primary" aria-label="Primary color hex code" value="#001E5B" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('primary')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Accent</label>
+                    <label for="color-accent" class="block text-xs font-600 text-gray-600 mb-1">Accent</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-accent" value="#066AFE" onchange="onColorChange()">
-                      <input type="text" id="hex-accent" value="#066AFE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('accent')">
+                      <input type="text" id="hex-accent" aria-label="Accent color hex code" value="#066AFE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('accent')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Secondary / Wash</label>
+                    <label for="color-secondary" class="block text-xs font-600 text-gray-600 mb-1">Secondary / Wash</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-secondary" value="#EAF5FE" onchange="onColorChange()">
-                      <input type="text" id="hex-secondary" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('secondary')">
+                      <input type="text" id="hex-secondary" aria-label="Secondary color hex code" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('secondary')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Bar Background</label>
+                    <label for="color-menu" class="block text-xs font-600 text-gray-600 mb-1">Menu Bar Background</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menu" value="#FFFFFF" onchange="onColorChange()">
-                      <input type="text" id="hex-menu" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
+                      <input type="text" id="hex-menu" aria-label="Menu bar background hex code" value="#FFFFFF" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menu')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
+                    <label for="color-menuText" class="block text-xs font-600 text-gray-600 mb-1">Menu Text</label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-menuText" value="#3E3E3C" onchange="onColorChange()">
-                      <input type="text" id="hex-menuText" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
+                      <input type="text" id="hex-menuText" aria-label="Menu text hex code" value="#3E3E3C" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('menuText')">
                     </div>
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
+                    <label for="color-pageBg" class="block text-xs font-600 text-gray-600 mb-1">Card Canvas Background <span class="text-gray-400 font-500">(behind the cards)</span></label>
                     <div class="flex items-center gap-2">
                       <input type="color" id="color-pageBg" value="#EAF5FE" onchange="onColorChange()">
-                      <input type="text" id="hex-pageBg" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
+                      <input type="text" id="hex-pageBg" aria-label="Card canvas background hex code" value="#EAF5FE" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onHexChange('pageBg')">
                     </div>
                   </div>
                 </div>
@@ -505,14 +560,14 @@
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
+                      <label for="left-col-w" class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
                       <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
                     </div>
                     <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
-                      <label class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
+                      <label for="middle-col-w" class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
                       <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
                     </div>
                     <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
@@ -527,15 +582,15 @@
         <div class="step-panel fade-in" data-step="1">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 2 of 7</div>
-            <h2 class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-2-title">Profile Card</h2>
             <p class="wizard-sub mb-6" id="step-2-sub">The customer's demographic, contact, and segment membership shown in the left panel.</p>
             <div class="mode-b2c">
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Customer ID</label><input type="text" id="profile-customerId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Email</label><input type="text" id="profile-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Phone</label><input type="text" id="profile-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-name" class="block text-xs font-600 text-gray-600 mb-1">Name</label><input type="text" id="profile-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-city" class="block text-xs font-600 text-gray-600 mb-1">City / State</label><input type="text" id="profile-city" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-customerId" class="block text-xs font-600 text-gray-600 mb-1">Customer ID</label><input type="text" id="profile-customerId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-email" class="block text-xs font-600 text-gray-600 mb-1">Email</label><input type="text" id="profile-email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="profile-phone" class="block text-xs font-600 text-gray-600 mb-1">Phone</label><input type="text" id="profile-phone" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div class="col-span-2 border-t border-gray-100 pt-3">
                 <label class="flex items-center gap-2 text-xs font-600 text-gray-600 mb-2">
                   <input type="checkbox" id="secondary-email-include" onchange="onFieldChange()">
@@ -543,26 +598,27 @@
                 </label>
                 <div class="grid grid-cols-2 gap-3">
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Field Label</label>
+                    <label for="secondary-email-label" class="block text-xs font-600 text-gray-600 mb-1">Field Label</label>
                     <input type="text" id="secondary-email-label" placeholder="e.g. Parent's Email, Spouse's Email" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                   </div>
                   <div>
-                    <label class="block text-xs font-600 text-gray-600 mb-1">Address</label>
+                    <label for="secondary-email-value" class="block text-xs font-600 text-gray-600 mb-1">Address</label>
                     <input type="text" id="secondary-email-value" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
                   </div>
                 </div>
               </div>
-              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Address</label><textarea id="profile-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
-              <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Segment Membership</label><textarea id="profile-segment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              <div class="col-span-2"><label for="profile-address" class="block text-xs font-600 text-gray-600 mb-1">Address</label><textarea id="profile-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+              <div class="col-span-2"><label for="profile-segment" class="block text-xs font-600 text-gray-600 mb-1">Segment Membership</label><textarea id="profile-segment" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
             </div>
 
             <div class="mt-4">
-              <label class="block text-xs font-600 text-gray-600 mb-1">Profile Photo <span class="text-gray-400 font-500">(optional)</span></label>
-              <div id="drop-photo" class="drop-zone-sf p-4 text-center cursor-pointer">
-                <img id="preview-photo" src="" class="hidden w-16 h-16 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
+              <label for="url-photo" class="block text-xs font-600 text-gray-600 mb-1">Profile Photo <span class="text-gray-400 font-500">(optional)</span></label>
+              <div id="drop-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload profile photo" data-upload-label="Upload profile photo">
+                <img alt="" id="preview-photo" src="" class="hidden w-16 h-16 object-cover rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                 <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
               </div>
               <input type="text" id="url-photo" placeholder="Or paste photo URL" class="w-full mt-2 px-3 py-2 border border-gray-300 rounded-lg text-xs outline-none" oninput="onPhotoUrlChange()">
+              <button type="button" class="upload-remove" onclick="document.getElementById('url-photo').value=''; onPhotoUrlChange()">Remove profile photo</button>
             </div>
             </div>
 
@@ -570,7 +626,7 @@
               <div class="account-mode-note">Account profiles replace person-level contact details with firmographics, ownership, and account hierarchy. Brand styling from Step 1 still applies to the generated view.</div>
               <div class="mt-4">
                 <label for="url-account-photo" class="block text-xs font-600 text-gray-600 mb-1">Account Picture <span class="text-gray-400 font-500">(optional)</span></label>
-                <div id="drop-account-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload account picture" onkeydown="if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); this.click(); }">
+                <div id="drop-account-photo" class="drop-zone-sf p-4 text-center cursor-pointer" role="button" tabindex="0" aria-label="Upload account picture" data-upload-label="Upload account picture">
                   <img id="preview-account-photo" src="" alt="Account picture preview" class="hidden w-16 h-16 object-contain rounded-full mx-auto mb-2 ring-2 ring-gray-200">
                   <p class="text-xs text-gray-500">📷 Drop image or click to upload</p>
                 </div>
@@ -581,19 +637,27 @@
                 </div>
               </div>
               <div class="grid grid-cols-2 gap-3 mt-4">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
+                <div><label for="account-name" class="block text-xs font-600 text-gray-600 mb-1">Account Name</label><input type="text" id="account-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-headquarters" class="block text-xs font-600 text-gray-600 mb-1">Headquarters</label><input type="text" id="account-headquarters" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-id" class="block text-xs font-600 text-gray-600 mb-1">Account ID</label><input type="text" id="account-id" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-industry" class="block text-xs font-600 text-gray-600 mb-1">Industry</label><input type="text" id="account-industry" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-type" class="block text-xs font-600 text-gray-600 mb-1">Account Type</label><input type="text" id="account-type" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-owner" class="block text-xs font-600 text-gray-600 mb-1">Account Owner</label><input type="text" id="account-owner" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-website" class="block text-xs font-600 text-gray-600 mb-1">Website</label><input type="text" id="account-website" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-employees" class="block text-xs font-600 text-gray-600 mb-1">Employees</label><input type="text" id="account-employees" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-tier" class="block text-xs font-600 text-gray-600 mb-1">Account Tier</label><input type="text" id="account-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="account-parent" class="block text-xs font-600 text-gray-600 mb-1">Parent Account</label><input type="text" id="account-parent" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label for="account-address" class="block text-xs font-600 text-gray-600 mb-1">Billing Address</label><textarea id="account-address" rows="2" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none resize-none" oninput="onFieldChange()"></textarea></div>
               </div>
             </div>
+            <section class="mt-5 border-t border-gray-100 pt-4" aria-labelledby="rail-fields-title">
+              <div class="flex items-center justify-between gap-3">
+                <h3 id="rail-fields-title" class="text-sm font-700 text-gray-800">Extra identity fields</h3>
+                <button type="button" onclick="addRailField()" class="btn-add-row px-3 py-1.5 text-xs">+ Add field</button>
+              </div>
+              <p class="text-xs text-gray-500 mt-2 mb-3">Optional facts in the left profile rail for this view, such as owner, renewal date, or preferred contact. Hidden fields stay editable here.</p>
+              <div id="rail-fields-container" class="space-y-3"></div>
+            </section>
           </div>
         </div>
 
@@ -602,18 +666,18 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 3 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-3-title">Insights</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-3-title">Insights</h2>
               <p class="wizard-sub mb-5" id="step-3-sub">Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).</p>
             </div>
 
             <div class="mode-b2c border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Loyalty Insights</h3>
               <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Member ID</label><input type="text" id="loyalty-memberId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Tier</label><input type="text" id="loyalty-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Loyalty Points</label><input type="text" id="loyalty-points" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div class="col-span-2"><label class="block text-xs font-600 text-gray-600 mb-1">Redeemed Points</label><input type="text" id="loyalty-redeemedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="loyalty-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-memberId" class="block text-xs font-600 text-gray-600 mb-1">Member ID</label><input type="text" id="loyalty-memberId" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-tier" class="block text-xs font-600 text-gray-600 mb-1">Loyalty Tier</label><input type="text" id="loyalty-tier" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="loyalty-points" class="block text-xs font-600 text-gray-600 mb-1">Loyalty Points</label><input type="text" id="loyalty-points" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div class="col-span-2"><label for="loyalty-redeemedPoints" class="block text-xs font-600 text-gray-600 mb-1">Redeemed Points</label><input type="text" id="loyalty-redeemedPoints" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               </div>
             </div>
 
@@ -621,22 +685,22 @@
               <h3 class="text-sm font-700 text-gray-800 mb-1">Account Overview Metrics</h3>
               <p class="text-xs text-gray-500 mb-3">These three scorecards anchor the account dashboard. Values are demo data until mapped to connected sources.</p>
               <div class="grid grid-cols-2 gap-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-revenue" class="block text-xs font-600 text-gray-600 mb-1">Commercial Value</label><input type="text" id="metric-revenue" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-revenue-trend" class="block text-xs font-600 text-gray-600 mb-1">Commercial Trend</label><input type="text" id="metric-revenue-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-pipeline" class="block text-xs font-600 text-gray-600 mb-1">Open Pipeline</label><input type="text" id="metric-pipeline" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-usage-score" class="block text-xs font-600 text-gray-600 mb-1">Usage Score</label><input type="text" id="metric-usage-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-usage-trend" class="block text-xs font-600 text-gray-600 mb-1">Usage Trend</label><input type="text" id="metric-usage-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-active-users" class="block text-xs font-600 text-gray-600 mb-1">Active Users</label><input type="text" id="metric-active-users" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-health-score" class="block text-xs font-600 text-gray-600 mb-1">Health Score</label><input type="text" id="metric-health-score" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-health-trend" class="block text-xs font-600 text-gray-600 mb-1">Health Trend</label><input type="text" id="metric-health-trend" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-support-cases" class="block text-xs font-600 text-gray-600 mb-1">Support Snapshot</label><input type="text" id="metric-support-cases" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="metric-renewal-date" class="block text-xs font-600 text-gray-600 mb-1">Renewal Date</label><input type="text" id="metric-renewal-date" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-3-insights-heading">Vertical Insights</h3>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="insights-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="insights-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="insights-container" class="space-y-2"></div>
               <button onclick="addInsight()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Insight</button>
             </div>
@@ -648,7 +712,7 @@
           <div class="wizard-card p-7 space-y-5">
             <div>
               <div class="wizard-eyebrow mb-2">Step 4 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-4-title">Affinities</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-4-title">Affinities</h2>
               <p class="wizard-sub mb-5" id="step-4-sub">The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).</p>
             </div>
 
@@ -658,28 +722,28 @@
             </label>
 
             <div class="grid grid-cols-2 gap-3">
-              <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div><label for="affinities-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="affinities-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div></div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Label</label>
+                <label for="seriesA-label" class="block text-xs font-600 text-gray-600 mb-1">Series A Label</label>
                 <input type="text" id="seriesA-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series A Color</label>
+                <label for="seriesA-color" class="block text-xs font-600 text-gray-600 mb-1">Series A Color</label>
                 <div class="flex items-center gap-2">
                   <input type="color" id="seriesA-color" onchange="onFieldChange()">
-                  <input type="text" id="seriesA-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('A')">
+                  <input type="text" id="seriesA-color-hex" aria-label="Series A color hex code" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('A')">
                 </div>
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Label</label>
+                <label for="seriesB-label" class="block text-xs font-600 text-gray-600 mb-1">Series B Label</label>
                 <input type="text" id="seriesB-label" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
               </div>
               <div>
-                <label class="block text-xs font-600 text-gray-600 mb-1">Series B Color</label>
+                <label for="seriesB-color" class="block text-xs font-600 text-gray-600 mb-1">Series B Color</label>
                 <div class="flex items-center gap-2">
                   <input type="color" id="seriesB-color" onchange="onFieldChange()">
-                  <input type="text" id="seriesB-color-hex" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('B')">
+                  <input type="text" id="seriesB-color-hex" aria-label="Series B color hex code" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-xs font-mono outline-none" oninput="onSeriesHexChange('B')">
                 </div>
               </div>
             </div>
@@ -696,19 +760,19 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 5 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-5-title">Preferences, Events & Membership</h2>
               <p class="wizard-sub mb-5" id="step-5-sub">The three stacked cards in the middle column.</p>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-preferences-heading">Preferences</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="preferences-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="preferences-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="preferences-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="preferences-icon" placeholder="📈 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-preferences-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-preferences-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload preferences section icon" data-upload-label="Upload preferences section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -719,12 +783,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-events-heading">Events</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="events-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="events-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="events-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="events-icon" placeholder="📅 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-events-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-events-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload events section icon" data-upload-label="Upload events section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -735,12 +799,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-5-membership-heading">Membership Details</h3>
               <div class="grid grid-cols-2 gap-3 mb-3">
-                <div><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+                <div><label for="membership-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="membership-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
                 <div>
-                  <label class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
+                  <label for="membership-icon" class="block text-xs font-600 text-gray-600 mb-1">Section Icon <span class="text-gray-400 font-500">(emoji or upload)</span></label>
                   <div class="flex items-center gap-2">
                     <input type="text" id="membership-icon" placeholder="🎫 or image URL" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
-                    <div id="drop-membership-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0">📷</div>
+                    <div id="drop-membership-icon" class="drop-zone-sf p-2 text-center cursor-pointer text-[10px] w-14 shrink-0" role="button" tabindex="0" aria-label="Upload membership section icon" data-upload-label="Upload membership section icon">📷</div>
                   </div>
                 </div>
               </div>
@@ -764,27 +828,28 @@
             </div>
 
             <div class="border-t border-gray-100 pt-4">
-              <div class="mode-b2c rounded-xl border border-blue-100 bg-blue-50/60 p-4">
-                <h3 class="text-sm font-700 text-gray-800 mb-1">Additional insight-card layout</h3>
-                <p class="text-xs text-gray-500 mb-3">The profile card stays fixed on the left. Drag non-profile cards between the middle and right columns, or keep them in the suggested library so the first screen remains presentation-ready.</p>
+              <div class="rounded-xl border border-blue-100 bg-blue-50/60 p-4">
+                <h3 class="text-sm font-700 text-gray-800 mb-1">Modules on this view &amp; suggested library</h3>
+                <p class="text-xs text-gray-500 mb-3">Keep the identity card on the left. Use Move to, Up, and Down to place and order additional cards, or drag between columns. Suggested and hidden cards stay available in the editor.</p>
                 <div id="module-composer" class="module-composer"></div>
+                <p id="module-composer-status" role="status" aria-live="polite" aria-atomic="true" class="text-xs text-blue-800 mt-2"></p>
               </div>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <div class="flex items-center justify-between mb-1">
-                <h3 class="text-sm font-700 text-gray-800">Custom Middle-Column Cards</h3>
+                <h3 class="text-sm font-700 text-gray-800">Custom cards · first collection</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Preferences. Use the layout above to move a card or keep it as a suggestion; every card remains available for a longer, scrollable profile when needed.</p>
+              <p class="text-xs text-gray-500 mb-3">Edit each card's contents here. Its placement is controlled in the module library above; visible additions can extend the profile vertically.</p>
               <div id="extra-cards-container" class="space-y-4"></div>
               <button onclick="addExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Custom Card</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <div class="flex items-center justify-between mb-1">
-                <h3 class="text-sm font-700 text-gray-800">Custom Right-Column Cards</h3>
+                <h3 class="text-sm font-700 text-gray-800">Custom cards · second collection</h3>
               </div>
-              <p class="text-xs text-gray-500 mb-3">Edit cards that appear below Products &amp; Offers in the right column. Cards can be moved, stashed, or restored in the layout above.</p>
+              <p class="text-xs text-gray-500 mb-3">Cards added here start on the right. Move, hide, or restore them in the module library above without deleting their contents.</p>
               <div id="right-extra-cards-container" class="space-y-4"></div>
               <button onclick="addRightExtraCard()" class="mt-3 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Right-Column Card</button>
             </div>
@@ -796,7 +861,7 @@
           <div class="wizard-card p-7 space-y-6">
             <div>
               <div class="wizard-eyebrow mb-2">Step 6 of 7</div>
-              <h2 class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
+              <h2 tabindex="-1" class="wizard-title mb-1" id="step-6-title">Einstein Recommendations & Activity</h2>
               <p class="wizard-sub mb-5" id="step-6-sub">The right column: AI-powered recommendation cards and the engagement timeline.</p>
             </div>
 
@@ -815,14 +880,14 @@
               </div>
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-recs-heading">Einstein Recommendations</h3>
               <p class="text-xs text-gray-500 -mt-1 mb-3">Edit each recommendation’s label, message, call to action, and image below. Recommendation copy is always rendered dark on a white card for readability.</p>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="recs-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="recs-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="recs-container" class="space-y-4"></div>
               <button onclick="addRec()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Recommendation</button>
             </div>
 
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3" id="step-6-activity-heading">Engagement Activity</h3>
-              <div class="mb-3"><label class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
+              <div class="mb-3"><label for="activity-title" class="block text-xs font-600 text-gray-600 mb-1">Section Title</label><input type="text" id="activity-title" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()"></div>
               <div id="activity-container" class="space-y-3"></div>
               <button onclick="addActivity()" class="mt-2 px-4 py-2 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Activity Item</button>
             </div>
@@ -830,11 +895,12 @@
             <div class="border-t border-gray-100 pt-4">
               <h3 class="text-sm font-700 text-gray-800 mb-3">Top-Nav Links</h3>
               <div id="nav-links-container" class="flex flex-wrap gap-2 mb-2"></div>
+              <label for="new-nav-link" class="block text-xs font-600 text-gray-600 mb-1">New navigation label</label>
               <div class="flex gap-2">
                 <input type="text" id="new-nav-link" placeholder="Add nav link" class="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none">
                 <button onclick="addNavLink()" class="px-4 py-2 bg-gray-100 text-gray-600 text-xs font-600 rounded-lg hover:bg-gray-200">Add</button>
               </div>
-              <label class="block text-xs font-600 text-gray-600 mt-4 mb-1">Active Tab Name (right-side pill)</label>
+              <label for="tab-name" class="block text-xs font-600 text-gray-600 mt-4 mb-1">Active Tab Name (right-side pill)</label>
               <input type="text" id="tab-name" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm outline-none" oninput="onFieldChange()">
             </div>
           </div>
@@ -844,7 +910,7 @@
         <div class="step-panel fade-in" data-step="6">
           <div class="wizard-card p-7">
             <div class="wizard-eyebrow mb-2">Step 7 of 7</div>
-            <h2 class="wizard-title mb-1">Preview & Export</h2>
+            <h2 tabindex="-1" class="wizard-title mb-1" id="step-7-title">Preview & Export</h2>
             <p class="wizard-sub mb-5">Download a self-contained HTML file — open it in any browser or drop it on GitHub Pages.</p>
 
             <section class="rounded-xl border border-blue-100 bg-blue-50/60 p-4 mb-5" aria-labelledby="persona-output-title">
@@ -865,9 +931,9 @@
                 Save Project
               </button>
             </div>
-            <div id="save-project-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
+            <div id="save-project-success" role="status" aria-live="polite" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-3">✓ Project saved!</div>
 
-            <div class="flex gap-3 mb-4">
+            <div class="flex flex-col sm:flex-row gap-3 mb-4">
               <button onclick="openPresentation()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
                 <span aria-hidden="true">▣</span>
                 Preview &amp; Present
@@ -881,7 +947,7 @@
                 Copy HTML
               </button>
             </div>
-            <div id="copy-success" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
+            <div id="copy-success" role="status" aria-live="polite" class="hidden bg-green-50 text-green-700 text-sm font-600 text-center py-2 rounded-lg mb-4">✓ Copied to clipboard!</div>
 
             <div class="flex gap-3 mb-3">
               <button onclick="exportForCloudy()" class="btn-secondary-sf flex-1 py-3 text-sm flex items-center justify-center gap-2">
@@ -889,7 +955,7 @@
                 Export for Cloudy
               </button>
             </div>
-            <div id="cloudy-hint" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
+            <div id="cloudy-hint" role="status" aria-live="polite" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
 
             <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
           </div>
@@ -914,7 +980,7 @@
             <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Desktop · 1300px</span>
           </div>
           <div class="preview-stage" id="preview-stage">
-            <iframe id="preview-iframe" sandbox="allow-scripts"></iframe>
+            <iframe id="preview-iframe" title="Live preview of the selected profile view" sandbox="allow-scripts"></iframe>
           </div>
         </div>
       </div>
@@ -922,22 +988,23 @@
     </div>
   </div>
 
-  <div id="save-project-modal" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center px-4" onclick="if(event.target===this) closeSaveProjectModal()">
+  <div id="save-project-modal" class="hidden fixed inset-0 bg-black/40 z-[100] flex items-center justify-center px-4" role="dialog" aria-modal="true" aria-labelledby="save-project-title" tabindex="-1" onclick="if(event.target===this) closeSaveProjectModal()">
     <div class="bg-white rounded-xl shadow-lg max-w-sm w-full p-6">
-      <h3 class="text-base font-700 text-gray-800 mb-1">Save Project</h3>
+      <h3 id="save-project-title" class="text-base font-700 text-gray-800 mb-1">Save Project</h3>
       <p class="text-xs text-gray-500 mb-4">Give this project a name so you can find it later.</p>
+      <label for="save-project-name-input" class="block text-xs font-600 text-gray-600 mb-1">Project name</label>
       <input id="save-project-name-input" type="text" class="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm mb-4" placeholder="e.g. Acme Corp — Recruiting" autocomplete="off" onkeydown="if(event.key==='Enter'){ event.preventDefault(); confirmSaveProject(false); }">
       <div id="save-project-modal-actions" class="flex gap-2"></div>
       <button onclick="closeSaveProjectModal()" class="mt-3 w-full text-xs text-gray-400 hover:text-gray-600">Cancel</button>
     </div>
   </div>
 
-  <div id="settings-modal" class="hidden fixed inset-0 bg-slate-950/45 z-[110] overflow-y-auto p-4 sm:p-8" onclick="if(event.target===this) closeSettings()">
+  <div id="settings-modal" class="hidden fixed inset-0 bg-slate-950/45 z-[110] overflow-y-auto p-4 sm:p-8" role="dialog" aria-modal="true" aria-labelledby="settings-title" tabindex="-1" onclick="if(event.target===this) closeSettings()">
     <div class="max-w-4xl mx-auto bg-slate-50 rounded-2xl shadow-2xl overflow-hidden">
       <div class="bg-gradient-to-r from-[#06235d] to-[#1378d6] px-6 sm:px-8 py-5 flex items-start justify-between gap-4 text-white">
         <div>
           <div class="text-[10px] font-700 tracking-[0.18em] uppercase text-cyan-200">Unified Profile Generator</div>
-          <h2 class="text-xl font-700 mt-1" style="color:#fff">Settings &amp; Integrations</h2>
+          <h2 id="settings-title" class="text-xl font-700 mt-1" style="color:#fff">Settings &amp; Integrations</h2>
           <p class="text-sm text-white/75 mt-1">Manage your saved-workspace access and API connections.</p>
         </div>
         <button onclick="closeSettings()" class="w-8 h-8 grid place-items-center rounded-lg hover:bg-white/15 text-lg" aria-label="Close settings">×</button>
@@ -967,7 +1034,7 @@
               <button onclick="hideCreateApiKeyForm()" class="btn-secondary-sf px-4 py-2 text-xs">Cancel</button>
             </div>
             <label class="flex gap-2.5 items-start mt-3 text-xs text-slate-600 cursor-pointer"><input id="api-key-enable-generation" type="checkbox" class="mt-0.5 rounded border-slate-300 text-blue-700 focus:ring-blue-600"><span><strong class="text-slate-700">Allow AI profile generation and saving.</strong> This grants this key permission to start asynchronous UPG generation jobs. Leave unchecked for a read-only profile connection.</span></label>
-            <p id="api-key-create-error" class="hidden text-xs text-red-600 mt-2"></p>
+            <p id="api-key-create-error" role="alert" class="hidden text-xs text-red-600 mt-2"></p>
           </div>
           <div id="api-key-reveal" class="hidden mx-5 mt-5 rounded-xl border border-emerald-200 bg-emerald-50 p-4">
             <div class="text-sm font-700 text-emerald-800">API key created — copy it now, it won’t be shown again.</div>
@@ -1035,6 +1102,29 @@
         </section>
 
         <section class="rounded-xl border border-slate-200 bg-white p-5">
+          <h3 class="text-base font-700 text-slate-900">Profile sets, images, and safe recovery — API &amp; MCP</h3>
+          <p class="mt-3 text-sm leading-6 text-slate-600">Both interfaces use the same background generation pipeline, role-aware text and image prompts, and saved-project renderer. A key is your access pass; the API or MCP endpoint is the entrance. Your connected tool must also be able to reach the internal Salesforce-hosted app.</p>
+          <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600 list-disc pl-5">
+            <li>For multiple views, pass <code>views</code> with up to five unique personas. Each accepts <code>persona</code>, <code>objective</code>, <code>brief</code>, and optional <code>customRole</code>. A single <code>persona</code> still works.</li>
+            <li><code>includeImages</code> defaults to <code>true</code>. Set it to <code>false</code> for text-only generation. Inspect <code>job.result.visuals</code> before presenting: completed text may still have partial or failed images. Open the saved project in UPG to retry only its missing images.</li>
+            <li>Prevent duplicates by sending a stable <code>Idempotency-Key</code> HTTP header, or <code>idempotencyKey</code> MCP argument (16–200 letters, digits, underscores or hyphens). Reuse it only for an exact retry. Keep the returned job ID. A new key means a new generation request.</li>
+            <li>Poll status every 3–5 seconds, respect <code>Retry-After</code>, and stop on completed, failed, or interrupted. Polling never starts paid work. A replayed request may return <code>200</code> with its original job instead of creating another one.</li>
+            <li>Jobs survive server restarts. After an interruption, explicitly call <code>POST /integrations/v1/upg/generations/:id/resume</code>, or MCP <code>upg_resume_generation</code> with <code>jobId</code>. Resume continues the last saved stage; a provider call completed just before a crash may be repeated and charged again. Ask the user before resuming.</li>
+            <li>Export a particular view with <code>GET /integrations/v1/upg/profiles/:id/export?persona=service</code>, or the MCP export tool’s <code>persona</code> argument. Inline generated images and the saved account tab are preserved. Use <code>X-API-Key</code> when retrieving the export; never put a key in its URL.</li>
+          </ul>
+          <pre class="mt-4 rounded-lg bg-slate-900 text-slate-100 p-4 text-xs overflow-x-auto"><code>{
+  "url": "https://customer.example",
+  "profileType": "b2c",
+  "idempotencyKey": "holodeck_demo_20261007_001",
+  "includeImages": true,
+  "views": [
+    { "persona": "sales", "brief": "Include a call-coaching summary" },
+    { "persona": "service", "brief": "Help reschedule an assessment call" }
+  ]
+}</code></pre>
+        </section>
+
+        <section class="rounded-xl border border-slate-200 bg-white p-5">
           <h3 class="text-base font-700 text-slate-900">What this enables</h3>
           <ul class="mt-3 space-y-2 text-sm leading-6 text-slate-600 list-disc pl-5">
             <li>Choose a saved UPG profile from a Holodeck presentation and insert a presentation-ready version.</li>
@@ -1058,7 +1148,7 @@
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
     // without the browser's aggressive JS cache getting in the way.
-    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/pagehost.js','js/localai.js','js/app.js'].forEach(src => {
+    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js'].forEach(src => {
       const s = document.createElement('script');
       s.src = src + '?v=' + window.__UPG_BUILD__;
       s.defer = false;

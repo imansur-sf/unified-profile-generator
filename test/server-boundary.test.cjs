@@ -9,10 +9,12 @@ const safeFetch = require('../lib/safe-fetch');
 const root = path.resolve(__dirname, '..');
 const localRequire = createRequire(path.join(root, 'server.js'));
 
-function loadServer({ env = {}, fetchPublicResource, fetch = async () => { throw Error('External network prohibited'); } } = {}) {
+function loadServer({ env = {}, fetchPublicResource, worker, profileRuntime, fetch = async () => { throw Error('External network prohibited'); } } = {}) {
   const context = vm.createContext({
     require(name) {
       if (name === './lib/safe-fetch') return { ...safeFetch, fetchPublicResource: fetchPublicResource || (async () => { throw Error('External network prohibited'); }) };
+      if (name === './lib/generation-worker' && worker) return { createGenerationWorker: () => worker };
+      if (name === './lib/profile-runtime' && profileRuntime) return { ...localRequire(name), ...profileRuntime };
       return localRequire(name);
     },
     __dirname: root, module: { exports: {} }, process: { env }, console,
@@ -21,9 +23,9 @@ function loadServer({ env = {}, fetchPublicResource, fetch = async () => { throw
   vm.runInContext(fs.readFileSync(path.join(root, 'server.js'), 'utf8'), context);
   return { app: context.module.exports.app, context };
 }
-function req({ headers = {}, body = {}, query = {}, protocol = 'https', ip = '93.184.216.34' } = {}) {
+function req({ headers = {}, body = {}, query = {}, params = {}, protocol = 'https', ip = '93.184.216.34' } = {}) {
   const normalized = { host: 'upg.example', ...Object.fromEntries(Object.entries(headers).map(([key, value]) => [key.toLowerCase(), value])) };
-  return { headers: normalized, body, query, protocol, ip, get: key => normalized[key.toLowerCase()] };
+  return { headers: normalized, body, query, params, protocol, ip, get: key => normalized[key.toLowerCase()] };
 }
 function res() {
   return { statusCode: 200, headers: {}, body: null,
@@ -128,10 +130,131 @@ test('malformed host fails discovery cleanly and never creates a generation job'
   const result = await context.createGenerationJob(request, request.body);
   assert.equal(result.status, 400);
   assert.equal(result.body.error, 'invalid_request_origin');
-  assert.equal(vm.runInContext('generationJobs.size', context), 0);
+  assert.equal(vm.runInContext('generationWorker.activeCount', context), 0);
 });
 
 test('server generation validates AI content before rendering a starter profile', () => {
   const { context } = loadServer();
   assert.throws(() => context.buildGeneratedProfile({}, { profileType: 'b2c' }, 'https://upg.example'), error => error.code === 'invalid_ai_response');
+});
+
+test('generation create uses durable idempotency; replay and GET never launch paid work', async () => {
+  const id = 'gen_' + 'a'.repeat(32);
+  let launches = 0;
+  let posts = 0;
+  let savedInput;
+  const job = { id, status: 'queued', phase: 'queued', input: {} };
+  const { context } = loadServer({ env: { GEMINI_API_KEY: 'offline-only' }, worker: { start: async () => { launches++; return { status: 202, body: { job } }; } }, fetch: async (url, options) => {
+    assert.match(url, /\/integrations\/v1\/upg\/jobs/);
+    assert.equal(options.headers['X-API-Key'], 'owner-key');
+    if (options.method === 'POST') {
+      assert.equal(options.headers['Idempotency-Key'], 'stable-request-key-123');
+      savedInput = JSON.parse(options.body).input;
+      return new Response(JSON.stringify({ job: { ...job, input: savedInput }, created: posts++ === 0 }), { status: posts === 1 ? 202 : 200 });
+    }
+    return new Response(JSON.stringify({ job: { ...job, status: 'interrupted', resumable: true } }));
+  } });
+  const request = req({ headers: { 'x-api-key': 'owner-key', 'idempotency-key': 'stable-request-key-123' }, body: { url: 'https://customer.example', profileType: 'b2b', views: [{ persona: 'sales', brief: 'commercial' }, { persona: 'service', brief: 'support' }] } });
+  assert.equal((await context.createGenerationJob(request, request.body)).status, 202);
+  assert.equal((await context.createGenerationJob(request, request.body)).status, 200);
+  assert.equal((await context.getGeneration(request, id)).body.job.status, 'interrupted');
+  assert.equal(launches, 1);
+  assert.equal(savedInput.views[1].brief, 'support');
+  assert.equal(savedInput.includeImages, true);
+  assert.doesNotMatch(JSON.stringify(savedInput), /owner-key/);
+});
+
+test('REST and MCP explicit resume share worker; completed resume returns same job', async () => {
+  const id = 'gen_' + 'b'.repeat(32);
+  const calls = [];
+  const job = { id, input: {}, status: 'completed', projectId: '42' };
+  const { context, app } = loadServer({ env: { GEMINI_API_KEY: 'offline-only' }, fetch: async () => new Response(JSON.stringify({ job: { ...job, status: 'interrupted' } })), worker: { start: async (...args) => { calls.push(args); return { status: 409, body: { error: 'job_completed', job } }; } } });
+  const request = req({ headers: { 'x-api-key': 'owner-key' }, params: { id } });
+  const rest = await call(app, 'post', '/integrations/v1/upg/generations/:id/resume', request);
+  assert.equal(rest.statusCode, 200);
+  assert.equal(rest.body.job.profile.id, '42');
+  const mcp = await context.callMcpTool(request, 'upg_resume_generation', { jobId: id });
+  assert.equal(mcp.isError, undefined);
+  assert.equal(JSON.parse(mcp.content[0].text).job.projectId, '42');
+  assert.equal(calls.length, 2);
+});
+
+test('invalid views/idempotency fail before any storage or provider work', async () => {
+  const { context } = loadServer({ env: { GEMINI_API_KEY: 'offline-only' }, fetch: async () => assert.fail('invalid input reached storage') });
+  for (const body of [
+    { views: [] }, { views: [{ persona: 'sales' }, { persona: 'sales' }] }, { persona: 'unknown' },
+    { persona: 'custom' }, { includeImages: 'yes' }, { profileType: 'invalid' }, { idempotencyKey: 'too-short' }
+  ]) {
+    const request = req({ body: { url: 'https://customer.example', ...body } });
+    assert.equal((await context.createGenerationJob(request, request.body)).status, 400);
+  }
+});
+
+test('fenced storage retries identical checkpoint body after lost response, not provider work', async () => {
+  const calls = [];
+  const { context } = loadServer({ fetch: async (url, options) => {
+    calls.push({ url, body: options.body });
+    if (calls.length === 1) throw Error('response lost after database committed');
+    return new Response(JSON.stringify({ version: '4' }));
+  } });
+  const result = await context.requestGenerationStore('test-key', 'gen_test/checkpoint', { method: 'PUT', body: { leaseId: 'worker-id', expectedVersion: '3', checkpoint: { phase: 'ready' }, phase: 'ready' } });
+  assert.equal(result.version, '4');
+  assert.deepEqual(calls[0], calls[1]);
+});
+
+test('REST export renders authorized saved state, preserves persona and forces inert attachment boundary', async () => {
+  let rendered;
+  const { app } = loadServer({ profileRuntime: { renderSavedProfile: (payload, options) => { rendered = { payload, options }; return { html: '<!doctype html><p>Saved image view</p>', persona: options.persona }; } }, fetch: async (url, options) => {
+    assert.match(url, /\/profiles\/42\/export-state$/);
+    assert.equal(options.headers['X-API-Key'], 'export-only-key');
+    return new Response(JSON.stringify({ profile: { id: '42' }, payload: { inlineImage: 'data:image/png;base64,aW1hZ2U=' } }));
+  } });
+  const result = await call(app, 'get', '/integrations/v1/upg/profiles/:id/export', req({ params: { id: '42' }, query: { persona: 'service' }, headers: { 'x-api-key': 'export-only-key' } }));
+  assert.equal(result.statusCode, 200);
+  assert.equal(rendered.options.persona, 'service');
+  assert.match(rendered.payload.inlineImage, /^data:/);
+  assert.match(result.headers['content-disposition'], /^attachment;/);
+  assert.match(result.headers['content-security-policy'], /sandbox allow-scripts/);
+  assert.equal(result.headers['x-content-type-options'], 'nosniff');
+});
+
+test('large MCP image export returns scoped path and never embeds caller key in URL', async () => {
+  const { context } = loadServer({ profileRuntime: { renderSavedProfile: () => ({ html: 'x'.repeat(200001), persona: 'marketing' }) }, fetch: async () => new Response(JSON.stringify({ profile: { id: '42' }, payload: {} })) });
+  const result = await context.callMcpTool(req({ headers: { 'x-api-key': 'private-api-key' } }), 'upg_get_profile_export', { profileId: '42', persona: 'marketing', includeHtml: true });
+  const output = JSON.parse(result.content[0].text);
+  assert.match(output.exportPath, /persona=marketing$/);
+  assert.equal(output.html, undefined);
+  assert.match(output.htmlOmitted, /limit/);
+  assert.doesNotMatch(JSON.stringify(output), /private-api-key/);
+});
+
+test('production without canonical origin blocks only integrations and exposes a non-secret health diagnostic', async () => {
+  const { context, app } = loadServer({ env: { NODE_ENV: 'production', GEMINI_API_KEY: 'never-emit-this' } });
+  const blocked = res();
+  context.requireConfiguredPublicOrigin(req(), blocked, () => assert.fail('integration must be configured'));
+  assert.equal(blocked.statusCode, 503);
+  assert.equal(blocked.body.error, 'public_origin_required');
+  const health = await call(app, 'get', '/api/health', req());
+  assert.equal(health.statusCode, 200);
+  assert.equal(health.body.integrations_configured, false);
+  assert.equal(health.body.llm_configured, true);
+  assert.doesNotMatch(JSON.stringify(health.body), /never-emit-this/);
+  const configured = loadServer({ env: { NODE_ENV: 'production', PUBLIC_ORIGIN: 'https://upg.example' } });
+  let allowed = false;
+  configured.context.requireConfiguredPublicOrigin(req(), res(), () => { allowed = true; });
+  assert.equal(allowed, true);
+});
+
+test('resume authenticates ownership before local busy/capacity state can be observed', async () => {
+  const id = 'gen_' + 'c'.repeat(32);
+  const { context } = loadServer({ env: { GEMINI_API_KEY: 'offline-only' }, worker: { start: async () => assert.fail('foreign or invalid key reached local worker state') }, fetch: async (url, options) => {
+    assert.match(url, new RegExp('/jobs/' + id + '$'));
+    const status = options.headers['X-API-Key'] === 'foreign-owner-key' ? 404 : 401;
+    return new Response(JSON.stringify({ error: status === 404 ? 'generation_not_found' : 'invalid_api_key' }), { status });
+  } });
+  const foreign = await context.resumeGeneration(req({ headers: { 'x-api-key': 'foreign-owner-key' } }), id);
+  assert.equal(foreign.status, 404);
+  assert.equal(foreign.body.error, 'generation_not_found');
+  const invalid = await context.resumeGeneration(req({ headers: { 'x-api-key': 'invalid-key' } }), id);
+  assert.equal(invalid.status, 401);
 });
