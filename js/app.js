@@ -680,14 +680,36 @@ function setProfileType(profileType) {
 
 // Debounce the preview iframe refresh — every keystroke otherwise re-parses a big HTML doc.
 let previewTimer = null;
+let lastRenderedPreviewHTML = '';
+
+// The live preview is the source of truth for the "Preview & Present"
+// experience. Keep the exact document we put into the iframe so Present
+// never performs a second, potentially different render after a persona
+// switch or an in-flight async update has changed the editor state.
+function renderPreviewDocument(profileState = state) {
+  return generateProfileHTML(cloneViewData(profileState));
+}
+
 function refreshPreview() {
   clearTimeout(previewTimer);
   previewTimer = setTimeout(() => {
     const iframe = document.getElementById('preview-iframe');
     if (!iframe) return;
-    const html = generateProfileHTML(state);
+    // Capture the state at render time. The iframe gets an immutable document,
+    // rather than a reference that can be changed by a subsequent persona swap.
+    const html = renderPreviewDocument(state);
+    lastRenderedPreviewHTML = html;
     iframe.srcdoc = html;
+    previewTimer = null;
   }, 120);
+}
+
+function getPresentationDocument() {
+  const preview = document.getElementById('preview-iframe');
+  // Prefer srcdoc over current state: it is precisely the profile the user is
+  // looking at when they choose Present. The cache covers browser timing where
+  // an iframe has not yet reflected its srcdoc property.
+  return preview?.srcdoc || lastRenderedPreviewHTML || renderPreviewDocument(state);
 }
 
 // The iframe renders at a fixed 1300×860 desktop viewport, then we scale
@@ -1442,7 +1464,6 @@ function fitPresentationScale() {
 }
 
 function openPresentation() {
-  readStaticFields();
   document.getElementById('presentation-overlay')?.remove();
   const overlay = document.createElement('div');
   overlay.id = 'presentation-overlay';
@@ -1459,7 +1480,7 @@ function openPresentation() {
     else overlay.requestFullscreen?.();
   });
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
-  document.getElementById('presentation-iframe').srcdoc = generateProfileHTML(state);
+  document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
   const onKey = event => { if (event.key === 'Escape' && document.getElementById('presentation-overlay')) { close(); document.removeEventListener('keydown', onKey); } };
   document.addEventListener('keydown', onKey);
   requestAnimationFrame(fitPresentationScale);
