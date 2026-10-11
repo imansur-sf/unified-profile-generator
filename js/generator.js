@@ -6,6 +6,53 @@
 // the exported file has no external dependencies.
 // ============================================================
 
+// One logical viewport across preview, presentation and exported HTML. Hosts
+// scale this canvas uniformly, never by stretching or rearranging its contents.
+const PROFILE_CANVAS = Object.freeze({ width: 1600, height: 900 });
+const PROFILE_COLUMN_BOUNDS = Object.freeze({
+  leftColWidth: [240, 500], middleColWidth: [280, 560], rightColWidth: [488, 1028]
+});
+const PROFILE_COLUMN_BUDGET = PROFILE_CANVAS.width - 52; // shell borders + padding + two gaps
+
+function boundedWidth(value, min, max, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(Math.max(min, Math.min(max, number))) : fallback;
+}
+
+function getProfileColumnWidths(layout = {}) {
+  layout = layout && typeof layout === 'object' ? layout : {};
+  // Older layouts displayed the middle slider value + 40px. Preserve that
+  // actual width when loading an existing project into the wider canvas.
+  const legacy = layout.rightColWidth === undefined && layout.middleColWidth !== undefined;
+  const leftColWidth = boundedWidth(layout.leftColWidth, 240, 500, 320);
+  const middleColWidth = boundedWidth(Number(layout.middleColWidth) + (legacy ? 40 : 0), 280, 560, 400);
+  return { leftColWidth, middleColWidth, rightColWidth: PROFILE_COLUMN_BUDGET - leftColWidth - middleColWidth };
+}
+
+function resizeProfileColumns(layout, field, value) {
+  const widths = getProfileColumnWidths(layout);
+  if (!Object.prototype.hasOwnProperty.call(PROFILE_COLUMN_BOUNDS, field) || !Number.isFinite(Number(value))) return widths;
+  const [min, max] = PROFILE_COLUMN_BOUNDS[field];
+  let remaining = boundedWidth(value, min, max, widths[field]) - widths[field];
+  // Keep the identity rail stable when resizing the right column when possible.
+  const others = field === 'rightColWidth' ? ['middleColWidth', 'leftColWidth'] : ['rightColWidth', field === 'leftColWidth' ? 'middleColWidth' : 'leftColWidth'];
+  for (const other of others) {
+    const [lower, upper] = PROFILE_COLUMN_BOUNDS[other];
+    const change = remaining > 0 ? Math.min(remaining, widths[other] - lower) : Math.max(remaining, widths[other] - upper);
+    widths[other] -= change;
+    widths[field] += change;
+    remaining -= change;
+  }
+  return widths;
+}
+
+function getCanvasFit(width, height) {
+  const availableWidth = Number.isFinite(Number(width)) && Number(width) > 0 ? Number(width) : 1;
+  const availableHeight = Number.isFinite(Number(height)) && Number(height) > 0 ? Number(height) : 1;
+  const scale = Math.min(availableWidth / PROFILE_CANVAS.width, availableHeight / PROFILE_CANVAS.height);
+  return { scale, width: PROFILE_CANVAS.width * scale, height: PROFILE_CANVAS.height * scale };
+}
+
 function esc(s) {
   if (s === undefined || s === null) return '';
   return String(s)
@@ -33,12 +80,46 @@ function renderLayoutStatusScript(state) {
 (function () {
   function report() {
     if (window.parent === window) return;
-    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: window.innerHeight }, '*');
+    var canvas = document.getElementById('upg-render-canvas');
+    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: canvas ? canvas.scrollHeight : Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: canvas ? ${PROFILE_CANVAS.height} : window.innerHeight }, '*');
   }
   window.upgReportLayout = report;
   window.addEventListener('load', report, { once: true });
   if (document.readyState === 'complete') report();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(report).catch(function () {});
+})();
+</script>`;
+}
+
+// Exported HTML may run in a smaller browser or a partner's iframe without our
+// editor's scaling stage. Keep the same logical screen there, including below-
+// fold content. The host's physical height prevents transform overflow from
+// creating blank scrolling space; only the canvas is transformed.
+function renderCanvasHostScript() {
+  return `<script>
+(function () {
+  var host = document.getElementById('upg-render-host');
+  var canvas = document.getElementById('upg-render-canvas');
+  if (!host || !canvas) return;
+  document.documentElement.style.width = '100%';
+  document.documentElement.style.minHeight = '100%';
+  document.body.style.width = '100%';
+  document.body.style.minHeight = '100vh';
+  host.style.cssText = 'position:relative;width:100%;overflow:hidden;';
+  canvas.style.cssText = 'position:absolute;top:0;width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;display:flow-root;transform-origin:top left;';
+  function fit() {
+    var width = Math.max(1, window.innerWidth);
+    var height = Math.max(1, window.innerHeight);
+    var scale = Math.min(width / ${PROFILE_CANVAS.width}, height / ${PROFILE_CANVAS.height});
+    canvas.style.transform = 'scale(' + scale + ')';
+    canvas.style.left = Math.max(0, (width - ${PROFILE_CANVAS.width} * scale) / 2) + 'px';
+    host.style.height = Math.ceil(Math.max(${PROFILE_CANVAS.height}, canvas.scrollHeight) * scale) + 'px';
+    if (window.upgReportLayout) window.upgReportLayout();
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('load', fit, { once: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(canvas);
 })();
 </script>`;
 }
@@ -214,8 +295,7 @@ function generateProfileHTML(state) {
   const menuText = getAccountColorTheme(s.colors.menuText, accent, menuBg).navInk;
   const pageBg = s.colors.pageBg || '#EAF5FE';
   const theme = getAccountColorTheme(primary, accent, menuBg);
-  const leftW = Math.max(220, Math.min(500, Number(s.layout?.leftColWidth) || 290));
-  const middleMin = Math.max(220, Math.min(500, Number(s.layout?.middleColWidth) || 320));
+  const columns = getProfileColumnWidths(s.layout);
   const visible = Object.assign({ affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true }, s.b2cSections || {});
   const customCards = [...(s.extraCards || []).map(card => Object.assign({ placement: 'middle' }, card)),
     ...(s.rightExtraCards || []).map(card => Object.assign({ placement: 'right' }, card))];
@@ -246,10 +326,11 @@ function generateProfileHTML(state) {
   --page-bg: ${pageBg};
 }
 * { box-sizing: border-box; }
-html { width: 1300px; min-height: 860px; }
+html { width: ${PROFILE_CANVAS.width}px; min-height: ${PROFILE_CANVAS.height}px; scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 body {
-  min-width: 1300px;
-  min-height: 860px;
+  width: ${PROFILE_CANVAS.width}px;
+  min-height: ${PROFILE_CANVAS.height}px;
   margin: 0;
   font-family: 'Salesforce Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
@@ -262,6 +343,7 @@ body {
 
 /* ── Global Salesforce top bar ─────────────────────────────── */
 .sf-topbar {
+  height: 58px;
   background: linear-gradient(180deg, #FAFAFB 0%, #F3F3F3 100%);
   border-bottom: 1px solid var(--border);
   padding: 8px 16px;
@@ -355,7 +437,8 @@ body {
   align-items: center;
   gap: 22px;
   border-bottom: 3px solid var(--accent);
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
   overflow: hidden;
 }
 .app-nav-brand {
@@ -431,11 +514,11 @@ body {
   background: var(--page-bg);
   padding: 12px;
   display: grid;
-  grid-template-columns: ${leftW}px minmax(${middleMin}px, ${middleMin + 40}px) 1fr;
+  grid-template-columns: ${columns.leftColWidth}px ${columns.middleColWidth}px ${columns.rightColWidth}px;
   gap: 12px;
   /* The two Salesforce chrome rows occupy ~102px at their rendered size. */
   height: auto;
-  min-height: calc(860px - 102px);
+  min-height: calc(${PROFILE_CANVAS.height}px - 102px);
   align-items: stretch;
   overflow: visible;
 }
@@ -591,12 +674,10 @@ body {
   display: flex;
   flex-direction: column;
 }
-/* Fixed image height keeps the card at a screenshot-friendly size no matter
-   how wide the right column expands. 160px is calibrated to the NCSA
-   reference — total card ends up ~280–300px tall. */
+/* Keep recommendation imagery bounded on the wider slide canvas. */
 .rec-image {
   width: 100%;
-  height: 128px;
+  height: 160px;
   background: #eee;
   overflow: hidden;
   flex-shrink: 0;
@@ -671,20 +752,14 @@ body {
    becomes part of the normal page flow so no added card is lost below it. */
 .right-bottom-expanded { flex: 0 0 auto; overflow: visible; }
 .right-bottom-expanded > .activity-card { align-self: start; max-height: 340px; }
-
-@media (max-width: 1100px) {
-  .up-shell { grid-template-columns: ${leftW}px 1fr; }
-  .right-col { grid-column: 1 / -1; }
-}
-@media (max-width: 520px) {
-  .up-shell { grid-template-columns: 1fr; }
-  .recs-carousel { grid-template-columns: 1fr; }
-  .right-bottom { grid-template-columns: 1fr; }
-}
+/* This is a fixed desktop canvas, including when embedded in a narrow host.
+   The host scales it; viewport media queries must not rearrange its columns. */
+.activity-list, .recs-carousel { scrollbar-width: none; scrollbar-gutter: auto; }
+.activity-list::-webkit-scrollbar, .recs-carousel::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
-
+<div id="upg-render-host"><div id="upg-render-canvas">
 <div class="sf-topbar">
   <div class="sf-brand">
     <div class="sf-brand-logo${s.logo ? ' has-image' : ''}">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
@@ -949,6 +1024,8 @@ body {
 
 </div>
 
+</div></div>
+${renderCanvasHostScript()}
 ${renderLayoutStatusScript(s)}
 </body>
 </html>`;
@@ -964,7 +1041,7 @@ function generateAccountProfileHTML(state) {
 
 // The account experience is a single fixed-canvas workspace. Rather than
 // stacking every B2B section vertically, each view gets a focused, clickable
-// tab so the exported profile remains presentation-ready at 1300 × 860.
+// tab so the exported profile remains presentation-ready on the 16:9 canvas.
 function generateTabbedAccountProfileHTML(state) {
   const s = safeRenderState(state);
   const primary = s.colors?.primary || '#001E5B';
@@ -1037,22 +1114,23 @@ function generateTabbedAccountProfileHTML(state) {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(a.name)} — Account Unified Profile</title>
 <style>
-:root{--primary:${primary};--accent:${uiAccent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--rail-text:${theme.text};--rail-muted:${theme.muted};--rail-rule:${theme.rule};--rail-surface:${theme.surface};--mark-text:${theme.markText};--primary-ink:${theme.primaryInk};--ink:#13213a;--muted:#65748a;--line:#dbe3ed;--card:#fff}*{box-sizing:border-box}html,body{width:1300px;height:860px;overflow:hidden}body{margin:0;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.3}.sf-global{height:42px;padding:0 18px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f4f6f9);border-bottom:1px solid var(--line)}.sf-brand{display:flex;align-items:center;gap:8px;min-width:190px;font-size:14px;font-weight:700;color:#252f3e}.sf-brand-mark{width:30px;height:30px;border-radius:5px;background:var(--primary);color:var(--rail-text);display:grid;place-items:center;overflow:hidden;font-size:12px}.sf-brand-mark img{width:100%;height:100%;object-fit:contain}.sf-search{height:24px;flex:1;max-width:540px;margin:auto;background:#fff;border:1px solid #cdd6e1;border-radius:3px;color:#7c899b;padding:5px 10px;font-size:10px}.sf-icons{display:flex;align-items:center;gap:5px;color:#64748b}.sf-icon{height:26px;min-width:26px;padding:0 6px;display:grid;place-items:center;background:#f5f6f8;border:1px solid #dfe5ec;border-radius:3px;font-size:12px}.sf-user{width:25px;height:25px;border-radius:50%;background:#7cab8c;color:#fff;display:grid;place-items:center;font-size:10px}.sf-app-nav{height:44px;padding:0 16px;display:flex;align-items:stretch;gap:20px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.sf-app-name{display:flex;align-items:center;gap:8px;padding-right:15px;border-right:1px solid var(--line);font-weight:700;font-size:13px;color:var(--menu-text)}.sf-waffle{font-size:17px;color:var(--accent)}.sf-app-nav a{display:flex;align-items:center;color:var(--menu-text);text-decoration:none;font-size:10px;white-space:nowrap}.sf-app-nav a:first-of-type{font-weight:700;color:var(--primary-ink);border-bottom:3px solid var(--accent)}.sf-profile-tab{margin-left:auto;display:flex;align-items:center;padding:0 12px;background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;font-size:11px;font-weight:700;white-space:nowrap}.account-shell{height:774px;padding:12px;display:grid;grid-template-columns:${accountRailWidth}px minmax(0,1fr);gap:12px}.account-rail{height:100%;padding:18px 16px;border:1px solid var(--rail-rule);border-radius:7px;background:var(--primary);color:var(--rail-text);overflow:hidden}.account-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--rail-rule)}.account-mark{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;overflow:hidden;background:var(--accent);color:var(--mark-text);border:2px solid var(--rail-rule);font-weight:700;font-size:17px}.account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.account-name{font-size:19px;font-weight:700;line-height:1.1}.account-location{margin-top:4px;color:var(--rail-muted)}.rail-fields{margin:16px 0}.rail-field{display:grid;grid-template-columns:17px 84px 1fr;gap:5px;margin:10px 0;font-size:11px}.rail-field i{color:var(--rail-muted);font-style:normal}.rail-field span{color:var(--rail-muted)}.rail-field b{overflow-wrap:anywhere}.rail-rule{height:1px;background:var(--rail-rule);margin:13px 0}.rail-stat{padding:9px 0;border-bottom:1px solid var(--rail-rule)}.rail-stat span{display:block;color:var(--rail-muted);font-size:10px}.rail-stat strong{display:block;margin-top:3px;font-size:14px}.rail-health{display:flex;align-items:center;gap:9px;margin-top:14px;padding:9px;background:var(--rail-surface);border-radius:5px}.rail-gauge{width:36px;height:36px;border:5px solid var(--rail-rule);border-top-color:#56e0b2;border-right-color:#56e0b2;border-radius:50%}.rail-health b{font-size:11px}.rail-health small{display:block;margin-top:2px;color:var(--rail-muted);font-size:9px}.rail-powered{margin-top:17px;padding-top:11px;border-top:1px solid var(--rail-rule);color:var(--rail-muted);font-size:10px}.account-workspace{height:100%;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(20,38,67,.04);overflow:hidden}.account-tabs{height:43px;display:flex;align-items:end;padding:0 16px;gap:25px;border-bottom:1px solid var(--line)}.account-tab{appearance:none;border:0;background:transparent;padding:0 1px 10px;color:#64748b;font:600 12px inherit;cursor:pointer}.account-tab[aria-selected="true"]{color:var(--primary-ink);border-bottom:3px solid var(--accent)}.account-views{height:calc(100% - 43px);padding:10px}.account-view{display:none;height:100%;grid-template-columns:minmax(0,1fr) ${actionRailWidth}px;gap:10px}.account-view.active{display:grid}.account-pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}.account-card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;box-shadow:0 1px 2px rgba(17,38,73,.035)}.account-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.account-panel-head h2{margin:0;font-size:14px;color:#21344f}.account-overview-metrics{padding:12px}.account-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.account-metric-grid article{padding:10px;border:1px solid #dce9fa;background:linear-gradient(180deg,#fff,#f7fbff);min-width:0}.account-metric-grid h3{margin:0;color:#334968;font-size:11px}.account-metric-grid article>strong{display:inline-block;margin:8px 0 0;font-size:22px;line-height:1}.account-metric-grid article>small{display:inline-block;margin-left:5px;color:#267447;background:#e7f7ec;border-radius:99px;padding:2px 5px;font-size:8px;font-weight:700}.account-spark{height:20px;margin:10px 0 7px;background:linear-gradient(169deg,transparent 45%,rgba(6,106,254,.17) 46%,rgba(6,106,254,.17) 72%,transparent 73%);border-bottom:2px solid var(--accent);clip-path:polygon(0 70%,16% 32%,31% 54%,45% 34%,60% 68%,75% 28%,88% 45%,100% 56%,100% 100%,0 100%)}.account-metric-grid p{display:flex;justify-content:space-between;gap:5px;margin:5px 0 0;padding-top:5px;border-top:1px solid #dfe8f2;color:var(--muted);font-size:9px}.account-metric-grid p b{color:var(--ink)}.account-progress{height:6px;margin:7px 0;background:#dfe8f3;border-radius:99px;overflow:hidden}.account-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#73a0ff);border-radius:inherit}.account-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:26px}.account-detail-grid>div{padding:6px 0;border-top:1px solid var(--line)}.account-detail-grid>div:nth-child(-n+2){border-top:0;padding-top:0}.account-detail-grid label,.account-sales-summary label,.account-success-grid label{display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.account-detail-grid strong{display:block;margin-top:3px;font-size:11px}.account-legend{display:flex;gap:10px;margin:-1px 0 8px;color:var(--muted);font-size:9px}.account-legend span{display:flex;gap:4px;align-items:center}.account-legend i{width:7px;height:7px;border-radius:50%}.account-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.account-signal-grid h3{margin:0 0 5px;font-size:10px}.account-signal{display:grid;grid-template-columns:83px 1fr;gap:7px;align-items:center;margin:6px 0;font-size:9px}.account-signal>span{text-align:right;color:#40536d}.account-signal>div{height:13px;display:flex;flex-direction:column;justify-content:center;gap:2px}.account-signal b,.account-signal em{display:block;height:4px;border-radius:2px}.account-notice{padding:9px 0;border-top:1px solid var(--line)}.account-notice:first-child{border-top:0;padding-top:0}.account-notice strong{display:block;font-size:11px}.account-notice span{display:block;margin-top:3px;color:var(--muted);font-size:10px}.account-insights>div{display:grid;grid-template-columns:16px 1fr auto;gap:5px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:10px}.account-insights>div:first-child{border-top:0;padding-top:0}.account-insights span{color:var(--accent);font-weight:700}.account-insights label{color:#3d5069}.account-insights strong{max-width:95px;text-align:right;font-size:10px}.account-table{width:100%;border-collapse:collapse;font-size:10px}.account-table th{text-align:left;color:var(--muted);font-size:9px;letter-spacing:.03em}.account-table td,.account-table th{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.account-table thead th{border-top:0;padding-top:0;text-transform:uppercase}.account-table tbody th{color:#265fa6;font-weight:700}.account-people-table td{padding-right:9px}.account-relationship,.account-sales-summary,.account-success-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.account-relationship>div,.account-sales-summary>div,.account-success-grid>div{padding:10px;background:#f7fbff;border:1px solid #dce9fa}.account-relationship strong,.account-sales-summary strong,.account-success-grid strong{display:block;margin-top:3px;font-size:18px}.account-relationship span,.account-sales-summary small,.account-success-grid small{display:block;margin-top:3px;color:var(--muted);font-size:9px}.account-actions>div{padding:9px 0;border-top:1px solid var(--line)}.account-actions>div:first-child{padding-top:0;border-top:0}.account-actions small{display:block;color:var(--accent);font-size:9px;font-weight:700;text-transform:uppercase}.account-actions strong{display:block;margin:3px 0 7px;font-size:11px}.account-actions button{border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);padding:4px 9px;font-size:9px;font-weight:700}.account-activity>div{display:flex;gap:7px;padding:7px 0;border-top:1px solid var(--line)}.account-activity>div:first-child{border-top:0;padding-top:0}.account-activity>div>span{width:18px;height:18px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:10px}.account-activity p{margin:0;font-size:9px;color:var(--muted)}.account-activity p strong{display:block;color:var(--ink);font-size:10px}.account-activity small{display:block;margin-top:2px;color:#8390a2;font-size:8px}.account-note{font-size:11px;line-height:1.45;color:var(--muted)}.account-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:120px;text-align:center;color:var(--muted)}.account-empty span{margin-top:4px;font-size:10px}
+:root{--primary:${primary};--accent:${uiAccent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--rail-text:${theme.text};--rail-muted:${theme.muted};--rail-rule:${theme.rule};--rail-surface:${theme.surface};--mark-text:${theme.markText};--primary-ink:${theme.primaryInk};--ink:#13213a;--muted:#65748a;--line:#dbe3ed;--card:#fff}*{box-sizing:border-box}html,body{width:${PROFILE_CANVAS.width}px;height:${PROFILE_CANVAS.height}px;overflow:hidden}body{margin:0;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.3}.sf-global{height:42px;padding:0 18px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f4f6f9);border-bottom:1px solid var(--line)}.sf-brand{display:flex;align-items:center;gap:8px;min-width:190px;font-size:14px;font-weight:700;color:#252f3e}.sf-brand-mark{width:30px;height:30px;border-radius:5px;background:var(--primary);color:var(--rail-text);display:grid;place-items:center;overflow:hidden;font-size:12px}.sf-brand-mark img{width:100%;height:100%;object-fit:contain}.sf-search{height:24px;flex:1;max-width:540px;margin:auto;background:#fff;border:1px solid #cdd6e1;border-radius:3px;color:#7c899b;padding:5px 10px;font-size:10px}.sf-icons{display:flex;align-items:center;gap:5px;color:#64748b}.sf-icon{height:26px;min-width:26px;padding:0 6px;display:grid;place-items:center;background:#f5f6f8;border:1px solid #dfe5ec;border-radius:3px;font-size:12px}.sf-user{width:25px;height:25px;border-radius:50%;background:#7cab8c;color:#fff;display:grid;place-items:center;font-size:10px}.sf-app-nav{height:44px;padding:0 16px;display:flex;align-items:stretch;gap:20px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.sf-app-name{display:flex;align-items:center;gap:8px;padding-right:15px;border-right:1px solid var(--line);font-weight:700;font-size:13px;color:var(--menu-text)}.sf-waffle{font-size:17px;color:var(--accent)}.sf-app-nav a{display:flex;align-items:center;color:var(--menu-text);text-decoration:none;font-size:10px;white-space:nowrap}.sf-app-nav a:first-of-type{font-weight:700;color:var(--primary-ink);border-bottom:3px solid var(--accent)}.sf-profile-tab{margin-left:auto;display:flex;align-items:center;padding:0 12px;background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;font-size:11px;font-weight:700;white-space:nowrap}.account-shell{height:${PROFILE_CANVAS.height - 86}px;padding:12px;display:grid;grid-template-columns:${accountRailWidth}px minmax(0,1fr);gap:12px}.account-rail{height:100%;padding:18px 16px;border:1px solid var(--rail-rule);border-radius:7px;background:var(--primary);color:var(--rail-text);overflow:hidden}.account-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--rail-rule)}.account-mark{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;overflow:hidden;background:var(--accent);color:var(--mark-text);border:2px solid var(--rail-rule);font-weight:700;font-size:17px}.account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.account-name{font-size:19px;font-weight:700;line-height:1.1}.account-location{margin-top:4px;color:var(--rail-muted)}.rail-fields{margin:16px 0}.rail-field{display:grid;grid-template-columns:17px 84px 1fr;gap:5px;margin:10px 0;font-size:11px}.rail-field i{color:var(--rail-muted);font-style:normal}.rail-field span{color:var(--rail-muted)}.rail-field b{overflow-wrap:anywhere}.rail-rule{height:1px;background:var(--rail-rule);margin:13px 0}.rail-stat{padding:9px 0;border-bottom:1px solid var(--rail-rule)}.rail-stat span{display:block;color:var(--rail-muted);font-size:10px}.rail-stat strong{display:block;margin-top:3px;font-size:14px}.rail-health{display:flex;align-items:center;gap:9px;margin-top:14px;padding:9px;background:var(--rail-surface);border-radius:5px}.rail-gauge{width:36px;height:36px;border:5px solid var(--rail-rule);border-top-color:#56e0b2;border-right-color:#56e0b2;border-radius:50%}.rail-health b{font-size:11px}.rail-health small{display:block;margin-top:2px;color:var(--rail-muted);font-size:9px}.rail-powered{margin-top:17px;padding-top:11px;border-top:1px solid var(--rail-rule);color:var(--rail-muted);font-size:10px}.account-workspace{height:100%;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(20,38,67,.04);overflow:hidden}.account-tabs{height:43px;display:flex;align-items:end;padding:0 16px;gap:25px;border-bottom:1px solid var(--line)}.account-tab{appearance:none;border:0;background:transparent;padding:0 1px 10px;color:#64748b;font:600 12px inherit;cursor:pointer}.account-tab[aria-selected="true"]{color:var(--primary-ink);border-bottom:3px solid var(--accent)}.account-views{height:calc(100% - 43px);padding:10px}.account-view{display:none;height:100%;grid-template-columns:minmax(0,1fr) ${actionRailWidth}px;gap:10px}.account-view.active{display:grid}.account-pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}.account-card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;box-shadow:0 1px 2px rgba(17,38,73,.035)}.account-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.account-panel-head h2{margin:0;font-size:14px;color:#21344f}.account-overview-metrics{padding:12px}.account-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.account-metric-grid article{padding:10px;border:1px solid #dce9fa;background:linear-gradient(180deg,#fff,#f7fbff);min-width:0}.account-metric-grid h3{margin:0;color:#334968;font-size:11px}.account-metric-grid article>strong{display:inline-block;margin:8px 0 0;font-size:22px;line-height:1}.account-metric-grid article>small{display:inline-block;margin-left:5px;color:#267447;background:#e7f7ec;border-radius:99px;padding:2px 5px;font-size:8px;font-weight:700}.account-spark{height:20px;margin:10px 0 7px;background:linear-gradient(169deg,transparent 45%,rgba(6,106,254,.17) 46%,rgba(6,106,254,.17) 72%,transparent 73%);border-bottom:2px solid var(--accent);clip-path:polygon(0 70%,16% 32%,31% 54%,45% 34%,60% 68%,75% 28%,88% 45%,100% 56%,100% 100%,0 100%)}.account-metric-grid p{display:flex;justify-content:space-between;gap:5px;margin:5px 0 0;padding-top:5px;border-top:1px solid #dfe8f2;color:var(--muted);font-size:9px}.account-metric-grid p b{color:var(--ink)}.account-progress{height:6px;margin:7px 0;background:#dfe8f3;border-radius:99px;overflow:hidden}.account-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#73a0ff);border-radius:inherit}.account-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:26px}.account-detail-grid>div{padding:6px 0;border-top:1px solid var(--line)}.account-detail-grid>div:nth-child(-n+2){border-top:0;padding-top:0}.account-detail-grid label,.account-sales-summary label,.account-success-grid label{display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.account-detail-grid strong{display:block;margin-top:3px;font-size:11px}.account-legend{display:flex;gap:10px;margin:-1px 0 8px;color:var(--muted);font-size:9px}.account-legend span{display:flex;gap:4px;align-items:center}.account-legend i{width:7px;height:7px;border-radius:50%}.account-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.account-signal-grid h3{margin:0 0 5px;font-size:10px}.account-signal{display:grid;grid-template-columns:83px 1fr;gap:7px;align-items:center;margin:6px 0;font-size:9px}.account-signal>span{text-align:right;color:#40536d}.account-signal>div{height:13px;display:flex;flex-direction:column;justify-content:center;gap:2px}.account-signal b,.account-signal em{display:block;height:4px;border-radius:2px}.account-notice{padding:9px 0;border-top:1px solid var(--line)}.account-notice:first-child{border-top:0;padding-top:0}.account-notice strong{display:block;font-size:11px}.account-notice span{display:block;margin-top:3px;color:var(--muted);font-size:10px}.account-insights>div{display:grid;grid-template-columns:16px 1fr auto;gap:5px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:10px}.account-insights>div:first-child{border-top:0;padding-top:0}.account-insights span{color:var(--accent);font-weight:700}.account-insights label{color:#3d5069}.account-insights strong{max-width:95px;text-align:right;font-size:10px}.account-table{width:100%;border-collapse:collapse;font-size:10px}.account-table th{text-align:left;color:var(--muted);font-size:9px;letter-spacing:.03em}.account-table td,.account-table th{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.account-table thead th{border-top:0;padding-top:0;text-transform:uppercase}.account-table tbody th{color:#265fa6;font-weight:700}.account-people-table td{padding-right:9px}.account-relationship,.account-sales-summary,.account-success-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.account-relationship>div,.account-sales-summary>div,.account-success-grid>div{padding:10px;background:#f7fbff;border:1px solid #dce9fa}.account-relationship strong,.account-sales-summary strong,.account-success-grid strong{display:block;margin-top:3px;font-size:18px}.account-relationship span,.account-sales-summary small,.account-success-grid small{display:block;margin-top:3px;color:var(--muted);font-size:9px}.account-actions>div{padding:9px 0;border-top:1px solid var(--line)}.account-actions>div:first-child{padding-top:0;border-top:0}.account-actions small{display:block;color:var(--accent);font-size:9px;font-weight:700;text-transform:uppercase}.account-actions strong{display:block;margin:3px 0 7px;font-size:11px}.account-actions button{border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);padding:4px 9px;font-size:9px;font-weight:700}.account-activity>div{display:flex;gap:7px;padding:7px 0;border-top:1px solid var(--line)}.account-activity>div:first-child{border-top:0;padding-top:0}.account-activity>div>span{width:18px;height:18px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:10px}.account-activity p{margin:0;font-size:9px;color:var(--muted)}.account-activity p strong{display:block;color:var(--ink);font-size:10px}.account-activity small{display:block;margin-top:2px;color:#8390a2;font-size:8px}.account-note{font-size:11px;line-height:1.45;color:var(--muted)}.account-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:120px;text-align:center;color:var(--muted)}.account-empty span{margin-top:4px;font-size:10px}
 </style>
 <style>
 :root{--accent-ink:${theme.accentInk}}
-html{width:1300px;min-height:860px;height:auto;overflow-y:auto}
-body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:auto}
+html{width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;height:auto;overflow-y:auto;scrollbar-width:none}
+body{width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;height:auto;overflow-x:hidden;overflow-y:auto}
+html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .sf-app-name{white-space:nowrap;flex:0 0 auto}
-.sf-app-nav{overflow-x:auto;scrollbar-width:thin}
+.sf-app-nav{overflow-x:hidden}
 .sf-waffle{color:var(--menu-text)}
 .sf-profile-tab{margin-left:0}
-.account-shell{min-height:774px;height:auto;align-items:stretch}
-.account-rail{min-height:750px;height:auto;overflow-wrap:anywhere}
+.account-shell{min-height:${PROFILE_CANVAS.height - 86}px;height:auto;align-items:stretch}
+.account-rail{min-height:${PROFILE_CANVAS.height - 110}px;height:auto;overflow-wrap:anywhere}
 .account-name{overflow-wrap:anywhere}
-.account-workspace{min-height:750px;height:auto;overflow:visible;min-width:0}
-.account-views{min-height:707px;height:auto}
-.account-view{min-height:687px;height:auto}
+.account-workspace{min-height:${PROFILE_CANVAS.height - 110}px;height:auto;overflow:visible;min-width:0}
+.account-views{min-height:${PROFILE_CANVAS.height - 155}px;height:auto}
+.account-view{min-height:${PROFILE_CANVAS.height - 175}px;height:auto}
 .account-view[hidden]{display:none}
 .account-pane{overflow:visible}
 .account-card{overflow-wrap:anywhere}
@@ -1069,8 +1147,11 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 .account-tab:focus-visible,[role="list"][tabindex]:focus-visible{outline:2px solid var(--primary-ink);outline-offset:2px}
 .account-metric-grid article>small{color:var(--muted);background:#eef2f6}
 .score-unknown,.rec-count{display:block;margin:7px 0;color:var(--muted);font-size:10px}
+.account-actions,.account-activity-card>.account-activity{scrollbar-width:none;scrollbar-gutter:auto}
+.account-actions::-webkit-scrollbar,.account-activity::-webkit-scrollbar{display:none}
 </style></head>
 <body>
+<div id="upg-render-host"><div id="upg-render-canvas">
 <header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark${s.logo ? ' has-image' : ''}"${s.logo ? ' style="background:#ffffff"' : ''}>${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
 <main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
@@ -1081,6 +1162,7 @@ ${viewPanels.map(([tab, main, side]) => `<div class="account-view${selectedTab =
 </div>
 ${extraCards.length ? `<div class="account-custom-modules"><div class="account-pane" data-module-placement="middle">${extraPanel('middle')}</div><div class="account-pane" data-module-placement="right">${extraPanel('right')}</div></div>` : ''}
 </section></main>
+</div></div>
 <script>
 (function () {
   var tabs = Array.from(document.querySelectorAll('[data-account-tab]'));
@@ -1113,6 +1195,7 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
   });
 })();
 </script>
+${renderCanvasHostScript()}
 ${renderLayoutStatusScript(s)}
 </body></html>`;
 }

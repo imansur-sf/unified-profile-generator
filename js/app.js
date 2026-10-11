@@ -737,8 +737,8 @@ function updateProfileModeUI() {
   setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
   setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
   setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
-  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Layout Widths (pixels)');
-  setText('layout-sub', b2b ? 'Adjust the persistent account rail and the contextual action rail. The selected workspace tab fills the remaining fixed export canvas.' : 'Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.');
+  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Column Widths · 16:9 Canvas');
+  setText('layout-sub', b2b ? 'Adjust the account and action rails. The center workspace fills the remaining 1600 × 900 canvas.' : 'Resize any column. The others rebalance to keep the 1600 × 900 slide width; content is never stretched.');
   setText('left-col-w-label', b2b ? 'Account Rail' : 'Left Column (Profile)');
   setText('middle-col-w-label', b2b ? 'Action Rail' : 'Middle Column');
 }
@@ -853,15 +853,17 @@ window.addEventListener('message', event => {
   if (event.source === presentation?.contentWindow) refreshPreview();
 });
 
-// The iframe renders at a fixed 1300×860 desktop viewport, then we scale
-// it down to fit the preview pane. This gives a miniature of the actual
-// export instead of the collapsed narrow-column layout.
+// Same logical widescreen viewport as presentation/export; the editor only
+// scales the frame, it never asks the renderer for a different arrangement.
 function fitPreviewScale() {
   const stage = document.getElementById('preview-stage');
   const iframe = document.getElementById('preview-iframe');
   if (!stage || !iframe) return;
-  const scale = stage.clientWidth / 1300;
-  iframe.style.transform = `scale(${scale})`;
+  stage.style.aspectRatio = `${PROFILE_CANVAS.width} / ${PROFILE_CANVAS.height}`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  const fit = getCanvasFit(stage.clientWidth, stage.clientWidth * PROFILE_CANVAS.height / PROFILE_CANVAS.width);
+  iframe.style.transform = `scale(${fit.scale})`;
 }
 window.addEventListener('resize', fitPreviewScale);
 
@@ -893,11 +895,7 @@ function fillStaticFields() {
   document.getElementById('color-pageBg').value = state.colors.pageBg || '#EAF5FE';
   document.getElementById('hex-pageBg').value = state.colors.pageBg || '#EAF5FE';
 
-  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
-  document.getElementById('left-col-w').value = state.layout.leftColWidth;
-  document.getElementById('left-col-w-val').textContent = state.layout.leftColWidth + 'px';
-  document.getElementById('middle-col-w').value = state.layout.middleColWidth;
-  document.getElementById('middle-col-w-val').textContent = state.layout.middleColWidth + 'px';
+  syncLayoutControls();
 
   document.getElementById('profile-name').value = state.profile.name;
   document.getElementById('profile-city').value = state.profile.city;
@@ -1086,13 +1084,40 @@ function onHexChange(key) {
   }
 }
 
-// Slider-driven column widths — update state, echo px, refresh preview.
+function syncLayoutControls() {
+  const b2b = state.profileType === 'b2b';
+  // Do not reinterpret legacy B2B middleColWidth: it has always been the
+  // contextual action rail, not the center workspace.
+  const widths = b2b ? {
+    leftColWidth: boundedWidth(state.layout?.leftColWidth, 240, 390, 290),
+    middleColWidth: boundedWidth(state.layout?.middleColWidth, 230, 390, 320)
+  } : getProfileColumnWidths(state.layout);
+  const ids = { leftColWidth: 'left-col-w', middleColWidth: 'middle-col-w', rightColWidth: 'right-col-w' };
+  for (const [field, value] of Object.entries(widths)) {
+    const input = document.getElementById(ids[field]);
+    const bounds = b2b ? (field === 'leftColWidth' ? [240, 390] : [230, 390]) : PROFILE_COLUMN_BOUNDS[field];
+    if (input) { input.min = bounds[0]; input.max = bounds[1]; input.value = value; }
+    setText(ids[field] + '-val', value + 'px');
+  }
+  const right = document.getElementById('right-col-width-control');
+  if (right) right.hidden = b2b;
+}
+
+// Every slider redistributes the same fixed canvas budget. Merely opening an
+// old project does not migrate its saved layout; editing explicitly does.
 function onLayoutChange(field, value) {
-  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
-  const n = Math.max(220, Math.min(500, +value));
-  state.layout[field] = n;
-  const echo = document.getElementById(field === 'leftColWidth' ? 'left-col-w-val' : 'middle-col-w-val');
-  if (echo) echo.textContent = n + 'px';
+  if (!Object.prototype.hasOwnProperty.call(PROFILE_COLUMN_BOUNDS, field) || !Number.isFinite(Number(value))) return;
+  if (state.profileType === 'b2b') {
+    if (field === 'rightColWidth') return;
+    const min = field === 'leftColWidth' ? 240 : 230;
+    state.layout = Object.assign({}, state.layout, { [field]: boundedWidth(value, min, 390, field === 'leftColWidth' ? 290 : 320) });
+  } else state.layout = Object.assign({}, state.layout, resizeProfileColumns(state.layout, field, value));
+  syncLayoutControls();
+  refreshPreview();
+}
+function resetLayoutWidths() {
+  state.layout = state.profileType === 'b2b' ? { leftColWidth: 290, middleColWidth: 320 } : getProfileColumnWidths();
+  syncLayoutControls();
   refreshPreview();
 }
 function onColorChange() {
@@ -1682,36 +1707,69 @@ function fitPresentationScale() {
   const stage = document.getElementById('presentation-stage');
   const iframe = document.getElementById('presentation-iframe');
   if (!canvas || !stage || !iframe) return;
-  const scale = Math.min((canvas.clientWidth - 32) / 1300, (canvas.clientHeight - 32) / 860, 1);
-  stage.style.width = `${Math.max(1, 1300 * scale)}px`;
-  stage.style.height = `${Math.max(1, 860 * scale)}px`;
-  iframe.style.transform = `scale(${scale})`;
+  const fit = getCanvasFit(canvas.clientWidth, canvas.clientHeight);
+  stage.style.width = `${fit.width}px`;
+  stage.style.height = `${fit.height}px`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  iframe.style.transform = `scale(${fit.scale})`;
 }
 
+let closeActivePresentation = null;
 function openPresentation() {
-  document.getElementById('presentation-overlay')?.remove();
+  closeActivePresentation?.();
   const overlay = document.createElement('div');
   overlay.id = 'presentation-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', 'Unified profile presentation');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#0f172a;display:flex;flex-direction:column;padding:12px;';
-  overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;padding:0 4px 10px;font:600 13px Salesforce Sans,system-ui,sans-serif;"><span>Unified Profile Presentation</span><div style="display:flex;gap:8px;"><button id="presentation-fullscreen" type="button" style="border:1px solid #64748b;border-radius:6px;background:#1e293b;color:#fff;padding:7px 10px;cursor:pointer;">Full screen</button><button id="presentation-close" type="button" style="border:1px solid #64748b;border-radius:6px;background:#fff;color:#0f172a;padding:7px 10px;cursor:pointer;">Close</button></div></div><div id="presentation-canvas" style="flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;"><div id="presentation-stage" style="position:relative;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.35);"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="position:absolute;top:0;left:0;width:1300px;height:860px;border:0;transform-origin:0 0;"></iframe></div></div>`;
+  overlay.className = 'presentation-overlay';
+  overlay.innerHTML = `<div id="presentation-toolbar" class="presentation-toolbar"><div><strong>Unified Profile Presentation · 16:9</strong><p id="presentation-status" role="status" aria-live="polite">Full screen hides these controls. Press Esc to return. Capture only the profile rectangle if your display is not 16:9.</p></div><div class="presentation-controls"><button id="presentation-fullscreen" type="button">Full screen · clean capture</button><button id="presentation-close" type="button">Close</button></div></div><div id="presentation-canvas" tabindex="-1" aria-label="Widescreen profile canvas. Press Escape to exit full screen."><div id="presentation-stage"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="width:${PROFILE_CANVAS.width}px;height:${PROFILE_CANVAS.height}px;"></iframe></div></div>`;
   document.body.appendChild(overlay);
-  const close = () => { releaseDialogFocus('presentation-overlay'); overlay.remove(); };
+  const canvas = document.getElementById('presentation-canvas');
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(fitPresentationScale) : null;
+  resizeObserver?.observe(canvas);
+  const close = () => {
+    resizeObserver?.disconnect();
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    releaseDialogFocus('presentation-overlay');
+    overlay.remove();
+    presentationContext = null;
+    if (closeActivePresentation === close) closeActivePresentation = null;
+  };
+  closeActivePresentation = close;
   overlay.querySelector('#presentation-close').addEventListener('click', close);
-  overlay.querySelector('#presentation-fullscreen').addEventListener('click', () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else overlay.requestFullscreen?.();
+  overlay.querySelector('#presentation-fullscreen').addEventListener('click', async () => {
+    try {
+      if (!canvas.requestFullscreen) throw new Error('fullscreen_unavailable');
+      // Only the profile canvas enters fullscreen; no toolbar, padding, or
+      // editor chrome becomes part of the screenshot.
+      await canvas.requestFullscreen();
+      if (closeActivePresentation !== close) return;
+      canvas.focus();
+      fitPresentationScale();
+    } catch (_) {
+      if (closeActivePresentation !== close) return;
+      overlay.querySelector('#presentation-status').textContent = 'Full screen is unavailable or was blocked. You can still capture the 16:9 profile rectangle below, or allow full screen and try again.';
+    }
   });
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
   document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
-  activateDialogFocus('presentation-overlay', close, 'presentation-close');
+  activateDialogFocus('presentation-overlay', () => {
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    else close();
+  }, 'presentation-close');
   requestAnimationFrame(fitPresentationScale);
   setTimeout(fitPresentationScale, 100);
 }
 window.addEventListener('resize', fitPresentationScale);
-document.addEventListener('fullscreenchange', () => setTimeout(fitPresentationScale, 0));
+document.addEventListener('fullscreenchange', () => {
+  const canvas = document.getElementById('presentation-canvas');
+  const toolbar = document.getElementById('presentation-toolbar');
+  if (toolbar) toolbar.hidden = document.fullscreenElement === canvas;
+  setTimeout(fitPresentationScale, 0);
+  if (!document.fullscreenElement) document.getElementById('presentation-fullscreen')?.focus();
+});
 
 function copyHTML() {
   const html = renderPreviewNow();

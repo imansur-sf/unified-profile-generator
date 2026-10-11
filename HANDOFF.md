@@ -4,6 +4,8 @@ Current implementation status: see [QUALITY-IMPLEMENTATION.md](docs/QUALITY-IMPL
 
 Customer-logo follow-up: see [LOGO-RECOVERY-2026-10-07.md](docs/LOGO-RECOVERY-2026-10-07.md) for safe SVG/ICO conversion, shared discovery/fallbacks, white image backgrounds, verification and its separate rollback checkpoint.
 
+Widescreen presentation follow-up: see [WIDESCREEN-PRESENTATION-2026-10-10.md](docs/WIDESCREEN-PRESENTATION-2026-10-10.md) for the 1600 × 900 canvas, clean fullscreen capture, export host scaling, column controls, rollback checkpoint, and the remaining administrator-blocked visual checks.
+
 ## Where we are
 
 - **Working directory**: `/Users/imansur/claude/unified-profile-generator`.

@@ -600,7 +600,7 @@ function cloneIndustry(key) {
   };
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
   if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
-  if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  if (!clone.layout) clone.layout = { leftColWidth: 320, middleColWidth: 400, rightColWidth: 828 };
   if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
 }
@@ -678,7 +678,7 @@ function cloneTonyRobbinsStarter() {
   };
   clone.extraCards = [];
   clone.rightExtraCards = [];
-  clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  clone.layout = { leftColWidth: 320, middleColWidth: 400, rightColWidth: 828 };
   return clone;
 }
 
@@ -697,6 +697,8 @@ function cloneAccountIndustry(key) {
   const base = cloneIndustry(key);
   const seed = accountSeeds[key] || accountSeeds.generic;
   base.profileType = 'b2b';
+  // B2B's second width is the action rail; keep its existing semantics.
+  base.layout = { leftColWidth: 290, middleColWidth: 320 };
   // The generated account sits inside Salesforce Data Cloud. Keep the chrome
   // canonical instead of allowing website analysis to invent a product nav.
   base.appName = 'Data Cloud';

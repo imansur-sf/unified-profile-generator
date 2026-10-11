@@ -103,25 +103,35 @@
     .module-composer-empty { padding: 20px 4px 8px; color: #98A5B5; font-size: 11px; text-align: center; }
     @media (max-width: 720px) { .module-composer { grid-template-columns: 1fr; } }
 
-    /* Preview stage — renders iframe at 1300×860 (desktop-shaped) and
-       scales it down to fit the preview pane so the SE sees a miniature
-       of the actual export, not the narrow mobile-stack layout. */
+    /* Logical 1600×900 widescreen viewport; app.js scales it uniformly. */
     .preview-stage {
       position: relative;
       width: 100%;
-      aspect-ratio: 1300 / 860;
+      aspect-ratio: 16 / 9;
       background: #fff;
       overflow: hidden;
     }
     #preview-iframe {
       position: absolute;
       top: 0; left: 0;
-      width: 1300px;
-      height: 860px;
+      width: 1600px;
+      height: 900px;
       transform-origin: 0 0;
       border: 0;
       background: #fff;
     }
+
+    .presentation-overlay { position: fixed; inset: 0; z-index: 200; background: #0f172a; display: flex; flex-direction: column; padding: 12px; }
+    .presentation-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: #fff; padding: 0 4px 12px; font-size: 13px; }
+    .presentation-toolbar p { color: #cbd5e1; font-size: 11px; margin: 4px 0 0; }
+    .presentation-toolbar[hidden] { display: none; }
+    .presentation-controls { display: flex; gap: 8px; flex-shrink: 0; }
+    .presentation-controls button { border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: #fff; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+    .presentation-controls #presentation-close { background: #fff; color: #0f172a; }
+    #presentation-canvas { flex: 1; min-height: 0; width: 100%; display: grid; place-items: center; overflow: hidden; background: #0f172a; }
+    #presentation-canvas:fullscreen { width: 100vw; height: 100vh; padding: 0; margin: 0; border: 0; outline: 0; }
+    #presentation-stage { position: relative; overflow: hidden; background: #fff; }
+    #presentation-iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; }
 
     .drop-zone-sf { border: 2px dashed rgba(0,30,91,0.20); background: #FAFCFF; border-radius: var(--radius-lg); transition: border-color 0.18s ease, background 0.18s ease; }
     .drop-zone-sf:hover, .drop-zone-sf.drag-active { border-color: var(--sf-blue-m); background: var(--cloud-95); }
@@ -557,24 +567,32 @@
               </div>
 
               <div class="border-t border-gray-100 pt-4">
-                <h3 class="text-sm font-700 text-gray-800 mb-3" id="layout-title">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
-                <p class="text-xs text-gray-500 mb-3" id="layout-sub">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
+                <h3 class="text-sm font-700 text-gray-800 mb-3" id="layout-title">Column Widths · 16:9 Canvas</h3>
+                <p class="text-xs text-gray-500 mb-3" id="layout-sub">Resize any column. The others rebalance to keep the 1600 × 900 slide width; content is never stretched.</p>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label for="left-col-w" class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
-                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
+                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
                     </div>
-                    <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
+                    <input type="range" id="left-col-w" min="240" max="500" value="320" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label for="middle-col-w" class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
-                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
+                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">400px</span>
                     </div>
-                    <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
+                    <input type="range" id="middle-col-w" min="280" max="560" value="400" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
+                  </div>
+                  <div id="right-col-width-control">
+                    <div class="flex items-center justify-between mb-1">
+                      <label for="right-col-w" class="block text-xs font-600 text-gray-600">Right Column (Recommendations &amp; Activity)</label>
+                      <span id="right-col-w-val" class="text-xs text-gray-500 font-mono">828px</span>
+                    </div>
+                    <input type="range" id="right-col-w" min="488" max="1028" value="828" class="w-full" oninput="onLayoutChange('rightColWidth', this.value)">
                   </div>
                 </div>
+                <button type="button" onclick="resetLayoutWidths()" class="mt-3 text-xs font-600 text-blue-700 underline">Reset column widths</button>
               </div>
             </div>
           </div>
@@ -959,7 +977,13 @@
             </div>
             <div id="cloudy-hint" role="status" aria-live="polite" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
 
-            <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
+            <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-slate-700">
+              <strong>Ready for widescreen slides · 16:9</strong>
+              <p class="mt-1">Preview, presentation and HTML share a 1600 × 900 canvas. Choose <strong>Preview &amp; Present → Full screen · clean capture</strong>, then screenshot the profile. Press Esc to return.</p>
+              <p class="mt-2">In Google Slides, use <strong>File → Page setup → Widescreen (16:9)</strong>. Insert the image on a blank slide and resize from a corner with its proportions locked. If your display is not 16:9, capture just the profile rectangle, excluding the outer bars.</p>
+              <p class="mt-2 text-xs">Extra modules remain scrollable. A screenshot captures the visible screen, not the entire scrollable profile.</p>
+            </div>
+            <p class="text-xs text-gray-400 text-center mt-3">The exported file works from file://, static hosts, or GitHub Pages.</p>
           </div>
         </div>
 
@@ -979,7 +1003,7 @@
             <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
             <div class="w-3 h-3 rounded-full bg-green-400"></div>
             <span class="text-[11px] font-600 text-gray-500 ml-2 tracking-wider uppercase">Live Preview</span>
-            <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Desktop · 1300px</span>
+            <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Slide-ready · 16:9 · 1600×900</span>
           </div>
           <div class="preview-stage" id="preview-stage">
             <iframe id="preview-iframe" title="Live preview of the selected profile view" sandbox="allow-scripts"></iframe>

@@ -107,25 +107,35 @@
     .module-composer-empty { padding: 20px 4px 8px; color: #98A5B5; font-size: 11px; text-align: center; }
     @media (max-width: 720px) { .module-composer { grid-template-columns: 1fr; } }
 
-    /* Preview stage — renders iframe at 1300×860 (desktop-shaped) and
-       scales it down to fit the preview pane so the SE sees a miniature
-       of the actual export, not the narrow mobile-stack layout. */
+    /* Logical 1600×900 widescreen viewport; app.js scales it uniformly. */
     .preview-stage {
       position: relative;
       width: 100%;
-      aspect-ratio: 1300 / 860;
+      aspect-ratio: 16 / 9;
       background: #fff;
       overflow: hidden;
     }
     #preview-iframe {
       position: absolute;
       top: 0; left: 0;
-      width: 1300px;
-      height: 860px;
+      width: 1600px;
+      height: 900px;
       transform-origin: 0 0;
       border: 0;
       background: #fff;
     }
+
+    .presentation-overlay { position: fixed; inset: 0; z-index: 200; background: #0f172a; display: flex; flex-direction: column; padding: 12px; }
+    .presentation-toolbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px; color: #fff; padding: 0 4px 12px; font-size: 13px; }
+    .presentation-toolbar p { color: #cbd5e1; font-size: 11px; margin: 4px 0 0; }
+    .presentation-toolbar[hidden] { display: none; }
+    .presentation-controls { display: flex; gap: 8px; flex-shrink: 0; }
+    .presentation-controls button { border: 1px solid #64748b; border-radius: 6px; background: #1e293b; color: #fff; padding: 8px 12px; cursor: pointer; font-weight: 600; }
+    .presentation-controls #presentation-close { background: #fff; color: #0f172a; }
+    #presentation-canvas { flex: 1; min-height: 0; width: 100%; display: grid; place-items: center; overflow: hidden; background: #0f172a; }
+    #presentation-canvas:fullscreen { width: 100vw; height: 100vh; padding: 0; margin: 0; border: 0; outline: 0; }
+    #presentation-stage { position: relative; overflow: hidden; background: #fff; }
+    #presentation-iframe { position: absolute; top: 0; left: 0; border: 0; transform-origin: 0 0; }
 
     .drop-zone-sf { border: 2px dashed rgba(0,30,91,0.20); background: #FAFCFF; border-radius: var(--radius-lg); transition: border-color 0.18s ease, background 0.18s ease; }
     .drop-zone-sf:hover, .drop-zone-sf.drag-active { border-color: var(--sf-blue-m); background: var(--cloud-95); }
@@ -561,24 +571,32 @@
               </div>
 
               <div class="border-t border-gray-100 pt-4">
-                <h3 class="text-sm font-700 text-gray-800 mb-3" id="layout-title">Layout Widths <span class="text-gray-400 font-500 text-xs">(pixels)</span></h3>
-                <p class="text-xs text-gray-500 mb-3" id="layout-sub">Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.</p>
+                <h3 class="text-sm font-700 text-gray-800 mb-3" id="layout-title">Column Widths · 16:9 Canvas</h3>
+                <p class="text-xs text-gray-500 mb-3" id="layout-sub">Resize any column. The others rebalance to keep the 1600 × 900 slide width; content is never stretched.</p>
                 <div class="grid grid-cols-2 gap-4">
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label for="left-col-w" class="block text-xs font-600 text-gray-600" id="left-col-w-label">Left Column (Profile)</label>
-                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">290px</span>
+                      <span id="left-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
                     </div>
-                    <input type="range" id="left-col-w" min="240" max="440" value="290" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
+                    <input type="range" id="left-col-w" min="240" max="500" value="320" class="w-full" oninput="onLayoutChange('leftColWidth', this.value)">
                   </div>
                   <div>
                     <div class="flex items-center justify-between mb-1">
                       <label for="middle-col-w" class="block text-xs font-600 text-gray-600" id="middle-col-w-label">Middle Column</label>
-                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">320px</span>
+                      <span id="middle-col-w-val" class="text-xs text-gray-500 font-mono">400px</span>
                     </div>
-                    <input type="range" id="middle-col-w" min="240" max="460" value="320" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
+                    <input type="range" id="middle-col-w" min="280" max="560" value="400" class="w-full" oninput="onLayoutChange('middleColWidth', this.value)">
+                  </div>
+                  <div id="right-col-width-control">
+                    <div class="flex items-center justify-between mb-1">
+                      <label for="right-col-w" class="block text-xs font-600 text-gray-600">Right Column (Recommendations &amp; Activity)</label>
+                      <span id="right-col-w-val" class="text-xs text-gray-500 font-mono">828px</span>
+                    </div>
+                    <input type="range" id="right-col-w" min="488" max="1028" value="828" class="w-full" oninput="onLayoutChange('rightColWidth', this.value)">
                   </div>
                 </div>
+                <button type="button" onclick="resetLayoutWidths()" class="mt-3 text-xs font-600 text-blue-700 underline">Reset column widths</button>
               </div>
             </div>
           </div>
@@ -963,7 +981,13 @@
             </div>
             <div id="cloudy-hint" role="status" aria-live="polite" class="hidden bg-blue-50 text-blue-700 text-sm font-600 text-center py-2 rounded-lg mb-4">Downloaded! Sign in via SSO at sfdc.co/cloudy, then drag your file in.</div>
 
-            <p class="text-xs text-gray-400 text-center">The exported file works from file://, static hosts, or GitHub Pages.</p>
+            <div class="mt-4 rounded-xl border border-blue-100 bg-blue-50 p-4 text-sm text-slate-700">
+              <strong>Ready for widescreen slides · 16:9</strong>
+              <p class="mt-1">Preview, presentation and HTML share a 1600 × 900 canvas. Choose <strong>Preview &amp; Present → Full screen · clean capture</strong>, then screenshot the profile. Press Esc to return.</p>
+              <p class="mt-2">In Google Slides, use <strong>File → Page setup → Widescreen (16:9)</strong>. Insert the image on a blank slide and resize from a corner with its proportions locked. If your display is not 16:9, capture just the profile rectangle, excluding the outer bars.</p>
+              <p class="mt-2 text-xs">Extra modules remain scrollable. A screenshot captures the visible screen, not the entire scrollable profile.</p>
+            </div>
+            <p class="text-xs text-gray-400 text-center mt-3">The exported file works from file://, static hosts, or GitHub Pages.</p>
           </div>
         </div>
 
@@ -983,7 +1007,7 @@
             <div class="w-3 h-3 rounded-full bg-yellow-400"></div>
             <div class="w-3 h-3 rounded-full bg-green-400"></div>
             <span class="text-[11px] font-600 text-gray-500 ml-2 tracking-wider uppercase">Live Preview</span>
-            <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Desktop · 1300px</span>
+            <span class="ml-auto text-[10px] font-600 text-gray-400 tracking-wider uppercase">Slide-ready · 16:9 · 1600×900</span>
           </div>
           <div class="preview-stage" id="preview-stage">
             <iframe id="preview-iframe" title="Live preview of the selected profile view" sandbox="allow-scripts"></iframe>
@@ -1754,7 +1778,7 @@ function cloneIndustry(key) {
   };
   if (!Array.isArray(clone.extraCards)) clone.extraCards = [];
   if (!Array.isArray(clone.rightExtraCards)) clone.rightExtraCards = [];
-  if (!clone.layout) clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  if (!clone.layout) clone.layout = { leftColWidth: 320, middleColWidth: 400, rightColWidth: 828 };
   if (!clone.colors.pageBg) clone.colors.pageBg = '#EAF5FE';
   return clone;
 }
@@ -1832,7 +1856,7 @@ function cloneTonyRobbinsStarter() {
   };
   clone.extraCards = [];
   clone.rightExtraCards = [];
-  clone.layout = { leftColWidth: 290, middleColWidth: 320 };
+  clone.layout = { leftColWidth: 320, middleColWidth: 400, rightColWidth: 828 };
   return clone;
 }
 
@@ -1851,6 +1875,8 @@ function cloneAccountIndustry(key) {
   const base = cloneIndustry(key);
   const seed = accountSeeds[key] || accountSeeds.generic;
   base.profileType = 'b2b';
+  // B2B's second width is the action rail; keep its existing semantics.
+  base.layout = { leftColWidth: 290, middleColWidth: 320 };
   // The generated account sits inside Salesforce Data Cloud. Keep the chrome
   // canonical instead of allowing website analysis to invent a product nav.
   base.appName = 'Data Cloud';
@@ -2247,6 +2273,53 @@ async function hydrateBundledStarterImages(target) {
 // the exported file has no external dependencies.
 // ============================================================
 
+// One logical viewport across preview, presentation and exported HTML. Hosts
+// scale this canvas uniformly, never by stretching or rearranging its contents.
+const PROFILE_CANVAS = Object.freeze({ width: 1600, height: 900 });
+const PROFILE_COLUMN_BOUNDS = Object.freeze({
+  leftColWidth: [240, 500], middleColWidth: [280, 560], rightColWidth: [488, 1028]
+});
+const PROFILE_COLUMN_BUDGET = PROFILE_CANVAS.width - 52; // shell borders + padding + two gaps
+
+function boundedWidth(value, min, max, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.round(Math.max(min, Math.min(max, number))) : fallback;
+}
+
+function getProfileColumnWidths(layout = {}) {
+  layout = layout && typeof layout === 'object' ? layout : {};
+  // Older layouts displayed the middle slider value + 40px. Preserve that
+  // actual width when loading an existing project into the wider canvas.
+  const legacy = layout.rightColWidth === undefined && layout.middleColWidth !== undefined;
+  const leftColWidth = boundedWidth(layout.leftColWidth, 240, 500, 320);
+  const middleColWidth = boundedWidth(Number(layout.middleColWidth) + (legacy ? 40 : 0), 280, 560, 400);
+  return { leftColWidth, middleColWidth, rightColWidth: PROFILE_COLUMN_BUDGET - leftColWidth - middleColWidth };
+}
+
+function resizeProfileColumns(layout, field, value) {
+  const widths = getProfileColumnWidths(layout);
+  if (!Object.prototype.hasOwnProperty.call(PROFILE_COLUMN_BOUNDS, field) || !Number.isFinite(Number(value))) return widths;
+  const [min, max] = PROFILE_COLUMN_BOUNDS[field];
+  let remaining = boundedWidth(value, min, max, widths[field]) - widths[field];
+  // Keep the identity rail stable when resizing the right column when possible.
+  const others = field === 'rightColWidth' ? ['middleColWidth', 'leftColWidth'] : ['rightColWidth', field === 'leftColWidth' ? 'middleColWidth' : 'leftColWidth'];
+  for (const other of others) {
+    const [lower, upper] = PROFILE_COLUMN_BOUNDS[other];
+    const change = remaining > 0 ? Math.min(remaining, widths[other] - lower) : Math.max(remaining, widths[other] - upper);
+    widths[other] -= change;
+    widths[field] += change;
+    remaining -= change;
+  }
+  return widths;
+}
+
+function getCanvasFit(width, height) {
+  const availableWidth = Number.isFinite(Number(width)) && Number(width) > 0 ? Number(width) : 1;
+  const availableHeight = Number.isFinite(Number(height)) && Number(height) > 0 ? Number(height) : 1;
+  const scale = Math.min(availableWidth / PROFILE_CANVAS.width, availableHeight / PROFILE_CANVAS.height);
+  return { scale, width: PROFILE_CANVAS.width * scale, height: PROFILE_CANVAS.height * scale };
+}
+
 function esc(s) {
   if (s === undefined || s === null) return '';
   return String(s)
@@ -2274,12 +2347,46 @@ function renderLayoutStatusScript(state) {
 (function () {
   function report() {
     if (window.parent === window) return;
-    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: window.innerHeight }, '*');
+    var canvas = document.getElementById('upg-render-canvas');
+    window.parent.postMessage({ type: 'upg:layout-status', revision: ${revision}, height: canvas ? canvas.scrollHeight : Math.max(document.documentElement.scrollHeight, document.body ? document.body.scrollHeight : 0), viewport: canvas ? ${PROFILE_CANVAS.height} : window.innerHeight }, '*');
   }
   window.upgReportLayout = report;
   window.addEventListener('load', report, { once: true });
   if (document.readyState === 'complete') report();
   if (document.fonts && document.fonts.ready) document.fonts.ready.then(report).catch(function () {});
+})();
+<\/script>`;
+}
+
+// Exported HTML may run in a smaller browser or a partner's iframe without our
+// editor's scaling stage. Keep the same logical screen there, including below-
+// fold content. The host's physical height prevents transform overflow from
+// creating blank scrolling space; only the canvas is transformed.
+function renderCanvasHostScript() {
+  return `<script>
+(function () {
+  var host = document.getElementById('upg-render-host');
+  var canvas = document.getElementById('upg-render-canvas');
+  if (!host || !canvas) return;
+  document.documentElement.style.width = '100%';
+  document.documentElement.style.minHeight = '100%';
+  document.body.style.width = '100%';
+  document.body.style.minHeight = '100vh';
+  host.style.cssText = 'position:relative;width:100%;overflow:hidden;';
+  canvas.style.cssText = 'position:absolute;top:0;width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;display:flow-root;transform-origin:top left;';
+  function fit() {
+    var width = Math.max(1, window.innerWidth);
+    var height = Math.max(1, window.innerHeight);
+    var scale = Math.min(width / ${PROFILE_CANVAS.width}, height / ${PROFILE_CANVAS.height});
+    canvas.style.transform = 'scale(' + scale + ')';
+    canvas.style.left = Math.max(0, (width - ${PROFILE_CANVAS.width} * scale) / 2) + 'px';
+    host.style.height = Math.ceil(Math.max(${PROFILE_CANVAS.height}, canvas.scrollHeight) * scale) + 'px';
+    if (window.upgReportLayout) window.upgReportLayout();
+  }
+  fit();
+  window.addEventListener('resize', fit);
+  window.addEventListener('load', fit, { once: true });
+  if (typeof ResizeObserver === 'function') new ResizeObserver(fit).observe(canvas);
 })();
 <\/script>`;
 }
@@ -2455,8 +2562,7 @@ function generateProfileHTML(state) {
   const menuText = getAccountColorTheme(s.colors.menuText, accent, menuBg).navInk;
   const pageBg = s.colors.pageBg || '#EAF5FE';
   const theme = getAccountColorTheme(primary, accent, menuBg);
-  const leftW = Math.max(220, Math.min(500, Number(s.layout?.leftColWidth) || 290));
-  const middleMin = Math.max(220, Math.min(500, Number(s.layout?.middleColWidth) || 320));
+  const columns = getProfileColumnWidths(s.layout);
   const visible = Object.assign({ affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true }, s.b2cSections || {});
   const customCards = [...(s.extraCards || []).map(card => Object.assign({ placement: 'middle' }, card)),
     ...(s.rightExtraCards || []).map(card => Object.assign({ placement: 'right' }, card))];
@@ -2487,10 +2593,11 @@ function generateProfileHTML(state) {
   --page-bg: ${pageBg};
 }
 * { box-sizing: border-box; }
-html { width: 1300px; min-height: 860px; }
+html { width: ${PROFILE_CANVAS.width}px; min-height: ${PROFILE_CANVAS.height}px; scrollbar-width: none; }
+html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; }
 body {
-  min-width: 1300px;
-  min-height: 860px;
+  width: ${PROFILE_CANVAS.width}px;
+  min-height: ${PROFILE_CANVAS.height}px;
   margin: 0;
   font-family: 'Salesforce Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
@@ -2503,6 +2610,7 @@ body {
 
 /* ── Global Salesforce top bar ─────────────────────────────── */
 .sf-topbar {
+  height: 58px;
   background: linear-gradient(180deg, #FAFAFB 0%, #F3F3F3 100%);
   border-bottom: 1px solid var(--border);
   padding: 8px 16px;
@@ -2596,7 +2704,8 @@ body {
   align-items: center;
   gap: 22px;
   border-bottom: 3px solid var(--accent);
-  min-height: 40px;
+  height: 44px;
+  min-height: 44px;
   overflow: hidden;
 }
 .app-nav-brand {
@@ -2672,11 +2781,11 @@ body {
   background: var(--page-bg);
   padding: 12px;
   display: grid;
-  grid-template-columns: ${leftW}px minmax(${middleMin}px, ${middleMin + 40}px) 1fr;
+  grid-template-columns: ${columns.leftColWidth}px ${columns.middleColWidth}px ${columns.rightColWidth}px;
   gap: 12px;
   /* The two Salesforce chrome rows occupy ~102px at their rendered size. */
   height: auto;
-  min-height: calc(860px - 102px);
+  min-height: calc(${PROFILE_CANVAS.height}px - 102px);
   align-items: stretch;
   overflow: visible;
 }
@@ -2832,12 +2941,10 @@ body {
   display: flex;
   flex-direction: column;
 }
-/* Fixed image height keeps the card at a screenshot-friendly size no matter
-   how wide the right column expands. 160px is calibrated to the NCSA
-   reference — total card ends up ~280–300px tall. */
+/* Keep recommendation imagery bounded on the wider slide canvas. */
 .rec-image {
   width: 100%;
-  height: 128px;
+  height: 160px;
   background: #eee;
   overflow: hidden;
   flex-shrink: 0;
@@ -2912,20 +3019,14 @@ body {
    becomes part of the normal page flow so no added card is lost below it. */
 .right-bottom-expanded { flex: 0 0 auto; overflow: visible; }
 .right-bottom-expanded > .activity-card { align-self: start; max-height: 340px; }
-
-@media (max-width: 1100px) {
-  .up-shell { grid-template-columns: ${leftW}px 1fr; }
-  .right-col { grid-column: 1 / -1; }
-}
-@media (max-width: 520px) {
-  .up-shell { grid-template-columns: 1fr; }
-  .recs-carousel { grid-template-columns: 1fr; }
-  .right-bottom { grid-template-columns: 1fr; }
-}
+/* This is a fixed desktop canvas, including when embedded in a narrow host.
+   The host scales it; viewport media queries must not rearrange its columns. */
+.activity-list, .recs-carousel { scrollbar-width: none; scrollbar-gutter: auto; }
+.activity-list::-webkit-scrollbar, .recs-carousel::-webkit-scrollbar { display: none; }
 </style>
 </head>
 <body>
-
+<div id="upg-render-host"><div id="upg-render-canvas">
 <div class="sf-topbar">
   <div class="sf-brand">
     <div class="sf-brand-logo${s.logo ? ' has-image' : ''}">${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'B')[0])}</div>
@@ -3190,6 +3291,8 @@ body {
 
 </div>
 
+</div></div>
+${renderCanvasHostScript()}
 ${renderLayoutStatusScript(s)}
 </body>
 </html>`;
@@ -3205,7 +3308,7 @@ function generateAccountProfileHTML(state) {
 
 // The account experience is a single fixed-canvas workspace. Rather than
 // stacking every B2B section vertically, each view gets a focused, clickable
-// tab so the exported profile remains presentation-ready at 1300 × 860.
+// tab so the exported profile remains presentation-ready on the 16:9 canvas.
 function generateTabbedAccountProfileHTML(state) {
   const s = safeRenderState(state);
   const primary = s.colors?.primary || '#001E5B';
@@ -3278,22 +3381,23 @@ function generateTabbedAccountProfileHTML(state) {
   return `<!DOCTYPE html>
 <html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>${esc(a.name)} — Account Unified Profile</title>
 <style>
-:root{--primary:${primary};--accent:${uiAccent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--rail-text:${theme.text};--rail-muted:${theme.muted};--rail-rule:${theme.rule};--rail-surface:${theme.surface};--mark-text:${theme.markText};--primary-ink:${theme.primaryInk};--ink:#13213a;--muted:#65748a;--line:#dbe3ed;--card:#fff}*{box-sizing:border-box}html,body{width:1300px;height:860px;overflow:hidden}body{margin:0;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.3}.sf-global{height:42px;padding:0 18px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f4f6f9);border-bottom:1px solid var(--line)}.sf-brand{display:flex;align-items:center;gap:8px;min-width:190px;font-size:14px;font-weight:700;color:#252f3e}.sf-brand-mark{width:30px;height:30px;border-radius:5px;background:var(--primary);color:var(--rail-text);display:grid;place-items:center;overflow:hidden;font-size:12px}.sf-brand-mark img{width:100%;height:100%;object-fit:contain}.sf-search{height:24px;flex:1;max-width:540px;margin:auto;background:#fff;border:1px solid #cdd6e1;border-radius:3px;color:#7c899b;padding:5px 10px;font-size:10px}.sf-icons{display:flex;align-items:center;gap:5px;color:#64748b}.sf-icon{height:26px;min-width:26px;padding:0 6px;display:grid;place-items:center;background:#f5f6f8;border:1px solid #dfe5ec;border-radius:3px;font-size:12px}.sf-user{width:25px;height:25px;border-radius:50%;background:#7cab8c;color:#fff;display:grid;place-items:center;font-size:10px}.sf-app-nav{height:44px;padding:0 16px;display:flex;align-items:stretch;gap:20px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.sf-app-name{display:flex;align-items:center;gap:8px;padding-right:15px;border-right:1px solid var(--line);font-weight:700;font-size:13px;color:var(--menu-text)}.sf-waffle{font-size:17px;color:var(--accent)}.sf-app-nav a{display:flex;align-items:center;color:var(--menu-text);text-decoration:none;font-size:10px;white-space:nowrap}.sf-app-nav a:first-of-type{font-weight:700;color:var(--primary-ink);border-bottom:3px solid var(--accent)}.sf-profile-tab{margin-left:auto;display:flex;align-items:center;padding:0 12px;background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;font-size:11px;font-weight:700;white-space:nowrap}.account-shell{height:774px;padding:12px;display:grid;grid-template-columns:${accountRailWidth}px minmax(0,1fr);gap:12px}.account-rail{height:100%;padding:18px 16px;border:1px solid var(--rail-rule);border-radius:7px;background:var(--primary);color:var(--rail-text);overflow:hidden}.account-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--rail-rule)}.account-mark{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;overflow:hidden;background:var(--accent);color:var(--mark-text);border:2px solid var(--rail-rule);font-weight:700;font-size:17px}.account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.account-name{font-size:19px;font-weight:700;line-height:1.1}.account-location{margin-top:4px;color:var(--rail-muted)}.rail-fields{margin:16px 0}.rail-field{display:grid;grid-template-columns:17px 84px 1fr;gap:5px;margin:10px 0;font-size:11px}.rail-field i{color:var(--rail-muted);font-style:normal}.rail-field span{color:var(--rail-muted)}.rail-field b{overflow-wrap:anywhere}.rail-rule{height:1px;background:var(--rail-rule);margin:13px 0}.rail-stat{padding:9px 0;border-bottom:1px solid var(--rail-rule)}.rail-stat span{display:block;color:var(--rail-muted);font-size:10px}.rail-stat strong{display:block;margin-top:3px;font-size:14px}.rail-health{display:flex;align-items:center;gap:9px;margin-top:14px;padding:9px;background:var(--rail-surface);border-radius:5px}.rail-gauge{width:36px;height:36px;border:5px solid var(--rail-rule);border-top-color:#56e0b2;border-right-color:#56e0b2;border-radius:50%}.rail-health b{font-size:11px}.rail-health small{display:block;margin-top:2px;color:var(--rail-muted);font-size:9px}.rail-powered{margin-top:17px;padding-top:11px;border-top:1px solid var(--rail-rule);color:var(--rail-muted);font-size:10px}.account-workspace{height:100%;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(20,38,67,.04);overflow:hidden}.account-tabs{height:43px;display:flex;align-items:end;padding:0 16px;gap:25px;border-bottom:1px solid var(--line)}.account-tab{appearance:none;border:0;background:transparent;padding:0 1px 10px;color:#64748b;font:600 12px inherit;cursor:pointer}.account-tab[aria-selected="true"]{color:var(--primary-ink);border-bottom:3px solid var(--accent)}.account-views{height:calc(100% - 43px);padding:10px}.account-view{display:none;height:100%;grid-template-columns:minmax(0,1fr) ${actionRailWidth}px;gap:10px}.account-view.active{display:grid}.account-pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}.account-card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;box-shadow:0 1px 2px rgba(17,38,73,.035)}.account-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.account-panel-head h2{margin:0;font-size:14px;color:#21344f}.account-overview-metrics{padding:12px}.account-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.account-metric-grid article{padding:10px;border:1px solid #dce9fa;background:linear-gradient(180deg,#fff,#f7fbff);min-width:0}.account-metric-grid h3{margin:0;color:#334968;font-size:11px}.account-metric-grid article>strong{display:inline-block;margin:8px 0 0;font-size:22px;line-height:1}.account-metric-grid article>small{display:inline-block;margin-left:5px;color:#267447;background:#e7f7ec;border-radius:99px;padding:2px 5px;font-size:8px;font-weight:700}.account-spark{height:20px;margin:10px 0 7px;background:linear-gradient(169deg,transparent 45%,rgba(6,106,254,.17) 46%,rgba(6,106,254,.17) 72%,transparent 73%);border-bottom:2px solid var(--accent);clip-path:polygon(0 70%,16% 32%,31% 54%,45% 34%,60% 68%,75% 28%,88% 45%,100% 56%,100% 100%,0 100%)}.account-metric-grid p{display:flex;justify-content:space-between;gap:5px;margin:5px 0 0;padding-top:5px;border-top:1px solid #dfe8f2;color:var(--muted);font-size:9px}.account-metric-grid p b{color:var(--ink)}.account-progress{height:6px;margin:7px 0;background:#dfe8f3;border-radius:99px;overflow:hidden}.account-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#73a0ff);border-radius:inherit}.account-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:26px}.account-detail-grid>div{padding:6px 0;border-top:1px solid var(--line)}.account-detail-grid>div:nth-child(-n+2){border-top:0;padding-top:0}.account-detail-grid label,.account-sales-summary label,.account-success-grid label{display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.account-detail-grid strong{display:block;margin-top:3px;font-size:11px}.account-legend{display:flex;gap:10px;margin:-1px 0 8px;color:var(--muted);font-size:9px}.account-legend span{display:flex;gap:4px;align-items:center}.account-legend i{width:7px;height:7px;border-radius:50%}.account-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.account-signal-grid h3{margin:0 0 5px;font-size:10px}.account-signal{display:grid;grid-template-columns:83px 1fr;gap:7px;align-items:center;margin:6px 0;font-size:9px}.account-signal>span{text-align:right;color:#40536d}.account-signal>div{height:13px;display:flex;flex-direction:column;justify-content:center;gap:2px}.account-signal b,.account-signal em{display:block;height:4px;border-radius:2px}.account-notice{padding:9px 0;border-top:1px solid var(--line)}.account-notice:first-child{border-top:0;padding-top:0}.account-notice strong{display:block;font-size:11px}.account-notice span{display:block;margin-top:3px;color:var(--muted);font-size:10px}.account-insights>div{display:grid;grid-template-columns:16px 1fr auto;gap:5px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:10px}.account-insights>div:first-child{border-top:0;padding-top:0}.account-insights span{color:var(--accent);font-weight:700}.account-insights label{color:#3d5069}.account-insights strong{max-width:95px;text-align:right;font-size:10px}.account-table{width:100%;border-collapse:collapse;font-size:10px}.account-table th{text-align:left;color:var(--muted);font-size:9px;letter-spacing:.03em}.account-table td,.account-table th{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.account-table thead th{border-top:0;padding-top:0;text-transform:uppercase}.account-table tbody th{color:#265fa6;font-weight:700}.account-people-table td{padding-right:9px}.account-relationship,.account-sales-summary,.account-success-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.account-relationship>div,.account-sales-summary>div,.account-success-grid>div{padding:10px;background:#f7fbff;border:1px solid #dce9fa}.account-relationship strong,.account-sales-summary strong,.account-success-grid strong{display:block;margin-top:3px;font-size:18px}.account-relationship span,.account-sales-summary small,.account-success-grid small{display:block;margin-top:3px;color:var(--muted);font-size:9px}.account-actions>div{padding:9px 0;border-top:1px solid var(--line)}.account-actions>div:first-child{padding-top:0;border-top:0}.account-actions small{display:block;color:var(--accent);font-size:9px;font-weight:700;text-transform:uppercase}.account-actions strong{display:block;margin:3px 0 7px;font-size:11px}.account-actions button{border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);padding:4px 9px;font-size:9px;font-weight:700}.account-activity>div{display:flex;gap:7px;padding:7px 0;border-top:1px solid var(--line)}.account-activity>div:first-child{border-top:0;padding-top:0}.account-activity>div>span{width:18px;height:18px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:10px}.account-activity p{margin:0;font-size:9px;color:var(--muted)}.account-activity p strong{display:block;color:var(--ink);font-size:10px}.account-activity small{display:block;margin-top:2px;color:#8390a2;font-size:8px}.account-note{font-size:11px;line-height:1.45;color:var(--muted)}.account-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:120px;text-align:center;color:var(--muted)}.account-empty span{margin-top:4px;font-size:10px}
+:root{--primary:${primary};--accent:${uiAccent};--secondary:${secondary};--menu:${menuBg};--menu-text:${menuText};--page:${pageBg};--rail-text:${theme.text};--rail-muted:${theme.muted};--rail-rule:${theme.rule};--rail-surface:${theme.surface};--mark-text:${theme.markText};--primary-ink:${theme.primaryInk};--ink:#13213a;--muted:#65748a;--line:#dbe3ed;--card:#fff}*{box-sizing:border-box}html,body{width:${PROFILE_CANVAS.width}px;height:${PROFILE_CANVAS.height}px;overflow:hidden}body{margin:0;background:var(--page);color:var(--ink);font-family:'Salesforce Sans',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:13px;line-height:1.3}.sf-global{height:42px;padding:0 18px;display:flex;align-items:center;gap:16px;background:linear-gradient(180deg,#fff,#f4f6f9);border-bottom:1px solid var(--line)}.sf-brand{display:flex;align-items:center;gap:8px;min-width:190px;font-size:14px;font-weight:700;color:#252f3e}.sf-brand-mark{width:30px;height:30px;border-radius:5px;background:var(--primary);color:var(--rail-text);display:grid;place-items:center;overflow:hidden;font-size:12px}.sf-brand-mark img{width:100%;height:100%;object-fit:contain}.sf-search{height:24px;flex:1;max-width:540px;margin:auto;background:#fff;border:1px solid #cdd6e1;border-radius:3px;color:#7c899b;padding:5px 10px;font-size:10px}.sf-icons{display:flex;align-items:center;gap:5px;color:#64748b}.sf-icon{height:26px;min-width:26px;padding:0 6px;display:grid;place-items:center;background:#f5f6f8;border:1px solid #dfe5ec;border-radius:3px;font-size:12px}.sf-user{width:25px;height:25px;border-radius:50%;background:#7cab8c;color:#fff;display:grid;place-items:center;font-size:10px}.sf-app-nav{height:44px;padding:0 16px;display:flex;align-items:stretch;gap:20px;background:var(--menu);border-bottom:3px solid var(--accent);overflow:hidden}.sf-app-name{display:flex;align-items:center;gap:8px;padding-right:15px;border-right:1px solid var(--line);font-weight:700;font-size:13px;color:var(--menu-text)}.sf-waffle{font-size:17px;color:var(--accent)}.sf-app-nav a{display:flex;align-items:center;color:var(--menu-text);text-decoration:none;font-size:10px;white-space:nowrap}.sf-app-nav a:first-of-type{font-weight:700;color:var(--primary-ink);border-bottom:3px solid var(--accent)}.sf-profile-tab{margin-left:auto;display:flex;align-items:center;padding:0 12px;background:#fff;border:1px solid var(--line);border-bottom:0;border-radius:4px 4px 0 0;font-size:11px;font-weight:700;white-space:nowrap}.account-shell{height:${PROFILE_CANVAS.height - 86}px;padding:12px;display:grid;grid-template-columns:${accountRailWidth}px minmax(0,1fr);gap:12px}.account-rail{height:100%;padding:18px 16px;border:1px solid var(--rail-rule);border-radius:7px;background:var(--primary);color:var(--rail-text);overflow:hidden}.account-head{display:flex;align-items:center;gap:11px;padding-bottom:16px;border-bottom:1px solid var(--rail-rule)}.account-mark{width:54px;height:54px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto;overflow:hidden;background:var(--accent);color:var(--mark-text);border:2px solid var(--rail-rule);font-weight:700;font-size:17px}.account-mark img{width:100%;height:100%;object-fit:contain;background:#fff}.account-name{font-size:19px;font-weight:700;line-height:1.1}.account-location{margin-top:4px;color:var(--rail-muted)}.rail-fields{margin:16px 0}.rail-field{display:grid;grid-template-columns:17px 84px 1fr;gap:5px;margin:10px 0;font-size:11px}.rail-field i{color:var(--rail-muted);font-style:normal}.rail-field span{color:var(--rail-muted)}.rail-field b{overflow-wrap:anywhere}.rail-rule{height:1px;background:var(--rail-rule);margin:13px 0}.rail-stat{padding:9px 0;border-bottom:1px solid var(--rail-rule)}.rail-stat span{display:block;color:var(--rail-muted);font-size:10px}.rail-stat strong{display:block;margin-top:3px;font-size:14px}.rail-health{display:flex;align-items:center;gap:9px;margin-top:14px;padding:9px;background:var(--rail-surface);border-radius:5px}.rail-gauge{width:36px;height:36px;border:5px solid var(--rail-rule);border-top-color:#56e0b2;border-right-color:#56e0b2;border-radius:50%}.rail-health b{font-size:11px}.rail-health small{display:block;margin-top:2px;color:var(--rail-muted);font-size:9px}.rail-powered{margin-top:17px;padding-top:11px;border-top:1px solid var(--rail-rule);color:var(--rail-muted);font-size:10px}.account-workspace{height:100%;background:#fff;border:1px solid var(--line);border-radius:7px;box-shadow:0 1px 2px rgba(20,38,67,.04);overflow:hidden}.account-tabs{height:43px;display:flex;align-items:end;padding:0 16px;gap:25px;border-bottom:1px solid var(--line)}.account-tab{appearance:none;border:0;background:transparent;padding:0 1px 10px;color:#64748b;font:600 12px inherit;cursor:pointer}.account-tab[aria-selected="true"]{color:var(--primary-ink);border-bottom:3px solid var(--accent)}.account-views{height:calc(100% - 43px);padding:10px}.account-view{display:none;height:100%;grid-template-columns:minmax(0,1fr) ${actionRailWidth}px;gap:10px}.account-view.active{display:grid}.account-pane{min-width:0;min-height:0;display:flex;flex-direction:column;gap:10px;overflow:hidden}.account-card{background:var(--card);border:1px solid var(--line);border-radius:6px;padding:12px;box-shadow:0 1px 2px rgba(17,38,73,.035)}.account-panel-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}.account-panel-head h2{margin:0;font-size:14px;color:#21344f}.account-overview-metrics{padding:12px}.account-metric-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:9px}.account-metric-grid article{padding:10px;border:1px solid #dce9fa;background:linear-gradient(180deg,#fff,#f7fbff);min-width:0}.account-metric-grid h3{margin:0;color:#334968;font-size:11px}.account-metric-grid article>strong{display:inline-block;margin:8px 0 0;font-size:22px;line-height:1}.account-metric-grid article>small{display:inline-block;margin-left:5px;color:#267447;background:#e7f7ec;border-radius:99px;padding:2px 5px;font-size:8px;font-weight:700}.account-spark{height:20px;margin:10px 0 7px;background:linear-gradient(169deg,transparent 45%,rgba(6,106,254,.17) 46%,rgba(6,106,254,.17) 72%,transparent 73%);border-bottom:2px solid var(--accent);clip-path:polygon(0 70%,16% 32%,31% 54%,45% 34%,60% 68%,75% 28%,88% 45%,100% 56%,100% 100%,0 100%)}.account-metric-grid p{display:flex;justify-content:space-between;gap:5px;margin:5px 0 0;padding-top:5px;border-top:1px solid #dfe8f2;color:var(--muted);font-size:9px}.account-metric-grid p b{color:var(--ink)}.account-progress{height:6px;margin:7px 0;background:#dfe8f3;border-radius:99px;overflow:hidden}.account-progress i{display:block;height:100%;background:linear-gradient(90deg,var(--accent),#73a0ff);border-radius:inherit}.account-detail-grid{display:grid;grid-template-columns:1fr 1fr;column-gap:26px}.account-detail-grid>div{padding:6px 0;border-top:1px solid var(--line)}.account-detail-grid>div:nth-child(-n+2){border-top:0;padding-top:0}.account-detail-grid label,.account-sales-summary label,.account-success-grid label{display:block;color:var(--muted);font-size:9px;font-weight:700;letter-spacing:.04em;text-transform:uppercase}.account-detail-grid strong{display:block;margin-top:3px;font-size:11px}.account-legend{display:flex;gap:10px;margin:-1px 0 8px;color:var(--muted);font-size:9px}.account-legend span{display:flex;gap:4px;align-items:center}.account-legend i{width:7px;height:7px;border-radius:50%}.account-signal-grid{display:grid;grid-template-columns:1fr 1fr;gap:15px}.account-signal-grid h3{margin:0 0 5px;font-size:10px}.account-signal{display:grid;grid-template-columns:83px 1fr;gap:7px;align-items:center;margin:6px 0;font-size:9px}.account-signal>span{text-align:right;color:#40536d}.account-signal>div{height:13px;display:flex;flex-direction:column;justify-content:center;gap:2px}.account-signal b,.account-signal em{display:block;height:4px;border-radius:2px}.account-notice{padding:9px 0;border-top:1px solid var(--line)}.account-notice:first-child{border-top:0;padding-top:0}.account-notice strong{display:block;font-size:11px}.account-notice span{display:block;margin-top:3px;color:var(--muted);font-size:10px}.account-insights>div{display:grid;grid-template-columns:16px 1fr auto;gap:5px;align-items:center;padding:6px 0;border-top:1px solid var(--line);font-size:10px}.account-insights>div:first-child{border-top:0;padding-top:0}.account-insights span{color:var(--accent);font-weight:700}.account-insights label{color:#3d5069}.account-insights strong{max-width:95px;text-align:right;font-size:10px}.account-table{width:100%;border-collapse:collapse;font-size:10px}.account-table th{text-align:left;color:var(--muted);font-size:9px;letter-spacing:.03em}.account-table td,.account-table th{padding:7px 0;border-top:1px solid var(--line);vertical-align:top}.account-table thead th{border-top:0;padding-top:0;text-transform:uppercase}.account-table tbody th{color:#265fa6;font-weight:700}.account-people-table td{padding-right:9px}.account-relationship,.account-sales-summary,.account-success-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}.account-relationship>div,.account-sales-summary>div,.account-success-grid>div{padding:10px;background:#f7fbff;border:1px solid #dce9fa}.account-relationship strong,.account-sales-summary strong,.account-success-grid strong{display:block;margin-top:3px;font-size:18px}.account-relationship span,.account-sales-summary small,.account-success-grid small{display:block;margin-top:3px;color:var(--muted);font-size:9px}.account-actions>div{padding:9px 0;border-top:1px solid var(--line)}.account-actions>div:first-child{padding-top:0;border-top:0}.account-actions small{display:block;color:var(--accent);font-size:9px;font-weight:700;text-transform:uppercase}.account-actions strong{display:block;margin:3px 0 7px;font-size:11px}.account-actions button{border:1px solid var(--accent);border-radius:4px;background:#fff;color:var(--accent);padding:4px 9px;font-size:9px;font-weight:700}.account-activity>div{display:flex;gap:7px;padding:7px 0;border-top:1px solid var(--line)}.account-activity>div:first-child{border-top:0;padding-top:0}.account-activity>div>span{width:18px;height:18px;display:grid;place-items:center;flex:0 0 auto;border-radius:50%;background:var(--secondary);color:var(--accent);font-size:10px}.account-activity p{margin:0;font-size:9px;color:var(--muted)}.account-activity p strong{display:block;color:var(--ink);font-size:10px}.account-activity small{display:block;margin-top:2px;color:#8390a2;font-size:8px}.account-note{font-size:11px;line-height:1.45;color:var(--muted)}.account-empty{display:flex;flex-direction:column;justify-content:center;align-items:center;min-height:120px;text-align:center;color:var(--muted)}.account-empty span{margin-top:4px;font-size:10px}
 </style>
 <style>
 :root{--accent-ink:${theme.accentInk}}
-html{width:1300px;min-height:860px;height:auto;overflow-y:auto}
-body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:auto}
+html{width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;height:auto;overflow-y:auto;scrollbar-width:none}
+body{width:${PROFILE_CANVAS.width}px;min-height:${PROFILE_CANVAS.height}px;height:auto;overflow-x:hidden;overflow-y:auto}
+html::-webkit-scrollbar,body::-webkit-scrollbar{display:none}
 .sf-app-name{white-space:nowrap;flex:0 0 auto}
-.sf-app-nav{overflow-x:auto;scrollbar-width:thin}
+.sf-app-nav{overflow-x:hidden}
 .sf-waffle{color:var(--menu-text)}
 .sf-profile-tab{margin-left:0}
-.account-shell{min-height:774px;height:auto;align-items:stretch}
-.account-rail{min-height:750px;height:auto;overflow-wrap:anywhere}
+.account-shell{min-height:${PROFILE_CANVAS.height - 86}px;height:auto;align-items:stretch}
+.account-rail{min-height:${PROFILE_CANVAS.height - 110}px;height:auto;overflow-wrap:anywhere}
 .account-name{overflow-wrap:anywhere}
-.account-workspace{min-height:750px;height:auto;overflow:visible;min-width:0}
-.account-views{min-height:707px;height:auto}
-.account-view{min-height:687px;height:auto}
+.account-workspace{min-height:${PROFILE_CANVAS.height - 110}px;height:auto;overflow:visible;min-width:0}
+.account-views{min-height:${PROFILE_CANVAS.height - 155}px;height:auto}
+.account-view{min-height:${PROFILE_CANVAS.height - 175}px;height:auto}
 .account-view[hidden]{display:none}
 .account-pane{overflow:visible}
 .account-card{overflow-wrap:anywhere}
@@ -3310,8 +3414,11 @@ body{min-width:1300px;min-height:860px;height:auto;overflow-x:hidden;overflow-y:
 .account-tab:focus-visible,[role="list"][tabindex]:focus-visible{outline:2px solid var(--primary-ink);outline-offset:2px}
 .account-metric-grid article>small{color:var(--muted);background:#eef2f6}
 .score-unknown,.rec-count{display:block;margin:7px 0;color:var(--muted);font-size:10px}
+.account-actions,.account-activity-card>.account-activity{scrollbar-width:none;scrollbar-gutter:auto}
+.account-actions::-webkit-scrollbar,.account-activity::-webkit-scrollbar{display:none}
 </style></head>
 <body>
+<div id="upg-render-host"><div id="upg-render-canvas">
 <header class="sf-global"><div class="sf-brand"><span class="sf-brand-mark${s.logo ? ' has-image' : ''}"${s.logo ? ' style="background:#ffffff"' : ''}>${s.logo ? `<img src="${esc(s.logo)}" alt="">` : esc((s.brandName || 'D')[0])}</span><span>${esc(s.brandName || 'Customer')}</span></div><div class="sf-search">⌕&nbsp;&nbsp;Search Salesforce</div><div class="sf-icons"><span class="sf-icon">☆⌄</span><span class="sf-icon">＋</span><span class="sf-icon">?</span><span class="sf-icon">⚙</span><span class="sf-icon">●</span><span class="sf-user">${esc((s.userName || 'U')[0])}</span></div></header>
 <nav class="sf-app-nav"><div class="sf-app-name"><span class="sf-waffle">⠿</span>${esc(s.appName || 'Data Cloud')}</div>${s.navLinks.map((link, index) => `<span class="sf-app-nav-link" style="display:flex;align-items:center;color:${index === 0 ? esc(theme.navInk) : 'var(--menu-text)'};font-size:10px;white-space:nowrap;cursor:default;user-select:none;${index === 0 ? 'font-weight:700;border-bottom:3px solid var(--accent);' : ''}">${esc(link)}</span>`).join('')}<div class="sf-profile-tab">♙&nbsp; ${esc(s.tabName || a.name)} &nbsp;×</div></nav>
 <main class="account-shell"><aside class="account-rail"><div class="account-head"><div class="account-mark">${accountMark}</div><div><div class="account-name">${esc(a.name)}</div><div class="account-location">${esc(a.headquarters)}</div></div></div><div class="rail-fields"><div class="rail-field"><i>▣</i><span>Account ID</span><b>${esc(a.accountId)}</b></div><div class="rail-field"><i>▥</i><span>Industry</span><b>${esc(a.industry)}</b></div><div class="rail-field"><i>▰</i><span>Type</span><b>${esc(a.type)}</b></div><div class="rail-field"><i>⌖</i><span>Employees</span><b>${esc(a.employees)}</b></div>${renderProfileRailFields(s.railFields, 'b2b')}</div><div class="rail-rule"></div><div class="rail-stat"><span>Current Commercial Value</span><strong>${esc(m.revenue)}</strong></div><div class="rail-stat"><span>Open Pipeline</span><strong>${esc(m.pipeline)}</strong></div><div class="rail-stat"><span>Renewal Date</span><strong>${esc(m.renewalDate)}</strong></div><div class="rail-stat"><span>Account Tier</span><strong>${esc(a.tier)}</strong></div><div class="rail-health"><div><b>${esc(m.healthScore)} Account Health</b><small>${esc(m.healthTrend || 'Health trend not provided')}</small></div></div><div class="rail-powered">Powered by&nbsp;&nbsp; ✦ ◉ ◌ ◈ ⌁ 🧠</div></aside>
@@ -3322,6 +3429,7 @@ ${viewPanels.map(([tab, main, side]) => `<div class="account-view${selectedTab =
 </div>
 ${extraCards.length ? `<div class="account-custom-modules"><div class="account-pane" data-module-placement="middle">${extraPanel('middle')}</div><div class="account-pane" data-module-placement="right">${extraPanel('right')}</div></div>` : ''}
 </section></main>
+</div></div>
 <script>
 (function () {
   var tabs = Array.from(document.querySelectorAll('[data-account-tab]'));
@@ -3354,6 +3462,7 @@ ${extraCards.length ? `<div class="account-custom-modules"><div class="account-p
   });
 })();
 <\/script>
+${renderCanvasHostScript()}
 ${renderLayoutStatusScript(s)}
 </body></html>`;
 }
@@ -3714,7 +3823,7 @@ Rules:
 - If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
 - Colors should match the customer's actual visual brand where discernible from the page, but use a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
 - Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
-- **COMPOSITION MATTERS** — SEs screenshot one 1300×860 profile canvas onto slides. The standard profile modules must form a complete, useful single-screen story: use 2-3 affinity groups with 2-3 items each, 2 recommendations, and 5-6 concise activity items. Only return an extraCard when it adds genuine optional value; it is presented in the builder as a suggested module rather than being placed on the first screen automatically. Keep labels short and messages scannable.
+- **COMPOSITION MATTERS** — SEs screenshot one 1600×900 (16:9 widescreen) profile canvas onto slides. The standard profile modules must form a complete, useful single-screen story: use 2-3 affinity groups with 2-3 items each, 2 recommendations, and 5-6 concise activity items. Only return an extraCard when it adds genuine optional value; it is presented in the builder as a suggested module rather than being placed on the first screen automatically. Keep labels short and messages scannable.
 - Keep all recommendation copy and standard labels suitable for dark text on white cards. Do not use white text or inline styles that reduce contrast.
 - A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs purchase/expansion signals and commercial actions; Service needs churn, case, sentiment, and save actions; Marketing needs journey, channel, content, and campaign engagement; Customer Success needs health, adoption, renewal, and value-realization actions. For Custom, the supplied role and decision request override these default patterns. Adapt every supporting module to that lens while keeping the customer internally consistent.
 - Return ONLY the JSON. No explanation.`;
@@ -5373,8 +5482,8 @@ function updateProfileModeUI() {
   setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
   setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
   setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
-  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Layout Widths (pixels)');
-  setText('layout-sub', b2b ? 'Adjust the persistent account rail and the contextual action rail. The selected workspace tab fills the remaining fixed export canvas.' : 'Widen the left/middle columns if long values (e.g. "Platinum Partner") wrap onto two lines. Right column absorbs the remainder.');
+  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Column Widths · 16:9 Canvas');
+  setText('layout-sub', b2b ? 'Adjust the account and action rails. The center workspace fills the remaining 1600 × 900 canvas.' : 'Resize any column. The others rebalance to keep the 1600 × 900 slide width; content is never stretched.');
   setText('left-col-w-label', b2b ? 'Account Rail' : 'Left Column (Profile)');
   setText('middle-col-w-label', b2b ? 'Action Rail' : 'Middle Column');
 }
@@ -5489,15 +5598,17 @@ window.addEventListener('message', event => {
   if (event.source === presentation?.contentWindow) refreshPreview();
 });
 
-// The iframe renders at a fixed 1300×860 desktop viewport, then we scale
-// it down to fit the preview pane. This gives a miniature of the actual
-// export instead of the collapsed narrow-column layout.
+// Same logical widescreen viewport as presentation/export; the editor only
+// scales the frame, it never asks the renderer for a different arrangement.
 function fitPreviewScale() {
   const stage = document.getElementById('preview-stage');
   const iframe = document.getElementById('preview-iframe');
   if (!stage || !iframe) return;
-  const scale = stage.clientWidth / 1300;
-  iframe.style.transform = `scale(${scale})`;
+  stage.style.aspectRatio = `${PROFILE_CANVAS.width} / ${PROFILE_CANVAS.height}`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  const fit = getCanvasFit(stage.clientWidth, stage.clientWidth * PROFILE_CANVAS.height / PROFILE_CANVAS.width);
+  iframe.style.transform = `scale(${fit.scale})`;
 }
 window.addEventListener('resize', fitPreviewScale);
 
@@ -5529,11 +5640,7 @@ function fillStaticFields() {
   document.getElementById('color-pageBg').value = state.colors.pageBg || '#EAF5FE';
   document.getElementById('hex-pageBg').value = state.colors.pageBg || '#EAF5FE';
 
-  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
-  document.getElementById('left-col-w').value = state.layout.leftColWidth;
-  document.getElementById('left-col-w-val').textContent = state.layout.leftColWidth + 'px';
-  document.getElementById('middle-col-w').value = state.layout.middleColWidth;
-  document.getElementById('middle-col-w-val').textContent = state.layout.middleColWidth + 'px';
+  syncLayoutControls();
 
   document.getElementById('profile-name').value = state.profile.name;
   document.getElementById('profile-city').value = state.profile.city;
@@ -5722,13 +5829,40 @@ function onHexChange(key) {
   }
 }
 
-// Slider-driven column widths — update state, echo px, refresh preview.
+function syncLayoutControls() {
+  const b2b = state.profileType === 'b2b';
+  // Do not reinterpret legacy B2B middleColWidth: it has always been the
+  // contextual action rail, not the center workspace.
+  const widths = b2b ? {
+    leftColWidth: boundedWidth(state.layout?.leftColWidth, 240, 390, 290),
+    middleColWidth: boundedWidth(state.layout?.middleColWidth, 230, 390, 320)
+  } : getProfileColumnWidths(state.layout);
+  const ids = { leftColWidth: 'left-col-w', middleColWidth: 'middle-col-w', rightColWidth: 'right-col-w' };
+  for (const [field, value] of Object.entries(widths)) {
+    const input = document.getElementById(ids[field]);
+    const bounds = b2b ? (field === 'leftColWidth' ? [240, 390] : [230, 390]) : PROFILE_COLUMN_BOUNDS[field];
+    if (input) { input.min = bounds[0]; input.max = bounds[1]; input.value = value; }
+    setText(ids[field] + '-val', value + 'px');
+  }
+  const right = document.getElementById('right-col-width-control');
+  if (right) right.hidden = b2b;
+}
+
+// Every slider redistributes the same fixed canvas budget. Merely opening an
+// old project does not migrate its saved layout; editing explicitly does.
 function onLayoutChange(field, value) {
-  if (!state.layout) state.layout = { leftColWidth: 290, middleColWidth: 320 };
-  const n = Math.max(220, Math.min(500, +value));
-  state.layout[field] = n;
-  const echo = document.getElementById(field === 'leftColWidth' ? 'left-col-w-val' : 'middle-col-w-val');
-  if (echo) echo.textContent = n + 'px';
+  if (!Object.prototype.hasOwnProperty.call(PROFILE_COLUMN_BOUNDS, field) || !Number.isFinite(Number(value))) return;
+  if (state.profileType === 'b2b') {
+    if (field === 'rightColWidth') return;
+    const min = field === 'leftColWidth' ? 240 : 230;
+    state.layout = Object.assign({}, state.layout, { [field]: boundedWidth(value, min, 390, field === 'leftColWidth' ? 290 : 320) });
+  } else state.layout = Object.assign({}, state.layout, resizeProfileColumns(state.layout, field, value));
+  syncLayoutControls();
+  refreshPreview();
+}
+function resetLayoutWidths() {
+  state.layout = state.profileType === 'b2b' ? { leftColWidth: 290, middleColWidth: 320 } : getProfileColumnWidths();
+  syncLayoutControls();
   refreshPreview();
 }
 function onColorChange() {
@@ -6318,36 +6452,69 @@ function fitPresentationScale() {
   const stage = document.getElementById('presentation-stage');
   const iframe = document.getElementById('presentation-iframe');
   if (!canvas || !stage || !iframe) return;
-  const scale = Math.min((canvas.clientWidth - 32) / 1300, (canvas.clientHeight - 32) / 860, 1);
-  stage.style.width = `${Math.max(1, 1300 * scale)}px`;
-  stage.style.height = `${Math.max(1, 860 * scale)}px`;
-  iframe.style.transform = `scale(${scale})`;
+  const fit = getCanvasFit(canvas.clientWidth, canvas.clientHeight);
+  stage.style.width = `${fit.width}px`;
+  stage.style.height = `${fit.height}px`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  iframe.style.transform = `scale(${fit.scale})`;
 }
 
+let closeActivePresentation = null;
 function openPresentation() {
-  document.getElementById('presentation-overlay')?.remove();
+  closeActivePresentation?.();
   const overlay = document.createElement('div');
   overlay.id = 'presentation-overlay';
   overlay.setAttribute('role', 'dialog');
   overlay.setAttribute('aria-modal', 'true');
   overlay.setAttribute('aria-label', 'Unified profile presentation');
-  overlay.style.cssText = 'position:fixed;inset:0;z-index:200;background:#0f172a;display:flex;flex-direction:column;padding:12px;';
-  overlay.innerHTML = `<div style="display:flex;align-items:center;justify-content:space-between;gap:12px;color:#fff;padding:0 4px 10px;font:600 13px Salesforce Sans,system-ui,sans-serif;"><span>Unified Profile Presentation</span><div style="display:flex;gap:8px;"><button id="presentation-fullscreen" type="button" style="border:1px solid #64748b;border-radius:6px;background:#1e293b;color:#fff;padding:7px 10px;cursor:pointer;">Full screen</button><button id="presentation-close" type="button" style="border:1px solid #64748b;border-radius:6px;background:#fff;color:#0f172a;padding:7px 10px;cursor:pointer;">Close</button></div></div><div id="presentation-canvas" style="flex:1;min-height:0;display:grid;place-items:center;overflow:hidden;"><div id="presentation-stage" style="position:relative;overflow:hidden;background:#fff;box-shadow:0 20px 60px rgba(0,0,0,.35);"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="position:absolute;top:0;left:0;width:1300px;height:860px;border:0;transform-origin:0 0;"></iframe></div></div>`;
+  overlay.className = 'presentation-overlay';
+  overlay.innerHTML = `<div id="presentation-toolbar" class="presentation-toolbar"><div><strong>Unified Profile Presentation · 16:9</strong><p id="presentation-status" role="status" aria-live="polite">Full screen hides these controls. Press Esc to return. Capture only the profile rectangle if your display is not 16:9.</p></div><div class="presentation-controls"><button id="presentation-fullscreen" type="button">Full screen · clean capture</button><button id="presentation-close" type="button">Close</button></div></div><div id="presentation-canvas" tabindex="-1" aria-label="Widescreen profile canvas. Press Escape to exit full screen."><div id="presentation-stage"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="width:${PROFILE_CANVAS.width}px;height:${PROFILE_CANVAS.height}px;"></iframe></div></div>`;
   document.body.appendChild(overlay);
-  const close = () => { releaseDialogFocus('presentation-overlay'); overlay.remove(); };
+  const canvas = document.getElementById('presentation-canvas');
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(fitPresentationScale) : null;
+  resizeObserver?.observe(canvas);
+  const close = () => {
+    resizeObserver?.disconnect();
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    releaseDialogFocus('presentation-overlay');
+    overlay.remove();
+    presentationContext = null;
+    if (closeActivePresentation === close) closeActivePresentation = null;
+  };
+  closeActivePresentation = close;
   overlay.querySelector('#presentation-close').addEventListener('click', close);
-  overlay.querySelector('#presentation-fullscreen').addEventListener('click', () => {
-    if (document.fullscreenElement) document.exitFullscreen();
-    else overlay.requestFullscreen?.();
+  overlay.querySelector('#presentation-fullscreen').addEventListener('click', async () => {
+    try {
+      if (!canvas.requestFullscreen) throw new Error('fullscreen_unavailable');
+      // Only the profile canvas enters fullscreen; no toolbar, padding, or
+      // editor chrome becomes part of the screenshot.
+      await canvas.requestFullscreen();
+      if (closeActivePresentation !== close) return;
+      canvas.focus();
+      fitPresentationScale();
+    } catch (_) {
+      if (closeActivePresentation !== close) return;
+      overlay.querySelector('#presentation-status').textContent = 'Full screen is unavailable or was blocked. You can still capture the 16:9 profile rectangle below, or allow full screen and try again.';
+    }
   });
   overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
   document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
-  activateDialogFocus('presentation-overlay', close, 'presentation-close');
+  activateDialogFocus('presentation-overlay', () => {
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    else close();
+  }, 'presentation-close');
   requestAnimationFrame(fitPresentationScale);
   setTimeout(fitPresentationScale, 100);
 }
 window.addEventListener('resize', fitPresentationScale);
-document.addEventListener('fullscreenchange', () => setTimeout(fitPresentationScale, 0));
+document.addEventListener('fullscreenchange', () => {
+  const canvas = document.getElementById('presentation-canvas');
+  const toolbar = document.getElementById('presentation-toolbar');
+  if (toolbar) toolbar.hidden = document.fullscreenElement === canvas;
+  setTimeout(fitPresentationScale, 0);
+  if (!document.fullscreenElement) document.getElementById('presentation-fullscreen')?.focus();
+});
 
 function copyHTML() {
   const html = renderPreviewNow();

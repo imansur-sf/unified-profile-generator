@@ -48,6 +48,72 @@ test('all ten industry/mode fixtures render complete HTML', () => {
   }
 });
 
+test('B2C and B2B render the same 1600x900 widescreen viewport without responsive column rearrangement', () => {
+  for (const mode of ['b2c', 'b2b']) {
+    const state = profile(mode);
+    const html = render(state);
+    assert.match(html, /html\s*\{[^}]*width:\s*1600px;[^}]*min-height:\s*900px;/);
+    assert.match(html, /body\s*\{[^}]*width:\s*1600px;[^}]*min-height:\s*900px;/);
+    assert.ok(!html.includes('1300px') && !html.includes('860px'));
+    assert.ok(!html.includes('@media (max-width:'));
+    // Hide scrollbar tracks for a clean capture without disabling scrolling.
+    assert.match(html, /overflow-y:\s*auto/);
+    assert.match(html, /html\s*\{[^}]*scrollbar-width:\s*none/);
+    assert.match(html, /(?:activity-list|account-activity-card>\.account-activity)\s*\{[^}]*overflow-y:\s*auto/);
+  }
+});
+
+test('rendered B2C grid fits its viewport budget and preserves legacy widths without mutating saved data', () => {
+  for (const layout of [null, {}, { leftColWidth: 370, middleColWidth: 340 }, { leftColWidth: 400, middleColWidth: 480, rightColWidth: 668 }]) {
+    const state = profile(); state.layout = layout;
+    const before = JSON.stringify(state);
+    const widths = context.getProfileColumnWidths(layout);
+    const html = render(state);
+    assert.ok(html.includes(`grid-template-columns: ${widths.leftColWidth}px ${widths.middleColWidth}px ${widths.rightColWidth}px;`));
+    assert.equal(widths.leftColWidth + widths.middleColWidth + widths.rightColWidth + 52, 1600);
+    assert.equal(JSON.stringify(state), before);
+  }
+});
+
+test('downloaded and embedded exports fit small hosts without clipping or losing below-fold content', () => {
+  for (const mode of ['b2c', 'b2b']) {
+    const html = render(profile(mode));
+    assert.match(html, /id="upg-render-host"><div id="upg-render-canvas"/);
+    const script = parseHTML(html).scripts.at(-2);
+    const host = { style: {} }, canvas = { style: {}, scrollHeight: 900 };
+    const listeners = {};
+    let observer, reports = 0;
+    const window = { innerWidth: 1366, innerHeight: 768, addEventListener: (event, fn) => { listeners[event] = fn; }, upgReportLayout: () => reports++ };
+    const document = { documentElement: { style: {} }, body: { style: {} }, getElementById: id => id === 'upg-render-host' ? host : canvas };
+    class ResizeObserver { constructor(callback) { observer = callback; } observe(element) { assert.equal(element, canvas); } }
+    vm.runInNewContext(script, { window, document, ResizeObserver });
+    assert.equal(canvas.style.transform, 'scale(0.8533333333333334)');
+    assert.equal(host.style.height, '768px');
+    assert.equal(document.body.style.width, '100%');
+    canvas.scrollHeight = 1200; observer();
+    assert.equal(host.style.height, '1024px', 'extended content remains reachable by normal page scrolling');
+    window.innerWidth = 1920; window.innerHeight = 1080; listeners.resize();
+    assert.equal(canvas.style.transform, 'scale(1.2)');
+    assert.equal(canvas.style.left, '0px');
+    assert.equal(host.style.height, '1440px');
+    window.innerWidth = 900; window.innerHeight = 900; listeners.resize();
+    assert.equal(canvas.style.transform, 'scale(0.5625)');
+    assert.equal(host.style.height, '675px');
+    assert.ok(reports >= 4);
+    assert.deepEqual(Object.keys(listeners), ['resize', 'load']);
+  }
+});
+
+test('scaled exports report logical layout size rather than transformed host size', () => {
+  const state = profile(); state._renderRevision = 'scaled-view';
+  const script = parseHTML(render(state)).scripts.at(-1), messages = [];
+  const window = { innerHeight: 450, parent: { postMessage: message => messages.push(message) }, addEventListener() {} };
+  const document = { readyState: 'complete', getElementById: () => ({ scrollHeight: 1100 }) };
+  vm.runInNewContext(script, { window, document });
+  assert.equal(messages[0].height, 1100);
+  assert.equal(messages[0].viewport, 900);
+});
+
 test('both templates preserve every visible extra identity field and escape its content', () => {
   for (const mode of ['b2c', 'b2b']) {
     const state = profile(mode);
@@ -212,7 +278,7 @@ test('hostile rich-text, image, color and revision values cannot add executable 
     state.activity.items[0].icon = '<svg onload=bad()></svg>';
     state._renderRevision = '</script><img src=x onerror=bad()>';
     const html = render(state), parsed = parseHTML(html);
-    assert.equal(parsed.scripts.length, mode === 'b2b' ? 2 : 1);
+    assert.equal(parsed.scripts.length, mode === 'b2b' ? 3 : 2);
     parsed.scripts.forEach(script => assert.doesNotThrow(() => new vm.Script(script)));
     assert.ok(parsed.tags.every(tag => !Object.keys(tag.attrs).some(key => /^on/i.test(key))));
     assert.ok(parsed.tags.every(tag => !/^(javascript:|data:text\/html)/i.test(tag.attrs.src || '')));
@@ -233,7 +299,7 @@ test('both templates report layout after images and fonts settle without scroll 
     const script = parseHTML(render(state)).scripts.at(-1);
     const listeners = {}, messages = [];
     const window = { parent: { postMessage: (message, origin) => messages.push({ message, origin }) }, innerHeight: 860, addEventListener: (name, fn) => { listeners[name] = fn; } };
-    const document = { documentElement: { scrollHeight: 1100 }, body: { scrollHeight: 1090 }, readyState: 'loading', fonts: { ready: Promise.resolve() } };
+    const document = { getElementById: () => null, documentElement: { scrollHeight: 1100 }, body: { scrollHeight: 1090 }, readyState: 'loading', fonts: { ready: Promise.resolve() } };
     vm.runInNewContext(script, { window, document });
     await Promise.resolve();
     assert.equal(messages.length, 1);
