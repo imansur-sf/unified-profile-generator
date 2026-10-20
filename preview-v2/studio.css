@@ -6,7 +6,7 @@
   --studio-border: #d8dfe8;
   --studio-blue: #075dcc;
   --studio-soft-blue: #edf4ff;
-  --studio-canvas: #f5f6f8;
+  --studio-canvas: #f4f7fc;
   --studio-radius: .875rem;
 }
 body.studio-app {
@@ -31,16 +31,17 @@ body.studio-app {
 .studio-preview-notice { display: flex; align-items: center; justify-content: space-between; gap: 1rem; padding: .5rem 1.5rem; background: #edf3fc; border-bottom: 1px solid #d5e2f4; color: #354c6a; font-size: .75rem; }
 .studio-preview-notice strong { color: #193d70; margin-right: .375rem; }
 .studio-preview-notice a { color: #164e99; white-space: nowrap; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
-.studio-app .app-topbar { background: rgba(255,255,255,.97); color: var(--studio-ink); box-shadow: 0 1px 0 rgba(23,36,55,.08); backdrop-filter: blur(16px); }
-.studio-app .studio-header-inner { max-width: 1920px; min-height: 4.5rem; padding: .375rem 1.5rem; gap: 1.5rem; }
+.studio-app .app-topbar { background: linear-gradient(110deg, #001e5b 0%, #022ac0 55%, #075dcc 100%); color: #fff; box-shadow: 0 2px 12px rgba(0,30,91,.16); border-bottom: 2px solid #00b3ff; }
+.studio-app .studio-header-inner { max-width: 1920px; min-height: 4.75rem; padding: .375rem 1.5rem; gap: 1.5rem; }
 .studio-brand { min-width: 0; }
-.studio-brand > div:first-child { width: 3rem; height: 3rem; flex-shrink: 0; }
-.studio-app .app-topbar h1 { color: #102a4d; font-size: 1.0625rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
-.studio-brand .uppercase { color: #5b7089; font-size: .625rem; letter-spacing: .14em; line-height: 1.8; }
+/* Match the original w-16/h-16 logo at every breakpoint, without shrinking. */
+.studio-brand > div:first-child { width: 4rem; height: 4rem; flex-shrink: 0; }
+.studio-app .app-topbar h1 { color: #fff; font-size: 1.0625rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
+.studio-brand .uppercase { color: #dceaff; font-size: .625rem; letter-spacing: .14em; line-height: 1.8; }
 .studio-header-actions { flex-shrink: 0; }
-.studio-app .btn-topbar { background: transparent; color: #34475e; border-color: var(--studio-border); font-size: .8125rem; border-radius: .625rem; min-height: 2.5rem; }
-.studio-app .btn-topbar:hover { background: #f3f6fa; border-color: #bac8d8; }
-.studio-app .studio-start-over { border-color: transparent; color: #5a6878; }
+.studio-app .btn-topbar { background: rgba(0,30,91,.24); color: #fff; border-color: #91b8ef; font-size: .8125rem; border-radius: .625rem; min-height: 2.5rem; }
+.studio-app .btn-topbar:hover { background: rgba(0,30,91,.44); border-color: #fff; }
+.studio-app .studio-start-over { border-color: transparent; color: #fff; }
 .studio-app #account-initial { background: #e7f0ff; color: var(--studio-blue); }
 .studio-app #account-menu { right: 0; }
 .studio-button, .studio-app .btn-primary-sf, .studio-app .btn-secondary-sf {
@@ -58,6 +59,16 @@ body.studio-app {
 .studio-menu > summary { list-style: none; cursor: pointer; }
 .studio-menu > summary::-webkit-details-marker { display: none; }
 .studio-menu[open] > summary { background: var(--studio-soft-blue); border-color: #a7c6ef; }
+/* Only toolbar controls invert; dropdowns retain their readable light surface. */
+.studio-header-actions > .studio-button,
+.studio-header-actions > .studio-menu > summary { background: rgba(0,30,91,.24); color: #fff; border-color: #91b8ef; }
+.studio-header-actions > .studio-button:hover,
+.studio-header-actions > .studio-menu > summary:hover,
+.studio-header-actions > .studio-menu[open] > summary { background: rgba(0,30,91,.44); color: #fff; border-color: #fff; }
+.studio-header-actions > .studio-button-primary { background: #fff; color: #064eb2; border-color: #fff; }
+.studio-header-actions > .studio-button-primary:hover { background: #eaf3ff; color: #064eb2; border-color: #eaf3ff; }
+.studio-header-actions > button:focus-visible,
+.studio-header-actions > .studio-menu > summary:focus-visible { outline-color: #fff; }
 .studio-menu-surface { position: absolute; right: 0; top: calc(100% + .5rem); width: 15rem; padding: .375rem; border: 1px solid var(--studio-border); border-radius: .875rem; background: white; box-shadow: 0 12px 36px rgba(15,35,65,.14); z-index: 65; transform-origin: top right; animation: studio-menu-in .12s ease-out; }
 .studio-menu-surface button { display: block; width: 100%; padding: .625rem .75rem; text-align: left; border-radius: .5rem; font-size: .875rem; color: #24374e; font-weight: 600; }
 .studio-menu-surface button:hover { background: #eff4fb; }
@@ -92,9 +103,9 @@ body.studio-app {
 .studio-app #persona-picker { display: flex; gap: .25rem; width: fit-content; max-width: 100%; padding: .25rem; margin: 0 0 1rem; background: #e8ecf2; border: 1px solid #dfe4eb; border-radius: .75rem; overflow-x: auto; }
 .studio-app .persona-option { flex: 0 0 auto; min-height: 2.375rem; padding: .5rem .875rem; border: 1px solid transparent; border-radius: .5rem; color: #45546a; background: transparent; font-size: .8125rem; font-weight: 550; white-space: nowrap; transition: background .12s, color .12s; }
 .studio-app .persona-option:hover { color: #102a4c; background: #f4f6f9; }
-.studio-app .persona-option.active { color: #084f9e; border-color: #d4dde9; background: white; box-shadow: 0 1px 3px #132a4710; }
+.studio-app .persona-option.active { color: #fff; border-color: var(--studio-blue); background: var(--studio-blue); box-shadow: 0 1px 3px #132a4710; }
 .studio-app .preview-shell { border-radius: .75rem; border: 1px solid #d4dce6; box-shadow: 0 4px 20px rgba(27,47,76,.06); background: white; }
-.studio-app .preview-chrome { background: white; border-bottom: 1px solid #e4e9f0; padding: .625rem .875rem; font-size: .75rem; font-weight: 500; color: #52647a; gap: .5rem; }
+.studio-app .preview-chrome { background: #f0f5ff; border-bottom: 1px solid #d6e4f8; padding: .625rem .875rem; font-size: .75rem; font-weight: 500; color: #365879; gap: .5rem; }
 .studio-live-dot { width: .375rem; height: .375rem; border-radius: 50%; background: #238461; }
 .studio-canvas-size { margin-left: auto; font-size: .6875rem; color: #5a6b7f; }
 .studio-preview-expand { padding: .25rem .5rem; margin-left: .25rem; min-height: 2rem; color: #195497; border: 1px solid #dae3ef; border-radius: .375rem; }
@@ -290,15 +301,17 @@ body.studio-app {
   .studio-app button:active:not(:disabled), .studio-app summary:active { transform: none; }
 }
 @media (prefers-reduced-transparency: reduce) {
-  .studio-app .app-topbar { background: #fff; backdrop-filter: none; }
+  .studio-app .app-topbar { background: #001e5b; backdrop-filter: none; }
 }
 @media (prefers-contrast: more) {
   .studio-app { --studio-border: #77889e; --studio-muted: #35475f; }
-  .studio-app .app-topbar { background: #fff; backdrop-filter: none; border-bottom: 1px solid #77889e; }
+  .studio-app .app-topbar { background: #001e5b; backdrop-filter: none; border-bottom: 1px solid #91b8ef; }
   .studio-app .wizard-card, .studio-app .quickstart, .studio-app .preview-shell { border-color: #77889e; }
   .studio-app .studio-field-help, .studio-app .quickstart-sub, .studio-app .editor-note, .studio-app .studio-preview-note { color: #35475f; }
 }
 @media (forced-colors: active) {
+  .studio-app .app-topbar { background: Canvas; color: CanvasText; border-bottom-color: CanvasText; }
+  .studio-app .app-topbar h1, .studio-brand .uppercase { color: CanvasText; }
   .studio-app .persona-option.active, .studio-app .step-dot.active { outline: 2px solid Highlight; }
   .studio-app .composer-drop-marker { background: Highlight; forced-color-adjust: none; }
 }

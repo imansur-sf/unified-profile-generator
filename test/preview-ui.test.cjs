@@ -45,6 +45,37 @@ test('visual-recovery link inherits a readable color on the light inspector surf
   assert.match(css, /\.studio-app \.quickstart-settings-toggle \{ color: #335e90/);
 });
 
+test('preview branding retains the original logo size and readable blue accents', () => {
+  const original = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
+  assert.match(original, /class="w-16 h-16 flex items-center justify-center overflow-hidden"/);
+  assert.match(css, /\.studio-brand > div:first-child \{ width: 4rem; height: 4rem; flex-shrink: 0; \}/);
+  assert.match(css, /\.studio-app \.app-topbar \{ background: linear-gradient\(110deg, #001e5b 0%, #022ac0 55%, #075dcc 100%\); color: #fff/);
+  assert.match(css, /\.studio-app \.persona-option.active \{ color: #fff; border-color: var\(--studio-blue\); background: var\(--studio-blue\)/);
+  assert.match(css, /\.studio-header-actions > \.studio-button-primary \{ background: #fff; color: #064eb2/);
+  assert.match(css, /\.studio-header-actions > \.studio-menu > summary:focus-visible \{ outline-color: #fff/);
+  for (const preference of ['prefers-reduced-transparency', 'prefers-contrast']) {
+    const block = css.slice(css.indexOf(`@media (${preference}:`) + '@media'.length).split('@media')[0];
+    assert.match(block, /\.studio-app \.app-topbar \{ background: #001e5b/);
+  }
+  const luminance = hex => {
+    const rgb = hex.match(/[a-f\d]{2}/gi).map(value => {
+      const channel = parseInt(value, 16) / 255;
+      return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4;
+    });
+    return rgb[0] * .2126 + rgb[1] * .7152 + rgb[2] * .0722;
+  };
+  const contrast = (a, b) => {
+    const values = [luminance(a), luminance(b)].sort((a, b) => b - a);
+    return (values[0] + .05) / (values[1] + .05);
+  };
+  for (const background of ['001e5b', '022ac0', '075dcc']) {
+    assert.ok(contrast('ffffff', background) >= 4.5, `Header text on #${background}`);
+    assert.ok(contrast('dceaff', background) >= 4.5, `Header subtitle on #${background}`);
+  }
+  assert.ok(contrast('ffffff', '075dcc') >= 4.5, 'Selected view');
+  assert.ok(contrast('064eb2', 'ffffff') >= 4.5, 'Primary toolbar action');
+});
+
 function harness() {
   const elements = new Map();
   const calls = [];

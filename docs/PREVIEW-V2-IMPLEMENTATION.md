@@ -71,6 +71,18 @@ Focus mode, header save/present/export controls, and persistent feedback reduce
 trips through the wizard. Motion is brief and respects reduced-motion settings.
 The generated Salesforce profile design is deliberately unchanged.
 
+### Preview branding follow-up
+
+At the user's request, the preview restores a navy-to-blue header, a cyan edge,
+blue selected-view controls and a softly blue preview toolbar. The SaaSy logo
+matches the original `w-16 h-16` size (4rem / 64px at default text size), without
+shrinking on narrow screens. Light editing surfaces and the redesigned spacing
+remain. Header actions, dropdowns, keyboard focus and accessibility preference
+fallbacks keep contrasting colors. No original frontend or generation logic was
+changed. Verification: 196 automated tests and 16 DOM checks passed, including
+logo-size and foreground/background contrast assertions; no browser paint check
+was available.
+
 An additional regression was found during the DOM workflow audit: simply visiting
 a queued view caused native color-input normalization and empty optional fields
 to look like manual edits. Preview generation now compares those equivalent values
