@@ -210,6 +210,23 @@ app.use((err, req, res, next) => {
   }
   return next(err);
 });
+// The trial editor has its own frontend. It deliberately shares the existing
+// root API/auth routes, never the production editor's scripts or draft store.
+// Express's default string route also matches the trailing-slash destination;
+// explicitly pass that through to static serving to avoid a redirect loop.
+app.get('/preview-v2', (req, res, next) => {
+  if (req.path !== '/preview-v2') return next();
+  const query = req.originalUrl.includes('?') ? req.originalUrl.slice(req.originalUrl.indexOf('?')) : '';
+  res.redirect(307, `/preview-v2/${query}`);
+});
+app.use('/preview-v2/assets', express.static(path.join(__dirname, 'assets'), { maxAge: '1h' }));
+app.use('/preview-v2', express.static(path.join(__dirname, 'preview-v2'), {
+  index: 'index.html', maxAge: 0,
+  setHeaders(res) { res.setHeader('Cache-Control', 'no-store'); res.setHeader('X-UPG-Editor', 'preview-v2'); }
+}));
+// Missing preview modules must fail visibly, not receive the production HTML
+// catch-all (which would hide a broken deployment behind a script parse error).
+app.use('/preview-v2', (req, res) => res.status(404).type('text/plain').send('Preview file not found.'));
 app.use(express.static(path.join(__dirname), { extensions: ['html'], maxAge: '1h' }));
 app.get('*', (req, res) => { res.sendFile(path.join(__dirname, 'index.html')); });
 if (require.main === module) app.listen(PORT, '::', () => { console.log(`unified-profile-generator running on port ${PORT} (IPv6 dual-stack)`); console.log(`LLM backend: ${GEMINI_API_KEY ? 'Gemini API configured' : 'NOT configured (set GEMINI_API_KEY)'}`); });

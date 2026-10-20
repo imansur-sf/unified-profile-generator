@@ -1,0 +1,2950 @@
+// ============================================================
+// app.js — Wizard flow, state, live preview, export
+// ============================================================
+
+const TOTAL_STEPS = 7;
+let currentStep = 0;
+const personaVisualRequests = new Map();
+const personaTextRequests = new Map();
+let generationRunId = 0;
+let renderRevision = 0;
+const MAX_SAVED_PROJECT_BYTES = 18 * 1024 * 1024;
+// Start with a complete, presentation-ready B2C story. Industry templates
+// remain available whenever the user changes industry or starts a B2B build.
+let state = cloneTonyRobbinsStarter();
+
+const B2B_SECTION_DEFAULTS = {
+  overviewMetrics: true, overviewDetails: true, overviewSignals: true,
+  peopleStakeholders: true, salesProducts: true, salesActions: true,
+  successInsights: true, relatedActivity: true
+};
+
+const B2C_SECTION_DEFAULTS = {
+  affinities: true, preferences: true, events: true,
+  membership: true, recommendations: true, activity: true
+};
+
+// The profile entity (B2C/B2B) and the viewer's job are separate choices.
+// These presets are the first module registry: a persona chooses a focused
+// one-screen composition while the user can still toggle individual modules.
+const PERSONA_PRESETS = {
+  sales: {
+    label: 'Sales', objective: 'convert',
+    blueprint: 'Prioritizes commercial fit, purchase signals, and the next action that moves an opportunity forward.',
+    b2c: { insights: 'Revenue & Propensity Insights', affinities: 'Purchase & Engagement Signals', preferences: 'Buying Preferences', events: 'Recent Commercial Touchpoints', membership: 'Products & Offers', recommendations: 'Einstein Sales Recommendations', activity: 'Sales & Engagement Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Sales & Growth Insights', affinities: 'Buying & Expansion Signals', preferences: 'Account Buying Context', events: 'Buying Committee', membership: 'Products & Commercials', recommendations: 'Next Best Sales Actions', activity: 'Commercial Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  service: {
+    label: 'Service', objective: 'resolve',
+    blueprint: 'Elevates churn risk, support context, product entitlements, and retention-oriented service actions.',
+    b2c: { insights: 'Retention & Service Insights', affinities: 'Churn Risk Indicators', preferences: 'Service Preferences', events: 'Case & Service Timeline', membership: 'Entitlements & Coverage', recommendations: 'Einstein Service Recommendations', activity: 'Service & Support Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Health & Churn Risk Insights', affinities: 'Account Risk Indicators', preferences: 'Service Coverage', events: 'Support Stakeholders', membership: 'Entitlements & Contracts', recommendations: 'Next Best Service Actions', activity: 'Service & Support Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  marketing: {
+    label: 'Marketing', objective: 'engage',
+    blueprint: 'Emphasizes journey stage, content and channel signals, and the best next engagement motion.',
+    b2c: { insights: 'Marketing Propensity Insights', affinities: 'Content & Channel Affinities', preferences: 'Channel & Consent Preferences', events: 'Journey & Campaign Timeline', membership: 'Program Enrollment', recommendations: 'Next Best Content', activity: 'Journey Engagement Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Account Engagement Insights', affinities: 'Content & Intent Signals', preferences: 'Account Channel Preferences', events: 'Campaign & Journey Stakeholders', membership: 'Programs & Subscriptions', recommendations: 'Next Best Marketing Actions', activity: 'Journey & Campaign Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  success: {
+    label: 'Customer Success', objective: 'retain',
+    blueprint: 'Centers account health, adoption, renewal readiness, and actions that protect and expand value.',
+    b2c: { insights: 'Customer Health Insights', affinities: 'Adoption & Health Signals', preferences: 'Success Preferences', events: 'Milestones & Touchpoints', membership: 'Products & Adoption', recommendations: 'Next Best Success Actions', activity: 'Success & Adoption Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Customer Health Insights', affinities: 'Adoption & Renewal Signals', preferences: 'Success Plan Details', events: 'Success Stakeholders', membership: 'Products & Adoption', recommendations: 'Next Best Success Actions', activity: 'Success & Adoption Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  },
+  custom: {
+    label: 'Custom profile', objective: 'engage',
+    blueprint: 'Uses the role and decision request you provide to focus the profile on the most useful signals and actions.',
+    b2c: { insights: 'Decision-Ready Insights', affinities: 'Behavior & Context Signals', preferences: 'Relevant Preferences', events: 'Recent Touchpoints', membership: 'Programs & Relationships', recommendations: 'Recommended Actions', activity: 'Relevant Activity', sections: { affinities: true, preferences: true, events: true, membership: true, recommendations: true, activity: true } },
+    b2b: { insights: 'Account Decision Insights', affinities: 'Account Signals', preferences: 'Account Context', events: 'Key Relationships', membership: 'Products & Agreements', recommendations: 'Recommended Actions', activity: 'Account Activity', sections: { overviewMetrics: true, overviewDetails: true, overviewSignals: true, peopleStakeholders: true, salesProducts: true, salesActions: true, successInsights: true, relatedActivity: true } }
+  }
+};
+
+function getProfileStrategy(target = state) {
+  target.profileStrategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, target.profileStrategy || {});
+  if (!PERSONA_PRESETS[target.profileStrategy.lens]) target.profileStrategy.lens = 'sales';
+  return target.profileStrategy;
+}
+
+const STANDARD_PERSONA_LENSES = ['sales', 'service', 'marketing', 'success'];
+
+function ensureProfileSet(target = state) {
+  if (!target.profileSet || typeof target.profileSet !== 'object') {
+    target.profileSet = { selectedLenses: [...STANDARD_PERSONA_LENSES], briefs: {}, statuses: {}, visuals: {}, customRole: '' };
+  }
+  if (!Array.isArray(target.profileSet.selectedLenses)) target.profileSet.selectedLenses = [...STANDARD_PERSONA_LENSES];
+  if (!target.profileSet.briefs || typeof target.profileSet.briefs !== 'object') target.profileSet.briefs = {};
+  if (!target.profileSet.statuses || typeof target.profileSet.statuses !== 'object') target.profileSet.statuses = {};
+  if (!target.profileSet.visuals || typeof target.profileSet.visuals !== 'object') target.profileSet.visuals = {};
+  if (typeof target.profileSet.customRole !== 'string') target.profileSet.customRole = '';
+  return target.profileSet;
+}
+
+function getPersonaBrief(target = state, lens = getProfileStrategy(target).lens) {
+  return String(ensureProfileSet(target).briefs[lens] || '');
+}
+
+function setPersonaBrief(target = state, lens, brief) {
+  ensureProfileSet(target).briefs[lens] = String(brief || '');
+}
+
+function readProfileSetConfig() {
+  const selectedLenses = Array.from(document.querySelectorAll('.profile-set-choices input:checked')).map(input => input.value);
+  const customRole = document.getElementById('profile-set-custom-role')?.value.trim() || '';
+  const customBrief = document.getElementById('profile-set-custom-brief')?.value.trim() || '';
+  return {
+    selectedLenses: selectedLenses.length ? selectedLenses : ['sales'],
+    briefs: Object.assign({}, ensureProfileSet().briefs, selectedLenses.includes('custom') ? { custom: customBrief || getPersonaBrief(state, 'custom') } : {}),
+    strategies: Object.fromEntries(selectedLenses.map(lens => [lens, Object.assign({}, state.personaVariants?.[lens]?.strategy || {}, getProfileStrategy().lens === lens ? getProfileStrategy() : {})])),
+    customRole
+  };
+}
+
+function syncProfileSetConfigUI() {
+  const profileSet = ensureProfileSet();
+  document.querySelectorAll('.profile-set-choices input').forEach(input => { input.checked = profileSet.selectedLenses.includes(input.value); });
+  const customRole = document.getElementById('profile-set-custom-role');
+  const customBrief = document.getElementById('profile-set-custom-brief');
+  if (customRole) customRole.value = profileSet.customRole || '';
+  if (customBrief) customBrief.value = profileSet.briefs.custom || '';
+  onProfileSetCustomToggle();
+}
+
+function onProfileSetCustomToggle() {
+  const enabled = Boolean(document.querySelector('.profile-set-choices input[value="custom"]:checked'));
+  const fields = document.getElementById('profile-set-custom-fields');
+  if (fields) fields.hidden = !enabled;
+}
+
+function getProfileStrategyLabel(strategy = getProfileStrategy()) {
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
+  if (strategy.lens !== 'custom') return preset.label;
+  return String(strategy.customRole || '').trim().slice(0, 64) || preset.label;
+}
+
+function applyPersonaPreset(target = state) {
+  const strategy = getProfileStrategy(target);
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
+  const content = target.profileType === 'b2b' ? preset.b2b : preset.b2c;
+  target.insights.title = content.insights;
+  target.affinities.title = content.affinities;
+  target.preferences.title = content.preferences;
+  target.events.title = content.events;
+  target.membership.title = content.membership;
+  target.recommendations.title = content.recommendations;
+  target.activity.title = content.activity;
+  if (target.profileType === 'b2b') {
+    target.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, content.sections, target.b2bSections || {});
+  } else {
+    target.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, content.sections, target.b2cSections || {});
+  }
+}
+
+// These are deliberate, fictional starter stories for presenters who choose
+// to build manually. Website analysis replaces them with AI-tailored content;
+// changing personas swaps the working story without changing the customer or
+// account identity in the left rail.
+const PERSONA_SAMPLE_LIBRARY = {
+  sales: {
+    b2c: {
+      insights: [['🎯', 'Purchase Propensity', '84% · High'], ['💸', 'Estimated Value', '$1,240'], ['↗', 'Offer Engagement', '3 high-intent actions'], ['◉', 'Decision Readiness', 'Active research'], ['📅', 'Last Commercial Touch', '2 days ago'], ['✦', 'Cross-sell Fit', 'Strong']],
+      series: ['Research activity', 'Purchase intent'], groups: [['Commercial interest', [['Premium plan', 84, 78], ['Expert consultation', 72, 69]]], ['Offer signals', [['Pricing page', 76, 81], ['Product comparison', 68, 74]]]],
+      preferences: [['Preferred outreach', 'SMS then email'], ['Decision timing', 'Next 30 days'], ['Primary interest', 'Premium experience'], ['Best contact time', 'Weekday evening']], events: [['Product consultation', 'Sep 18, 2026', 'Booked'], ['Offer comparison', 'Sep 12, 2026', 'Viewed']], membership: [['Current plan', 'Core membership'], ['Recommended offer', 'Premium upgrade']],
+      recommendations: [['High intent', 'Schedule a tailored product consultation', 'Open play'], ['Offer fit', 'Share the premium value comparison', 'Send offer']], activity: [['↗', 'Pricing page revisited', 'Viewed pricing for the <b>third time</b>', '2 hours ago'], ['🎯', 'Consultation interest', 'Requested product details through chat', '1 day ago'], ['✦', 'Offer engagement', 'Clicked the <b>premium comparison</b>', '2 days ago']], extra: ['Commercial Context', '💼', [['Open opportunity', 'Premium upgrade'], ['Preferred motion', 'Consultative']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.42M', revenueTrend: '↑ 9% MoM', pipeline: '$510K', usageScore: '76%', usageTrend: '↑ 5% MoM', activeUsers: '346 active users', healthScore: '81%', healthTrend: '↑ 4% MoM', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '79% utilization' },
+      insights: [['↗', 'Expansion Propensity', '78% · High'], ['💰', 'Open Pipeline', '$510K'], ['◉', 'Buying Committee', '7 of 9 roles mapped'], ['✦', 'Champion Strength', 'Strong'], ['▦', 'Product Adoption', '76%'], ['⚠', 'Renewal Risk', 'Low']], series: ['Contact research', 'Account intent'], groups: [['Expansion interest', [['Analytics', 82, 77], ['Automation', 71, 74]]], ['Buying motion', [['Pricing review', 76, 81], ['Executive engagement', 68, 73]]]],
+      preferences: [['Commercial owner', 'Morgan Lee'], ['Buying motion', 'Expansion with renewal'], ['Budget cycle', 'Q4 planning'], ['Procurement path', 'Standard review']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Analytics', 'Expansion opportunity'], ['Renewal', 'Nov 30, 2026']], recommendations: [['High intent', 'Align champion on the Analytics expansion case', 'Activate'], ['Pipeline action', 'Schedule executive value review', 'Suggest']], activity: [['↗', 'Pipeline advanced', 'Analytics opportunity moved to <b>solution review</b>', 'Today'], ['◉', 'Champion engaged', 'Reviewed the <b>value realization brief</b>', '2 days ago'], ['✦', 'Executive signal', 'Sponsor joined the expansion workshop', '1 week ago']], extra: ['Commercial Plan', '💼', [['Open pipeline', '$510K'], ['Next milestone', 'Executive value review']]]
+    }
+  },
+  service: {
+    b2c: {
+      insights: [['⚠', 'Churn Risk', 'Moderate · Needs attention'], ['🎧', 'Open Service Case', '1 active case'], ['💚', 'Customer Sentiment', 'Declining'], ['📅', 'Last Successful Contact', '12 days ago'], ['◉', 'Resolution Confidence', '72%'], ['✦', 'Save Opportunity', 'High']], series: ['Support signals', 'Risk intensity'], groups: [['Risk indicators', [['Repeated issue', 74, 82], ['Low engagement', 67, 76]]], ['Service context', [['Self-service use', 58, 44], ['Knowledge content', 71, 53]]]],
+      preferences: [['Preferred support channel', 'Email'], ['Contact preference', 'Detailed updates'], ['Service tier', 'Priority'], ['Best resolution time', 'Weekday morning']], events: [['Case #84721 opened', 'Sep 16, 2026', 'In progress'], ['Support article viewed', 'Sep 14, 2026', 'Troubleshooting guide']], membership: [['Coverage', 'Priority support'], ['Current entitlement', 'Annual service plan']], recommendations: [['Retention action', 'Proactively resolve the active issue', 'Open case'], ['Save play', 'Offer a guided success check-in', 'Apply play']], activity: [['⚠', 'Case reopened', 'Customer reported the issue is <b>not yet resolved</b>', 'Today'], ['🎧', 'Support interaction', 'Shared troubleshooting steps by email', '2 days ago'], ['💬', 'Sentiment signal', 'Survey comment indicates <b>friction</b>', '5 days ago']], extra: ['Service Context', '🎧', [['Case priority', 'High'], ['Recommended owner', 'Retention specialist']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↓ 3% MoM', pipeline: '$180K', usageScore: '61%', usageTrend: '↓ 12% MoM', activeUsers: '214 active users', healthScore: '63%', healthTrend: '↓ 9% MoM', supportCases: '5 open cases', renewalDate: 'Nov 30, 2026', utilization: '64% utilization' },
+      insights: [['⚠', 'Account Churn Risk', 'Elevated'], ['🎧', 'Support Escalations', '2 active'], ['💚', 'Account Health', '63% · At risk'], ['◉', 'Coverage Gap', '3 critical roles'], ['▦', 'Adoption Risk', 'Declining'], ['✦', 'Save Opportunity', 'High']], series: ['Support signals', 'Account risk'], groups: [['Risk indicators', [['Open escalations', 82, 88], ['Usage decline', 75, 84]]], ['Service engagement', [['Knowledge use', 61, 43], ['Case response', 72, 58]]]],
+      preferences: [['Support tier', 'Priority'], ['Escalation owner', 'Morgan Lee'], ['Response SLA', '4 business hours'], ['Renewal status', 'At risk']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Service Champion', 'Director, Platform'], ['Jordan Kim', 'Escalation Contact', 'VP, Technology']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Support coverage', 'Priority Success'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Retention action', 'Launch an executive escalation review', 'Activate'], ['Service action', 'Resolve the two recurring platform issues', 'Open cases']], activity: [['⚠', 'Escalation created', 'Two high-priority issues are <b>awaiting review</b>', 'Today'], ['📉', 'Usage declined', 'Active users fell <b>12% month over month</b>', '3 days ago'], ['🎧', 'Case trend', 'Three contacts reported the same workflow issue', '1 week ago']], extra: ['Service Recovery Plan', '🛟', [['Critical issue', 'Workflow reliability'], ['Next milestone', 'Executive escalation review']]]
+    }
+  },
+  marketing: {
+    b2c: {
+      insights: [['✦', 'Journey Stage', 'Consideration'], ['📨', 'Email Engagement', '62% open · 18% click'], ['🎯', 'Conversion Propensity', '76%'], ['◉', 'Content Affinity', 'How-to guides'], ['📅', 'Last Campaign Touch', 'Yesterday'], ['💚', 'Channel Health', 'Strong']], series: ['Content engagement', 'Conversion signal'], groups: [['Content themes', [['Product education', 84, 73], ['Customer stories', 71, 65]]], ['Channel signals', [['Email', 76, 69], ['Web personalization', 68, 61]]]],
+      preferences: [['Preferred channel', 'Email + web'], ['Consent status', 'Subscribed'], ['Content format', 'How-to video'], ['Frequency', 'Weekly']], events: [['Education nurture journey', 'Sep 15, 2026', 'Active'], ['Product webinar', 'Sep 10, 2026', 'Registered']], membership: [['Current journey', 'Education nurture'], ['Campaign eligibility', 'Product launch']], recommendations: [['Next best content', 'Send the advanced product guide', 'Send content'], ['Journey action', 'Personalize the next website visit', 'Activate']], activity: [['📨', 'Email clicked', 'Clicked <b>advanced product guide</b>', 'Today'], ['🌐', 'Website return', 'Returned to the product comparison page', '1 day ago'], ['▶', 'Video completed', 'Watched 82% of the onboarding video', '3 days ago']], extra: ['Journey Context', '🧭', [['Current stage', 'Consideration'], ['Next milestone', 'Webinar attendance']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↑ 4% MoM', pipeline: '$350K', usageScore: '73%', usageTrend: '↑ 8% MoM', activeUsers: '328 active users', healthScore: '80%', healthTrend: '↑ 3% MoM', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '78% utilization' },
+      insights: [['✦', 'Account Intent', 'High'], ['📨', 'Campaign Engagement', '18 engaged contacts'], ['🎯', 'Marketing Qualified', 'Ready for sales'], ['◉', 'Buying Group Reach', '6 roles engaged'], ['▦', 'Content Resonance', 'Product education'], ['💚', 'Channel Health', 'Strong']], series: ['Contact engagement', 'Account intent'], groups: [['Content themes', [['Product education', 83, 76], ['Customer proof', 72, 68]]], ['Journey signals', [['Webinar interest', 75, 81], ['Website return', 68, 73]]]],
+      preferences: [['Preferred channel', 'Email + webinar'], ['Consent coverage', '18 marketable contacts'], ['Journey stage', 'Solution education'], ['Campaign owner', 'Morgan Lee']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Marketing Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Program', 'Executive nurture'], ['Subscription', 'Product education']], recommendations: [['Next best content', 'Invite the buying group to the value webinar', 'Activate'], ['Journey action', 'Launch account-personalized nurture', 'Suggest']], activity: [['📨', 'Campaign engaged', 'Six contacts clicked the <b>value webinar</b> invitation', 'Today'], ['🌐', 'Account research', 'Buying group returned to solution pages', '2 days ago'], ['▶', 'Content completed', 'Champion watched the adoption story video', '5 days ago']], extra: ['Campaign Context', '📣', [['Active program', 'Executive nurture'], ['Next milestone', 'Value webinar']]]
+    }
+  },
+  success: {
+    b2c: {
+      insights: [['💚', 'Customer Health', '78% · Healthy'], ['▦', 'Product Adoption', '72%'], ['📅', 'Renewal Readiness', 'On track'], ['🎯', 'Expansion Fit', 'Moderate'], ['◉', 'Milestone Progress', '4 of 5 complete'], ['✦', 'Advocacy Potential', 'High']], series: ['Adoption signal', 'Health contribution'], groups: [['Adoption areas', [['Core workflow', 78, 74], ['Advanced feature', 61, 58]]], ['Success signals', [['Milestone completion', 83, 77], ['Value realization', 72, 69]]]],
+      preferences: [['Success channel', 'Video check-in'], ['Primary goal', 'Advance proficiency'], ['Check-in cadence', 'Monthly'], ['Learning format', 'Guided workshop']], events: [['Success milestone', 'Sep 17, 2026', 'Completed'], ['Value review', 'Sep 5, 2026', 'Scheduled']], membership: [['Current plan', 'Premium membership'], ['Adoption program', 'Guided success']], recommendations: [['Success action', 'Celebrate the completed milestone', 'Send note'], ['Adoption action', 'Recommend the advanced-feature workshop', 'Activate']], activity: [['🏁', 'Milestone completed', 'Finished the <b>core workflow</b> milestone', 'Today'], ['▦', 'Adoption increased', 'Used advanced features in three sessions', '3 days ago'], ['💚', 'Health improved', 'Customer health improved <b>6 points</b>', '1 week ago']], extra: ['Success Context', '🌱', [['Primary goal', 'Advance proficiency'], ['Next milestone', 'Advanced workflow workshop']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: '↑ 6% MoM', pipeline: '$290K', usageScore: '82%', usageTrend: '↑ 10% MoM', activeUsers: '386 active users', healthScore: '86%', healthTrend: '↑ 7% MoM', supportCases: '1 open case', renewalDate: 'Nov 30, 2026', utilization: '84% utilization' },
+      insights: [['💚', 'Account Health', '86% · Healthy'], ['▦', 'Product Adoption', '82%'], ['📅', 'Renewal Readiness', 'On track'], ['◉', 'Stakeholder Coverage', '9 of 10 roles mapped'], ['🎯', 'Expansion Fit', '71%'], ['✦', 'Advocacy Potential', 'High']], series: ['Adoption signals', 'Health contribution'], groups: [['Adoption areas', [['Core platform', 85, 81], ['Analytics feature', 68, 64]]], ['Value signals', [['Milestone completion', 82, 78], ['Executive engagement', 76, 73]]]],
+      preferences: [['Success owner', 'Morgan Lee'], ['Success plan', 'Scale adoption'], ['Review cadence', 'Quarterly'], ['Renewal posture', 'On track']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Success Champion', 'Director, Platform'], ['Jordan Kim', 'Economic Buyer', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Success program', 'Scale adoption'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Success action', 'Run a QBR focused on realized value', 'Activate'], ['Adoption action', 'Expand the advanced-feature cohort', 'Suggest']], activity: [['🏁', 'Milestone completed', 'Two teams completed the advanced workflow', 'Today'], ['▦', 'Adoption increased', 'Active usage grew <b>10% month over month</b>', '3 days ago'], ['💚', 'Health improved', 'Account health improved <b>7 points</b>', '1 week ago']], extra: ['Success Plan', '🌱', [['Primary goal', 'Scale adoption'], ['Next milestone', 'Quarterly value review']]]
+    }
+  },
+  custom: {
+    b2c: {
+      insights: [['✦', 'Decision Priority', 'Needs review'], ['◉', 'Relevant Signal', 'High confidence'], ['🎯', 'Action Readiness', 'Ready'], ['📅', 'Recent Change', '2 days ago'], ['💚', 'Experience Signal', 'Positive'], ['▦', 'Context Coverage', 'Strong']], series: ['Observed behavior', 'Decision signal'], groups: [['Decision context', [['High-value behavior', 78, 74], ['Recent change', 71, 69]]], ['Supporting evidence', [['Engagement signal', 75, 72], ['Program activity', 63, 61]]]],
+      preferences: [['Preferred channel', 'Email'], ['Decision cadence', 'Weekly'], ['Primary context', 'Current program'], ['Best contact time', 'Weekday morning']], events: [['Relevant milestone', 'Sep 16, 2026', 'Completed'], ['Recent interaction', 'Sep 13, 2026', 'Engaged']], membership: [['Current program', 'Core experience'], ['Relevant status', 'Active']], recommendations: [['Recommended action', 'Review the highest-priority signal', 'Open view'], ['Suggested follow-up', 'Send a contextual next step', 'Activate']], activity: [['✦', 'Priority signal detected', 'A high-value behavior requires review', 'Today'], ['◉', 'Context updated', 'New supporting evidence was added', '2 days ago'], ['📨', 'Engagement recorded', 'Responded to a recent communication', '4 days ago']], extra: ['Decision Context', '✦', [['Primary signal', 'High-value behavior'], ['Next step', 'Review and act']]]
+    },
+    b2b: {
+      metrics: { revenue: '$1.28M', revenueTrend: 'Stable', pipeline: '$300K', usageScore: '74%', usageTrend: 'Stable', activeUsers: '328 active users', healthScore: '80%', healthTrend: 'Stable', supportCases: '2 open cases', renewalDate: 'Nov 30, 2026', utilization: '78% utilization' },
+      insights: [['✦', 'Decision Priority', 'Needs review'], ['◉', 'Signal Confidence', 'High'], ['🎯', 'Action Readiness', 'Ready'], ['▦', 'Context Coverage', 'Strong'], ['💚', 'Account Health', '80%'], ['📅', 'Recent Change', '2 days ago']], series: ['Contact signals', 'Account signals'], groups: [['Decision context', [['High-value behavior', 78, 74], ['Recent change', 71, 69]]], ['Supporting evidence', [['Stakeholder activity', 75, 72], ['Program activity', 63, 61]]]],
+      preferences: [['Profile owner', 'Morgan Lee'], ['Decision cadence', 'Weekly'], ['Account context', 'Current program'], ['Review status', 'Active']], events: [['Avery Johnson', 'Executive Sponsor', 'VP, Operations'], ['Priya Shah', 'Primary Contact', 'Director, Platform'], ['Jordan Kim', 'Decision Partner', 'CFO']], membership: [['Core platform', 'Enterprise · 250 seats'], ['Relevant program', 'Active'], ['Renewal', 'Nov 30, 2026']], recommendations: [['Recommended action', 'Review the highest-priority account signal', 'Open view'], ['Suggested follow-up', 'Schedule a contextual account review', 'Activate']], activity: [['✦', 'Priority signal detected', 'A high-value account behavior requires review', 'Today'], ['◉', 'Context updated', 'New stakeholder evidence was added', '2 days ago'], ['📨', 'Engagement recorded', 'Account responded to recent communication', '4 days ago']], extra: ['Decision Context', '✦', [['Primary signal', 'High-value account behavior'], ['Next step', 'Review and act']]]
+    }
+  }
+};
+
+// Supporting cards complete the first screen for every persona without
+// forcing an AI-created card to push the page below the fold. A card marked
+// "suggested" stays available in the builder, but is not rendered until the
+// user promotes it into a column.
+const PERSONA_SUPPORTING_MODULES = {
+  sales: {
+    visible: [
+      { title: 'Business Profile (Vance Tech)', icon: '💼', items: [['Industry Vertical', 'SaaS / Tech Services'], ['Annual Growth Rate', '35% YoY'], ['Marketing Budget', '$150,000 / year'], ['Sales Model', 'B2B Enterprise']] }
+    ],
+    suggested: [
+      { title: 'Sales Qualification Notes', icon: '📝', items: [['Authority', 'Sole Founder & Decision Maker'], ['Timeline', 'Q1 Upgrade Goal'], ['Key Motivator', 'Peer networking with high-growth founders']] }
+    ]
+  },
+  service: {
+    visible: [
+      { title: 'Service Context', icon: '🎧', items: [['Case priority', 'High'], ['Recommended owner', 'Retention specialist'], ['Preferred resolution', 'Guided walkthrough']] },
+      { title: 'Retention Plan', icon: '🛟', items: [['Save motion', 'Executive check-in'], ['Risk driver', 'Repeated workflow issue'], ['Next milestone', 'Resolved-case confirmation']] }
+    ],
+    suggested: [
+      { title: 'Voice of Customer', icon: '💬', items: [['Sentiment trend', 'Declining'], ['Survey follow-up', 'Requested'], ['Top theme', 'Faster resolution']] }
+    ]
+  },
+  marketing: {
+    visible: [
+      { title: 'Journey Context', icon: '🧭', items: [['Current stage', 'Consideration'], ['Next milestone', 'Webinar attendance'], ['Journey owner', 'Growth marketing']] },
+      { title: 'Content Performance', icon: '📣', items: [['Top content', 'Advanced product guide'], ['Campaign response', '18% click rate'], ['Audience fit', 'High intent segment']] }
+    ],
+    suggested: [
+      { title: 'Audience Activation', icon: '✨', items: [['Eligible channel', 'Email + web'], ['Next audience', 'Product explorers'], ['Suppression status', 'None']] }
+    ]
+  },
+  success: {
+    visible: [
+      { title: 'Success Context', icon: '🌱', items: [['Primary goal', 'Advance proficiency'], ['Next milestone', 'Advanced workflow workshop'], ['Success owner', 'Customer success team']] },
+      { title: 'Value Realization', icon: '📈', items: [['Value signal', 'Core workflow adoption'], ['Expansion cue', 'Advanced feature interest'], ['Renewal confidence', 'On track']] }
+    ],
+    suggested: [
+      { title: 'Success Plan', icon: '🗺️', items: [['Executive sponsor', 'Engaged'], ['Plan status', 'On track'], ['Next review', 'Monthly value check-in']] }
+    ]
+  },
+  custom: {
+    visible: [
+      { title: 'Decision Context', icon: '✦', items: [['Primary signal', 'High-value behavior'], ['Next step', 'Review and act'], ['Decision owner', 'Profile viewer']] },
+      { title: 'Action Plan', icon: '✅', items: [['Recommended motion', 'Contextual follow-up'], ['Confidence', 'High'], ['Timing', 'This week']] }
+    ],
+    suggested: [
+      { title: 'Supporting Evidence', icon: '◉', items: [['Evidence source', 'Engagement + program data'], ['Signal freshness', '2 days ago'], ['Coverage', 'Strong']] }
+    ]
+  }
+};
+
+const PERSONA_ACTIVITY_BOOSTS = {
+  sales: [['📨', 'Opened leadership playbook', 'Opened the <b>growth playbook</b> after a commercial touchpoint', '4 days ago'], ['🤝', 'Advisor follow-up booked', 'Scheduled a focused <b>value review</b> with an advisor', '1 week ago']],
+  service: [['📚', 'Knowledge article viewed', 'Reviewed the troubleshooting guide before reopening the case', '7 days ago'], ['📞', 'Service follow-up scheduled', 'Accepted a proactive resolution check-in', '9 days ago']],
+  marketing: [['🎯', 'Audience qualification updated', 'Moved into the <b>high-intent</b> nurture audience', '5 days ago'], ['🧩', 'Personalized web content served', 'Viewed a tailored proof-point experience', '8 days ago']],
+  success: [['📈', 'Value milestone tracked', 'Logged progress against the <b>advanced workflow</b> milestone', '5 days ago'], ['🤝', 'Success review confirmed', 'Accepted the next value realization check-in', '9 days ago']],
+  custom: [['🧠', 'Context signal refreshed', 'New supporting behavior was added to the decision view', '5 days ago'], ['✅', 'Recommended action queued', 'A contextual next step is ready for review', '8 days ago']]
+};
+
+function itemsFromPairs(items, keys) {
+  return items.map(values => Object.fromEntries(keys.map((key, index) => [key, values[index]])));
+}
+
+function createSupportingCard(definition, placement = 'middle', visibility = 'visible') {
+  return {
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: definition.title,
+    icon: definition.icon,
+    items: itemsFromPairs(definition.items, ['label', 'value']),
+    placement,
+    visibility
+  };
+}
+
+function normalizeCustomModules(target = state) {
+  const ids = new Set();
+  ['extraCards', 'rightExtraCards'].forEach((key) => {
+    if (!Array.isArray(target[key])) target[key] = [];
+    const defaultPlacement = key === 'rightExtraCards' ? 'right' : 'middle';
+    target[key].forEach((card, index) => {
+      if (!/^[A-Za-z0-9_-]{1,160}$/.test(card.moduleId || '')) card.moduleId = `${defaultPlacement}-module-${index + 1}`;
+      if (ids.has(card.moduleId)) card.moduleId = `${card.moduleId}-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 8)}`;
+      ids.add(card.moduleId);
+      if (!['middle', 'right'].includes(card.placement)) card.placement = defaultPlacement;
+      if (!['visible', 'suggested', 'hidden'].includes(card.visibility)) card.visibility = 'visible';
+      if (!Array.isArray(card.items)) card.items = [];
+    });
+  });
+}
+
+function getCustomModules(target = state) {
+  normalizeCustomModules(target);
+  return [...target.extraCards, ...target.rightExtraCards];
+}
+
+function buildPersonaSupportingModules(lens) {
+  const registry = PERSONA_SUPPORTING_MODULES[lens] || PERSONA_SUPPORTING_MODULES.sales;
+  return [
+    ...registry.visible.map(card => createSupportingCard(card, 'middle', 'visible')),
+    ...registry.suggested.map(card => createSupportingCard(card, 'middle', 'suggested'))
+  ];
+}
+
+function applyPersonaSampleTemplate(target = state) {
+  const strategy = getProfileStrategy(target);
+  const mode = target.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const template = PERSONA_SAMPLE_LIBRARY[strategy.lens]?.[mode];
+  if (!template) return;
+  // Preserve the curated Tony Robbins sales story on first launch. It is the
+  // richer out-of-the-box example users can edit without analyzing a website.
+  if (target._starterProfile === 'tony-robbins' && mode === 'b2c' && strategy.lens === 'sales') {
+    target.extraCards = buildPersonaSupportingModules('sales');
+    target.rightExtraCards = [];
+    normalizeCustomModules(target);
+    return;
+  }
+  const primary = target.colors?.primary || '#001E5B';
+  const accent = target.colors?.accent || '#066AFE';
+  // The Salesforce chrome intentionally defaults to a white accent. Keep the
+  // modeled signal series visible on its white cards until a user edits it.
+  const signalAccent = /^#(?:fff|ffffff)$/i.test(accent) ? '#066AFE' : accent;
+  target.insights.items = itemsFromPairs(template.insights, ['icon', 'label', 'value']);
+  target.affinities.seriesA = { label: template.series[0], color: primary };
+  target.affinities.seriesB = { label: template.series[1], color: signalAccent };
+  target.affinities.groups = template.groups.map(([name, items]) => ({ name, items: itemsFromPairs(items, ['label', 'a', 'b']) }));
+  target.preferences.items = itemsFromPairs(template.preferences, ['label', 'value']);
+  target.events.items = itemsFromPairs(template.events, ['name', 'date', 'confirmation']);
+  target.membership.items = itemsFromPairs(template.membership, ['label', 'value']);
+  // A new persona must never inherit another persona's recommendation art.
+  // Saved persona variants preserve their own images; first-time views either
+  // receive freshly generated visual recommendations or remain editable.
+  target.recommendations.items = template.recommendations.map(item => ({ eyebrow: item[0], title: item[1], cta: item[2], image: '' }));
+  const activityItems = [...template.activity, ...(PERSONA_ACTIVITY_BOOSTS[strategy.lens] || [])];
+  target.activity.items = itemsFromPairs(activityItems, ['icon', 'title', 'body', 'time']);
+  if (mode === 'b2c') {
+    target.extraCards = buildPersonaSupportingModules(strategy.lens);
+    target.rightExtraCards = [];
+  } else {
+    target.extraCards = [{ ...createSupportingCard({ title: template.extra[0], icon: template.extra[1], items: template.extra[2] }, 'middle', 'visible') }];
+    target.rightExtraCards = [];
+  }
+  normalizeCustomModules(target);
+  // Account facts are shared across views. A persona template must not replace
+  // revenue/pipeline/health already established for this customer.
+}
+
+const PERSONA_VIEW_FIELDS = [
+  'insights', 'affinities', 'preferences', 'events', 'membership',
+  'recommendations', 'activity', 'extraCards', 'rightExtraCards',
+  'b2cSections', 'b2bSections', 'accountViewTab', 'railFields'
+];
+
+function cloneViewData(value) {
+  return value == null ? value : JSON.parse(JSON.stringify(value));
+}
+
+function personaView(owner, lens) {
+  if (getProfileStrategy(owner).lens === lens) {
+    return Object.assign({ strategy: cloneViewData(owner.profileStrategy) }, Object.fromEntries(PERSONA_VIEW_FIELDS.map(key => [key, cloneViewData(owner[key] ?? (key === 'railFields' ? [] : key === 'accountViewTab' ? 'overview' : undefined))])));
+  }
+  return cloneViewData(owner.personaVariants?.[lens]);
+}
+
+function personaFingerprint(owner, lens) {
+  return JSON.stringify(personaView(owner, lens));
+}
+
+function commitPersonaView(owner, lens, variant) {
+  if (state !== owner) return false;
+  owner.personaVariants ||= {};
+  owner.personaVariants[lens] = cloneViewData(variant);
+  if (getProfileStrategy(owner).lens === lens) {
+    restorePersonaView(owner, lens);
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+  }
+  return true;
+}
+
+// Brand identity and the unified customer/account remain shared. Everything
+// that describes how a particular team consumes that information is retained
+// as its own editable working view.
+function snapshotPersonaView(target = state, lens = getProfileStrategy(target).lens) {
+  if (!PERSONA_PRESETS[lens]) return;
+  if (getProfileStrategy(target).lens !== lens) return;
+  target.railFields ||= [];
+  target.accountViewTab ||= 'overview';
+  if (!target.personaVariants || typeof target.personaVariants !== 'object') target.personaVariants = {};
+  const variant = {
+    strategy: Object.assign({}, getProfileStrategy(target), { lens })
+  };
+  PERSONA_VIEW_FIELDS.forEach(key => { variant[key] = cloneViewData(target[key]); });
+  target.personaVariants[lens] = variant;
+}
+
+function restorePersonaView(target = state, lens) {
+  const currentStrategy = getProfileStrategy(target);
+  const saved = target.personaVariants?.[lens];
+  if (saved) {
+    PERSONA_VIEW_FIELDS.forEach(key => {
+      if (saved[key] !== undefined) target[key] = cloneViewData(saved[key]);
+      else if (key === 'railFields') target[key] = [];
+      else if (key === 'accountViewTab') target[key] = 'overview';
+    });
+    target.profileStrategy = Object.assign(
+      { lens, objective: PERSONA_PRESETS[lens].objective, brief: '', customRole: '' },
+      cloneViewData(saved.strategy) || {},
+      { lens }
+    );
+    return true;
+  }
+
+  target.profileStrategy = {
+    lens,
+    objective: PERSONA_PRESETS[lens].objective,
+    // Every standard view keeps its own optional additive requirements.
+    brief: getPersonaBrief(target, lens),
+    customRole: lens === 'custom' ? ensureProfileSet(target).customRole : ''
+  };
+  target.railFields = [];
+  target.accountViewTab = 'overview';
+  applyPersonaPreset(target);
+  applyPersonaSampleTemplate(target);
+  return false;
+}
+
+function updateProfileStrategyUI() {
+  const strategy = getProfileStrategy();
+  const preset = PERSONA_PRESETS[strategy.lens] || PERSONA_PRESETS.sales;
+  Object.keys(PERSONA_PRESETS).forEach(lens => {
+    const button = document.getElementById(`persona-${lens}`);
+    if (button) { button.classList.toggle('active', strategy.lens === lens); button.setAttribute('aria-checked', String(strategy.lens === lens)); button.tabIndex = strategy.lens === lens ? 0 : -1; }
+  });
+  const objective = document.getElementById('strategy-objective');
+  const brief = document.getElementById('strategy-brief');
+  const customRole = document.getElementById('strategy-custom-role');
+  const customRoleField = document.getElementById('custom-role-field');
+  if (objective) objective.value = strategy.objective;
+  if (brief) brief.value = strategy.brief;
+  if (customRole) customRole.value = strategy.customRole || '';
+  if (customRoleField) customRoleField.hidden = strategy.lens !== 'custom';
+  const blueprint = document.getElementById('strategy-blueprint');
+  if (blueprint) {
+    const profileLabel = getProfileStrategyLabel(strategy);
+    const customReminder = strategy.lens === 'custom' && !String(strategy.customRole || '').trim()
+      ? '<br><em>Add the profile role above to tailor the generated view.</em>' : '';
+    const visual = ensureProfileSet().visuals?.[strategy.lens];
+    const visualNotice = visual?.state === 'generating'
+      ? '<br><em>Creating distinct recommendation visuals for this view…</em>'
+      : ['failed', 'partial'].includes(visual?.state)
+        ? `<br><em>${escHTML(visual.message || 'Some recommendation visuals are still missing.')}</em> <button type="button" class="quickstart-settings-toggle" style="color:#fff;text-decoration:underline;padding:0;min-height:0" onclick="retryPersonaRecommendationImages()">Retry visuals</button>`
+        : '';
+    blueprint.innerHTML = `<span>✦</span><span><strong>${escHTML(profileLabel)} view · ${strategy.objective}</strong><br>${preset.blueprint}${customReminder}<br><em>This view saves its own module choices and brief.</em>${visualNotice}</span>`;
+  }
+
+  // Keep the seven-step editor oriented around the selected team’s decision,
+  // rather than making people translate generic module names as they work.
+  const content = isB2B() ? preset.b2b : preset.b2c;
+  const entity = isB2B() ? 'account' : 'customer';
+  const profileLabel = getProfileStrategyLabel(strategy);
+  setText('step-3-title', `${profileLabel} ${isB2B() ? 'Account' : ''} Insights`.trim());
+  setText('step-3-sub', `Configure the modeled ${entity} signals and calculated insights that help ${profileLabel.toLowerCase()} achieve the ${strategy.objective} objective.`);
+  setText('step-3-insights-heading', content.insights);
+  setText('step-4-title', content.affinities);
+  setText('step-4-sub', `Tune the aggregate signals and evidence ${profileLabel.toLowerCase()} should use to make the next decision.`);
+  setText('step-5-title', `${content.preferences}, ${content.events} & ${content.membership}`);
+  setText('step-5-sub', `Edit the context, relationships, and programs that make this ${entity} story actionable.`);
+  setText('step-5-preferences-heading', content.preferences);
+  setText('step-5-events-heading', content.events);
+  setText('step-5-membership-heading', content.membership);
+  setText('step-6-title', `${content.recommendations} & ${content.activity}`);
+  setText('step-6-sub', `Prioritize concise next-best actions and the activity evidence ${profileLabel.toLowerCase()} needs to act with confidence.`);
+  setText('step-6-recs-heading', content.recommendations);
+  setText('step-6-activity-heading', content.activity);
+  renderPersonaOutputSwitcher(strategy);
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+}
+
+// Step 7 is a delivery surface, so it mirrors the persona picker without
+// making people return to Quick Start or lose the independently saved view.
+function renderPersonaOutputSwitcher(strategy = getProfileStrategy()) {
+  const container = document.getElementById('persona-output-switcher');
+  if (!container) return;
+  const label = getProfileStrategyLabel(strategy);
+  setText('persona-output-summary', `${label} is selected. Present, download, or copy this saved persona view.`);
+  container.innerHTML = Object.entries(PERSONA_PRESETS).map(([lens, preset]) => {
+    const active = strategy.lens === lens;
+    const name = lens === 'custom' && strategy.customRole ? strategy.customRole : preset.label;
+    return `<button type="button" class="${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700'} border rounded-lg px-3 py-2 text-xs font-700 transition" onclick="setPersonaOutputLens('${lens}')" aria-pressed="${active}">${escHTML(name)}</button>`;
+  }).join('');
+}
+
+function setPersonaOutputLens(lens) {
+  setViewerLens(lens);
+  if (currentStep !== TOTAL_STEPS - 1) goToStep(TOTAL_STEPS - 1);
+}
+
+function setViewerLens(lens) {
+  if (!PERSONA_PRESETS[lens]) return;
+  readStaticFields();
+  const currentLens = getProfileStrategy().lens;
+  snapshotPersonaView(state, currentLens);
+  restorePersonaView(state, lens);
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+  ensurePersonaRecommendationImages(lens);
+  if (currentStep === 0 && lens === 'custom' && !getProfileStrategy().customRole) document.getElementById('strategy-custom-role')?.focus();
+}
+
+function setPersonaVisualStatus(message) {
+  const status = document.getElementById('quickstart-status');
+  if (status) status.textContent = message;
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+}
+
+// Recommendation visuals belong to each persona view, not the shared customer
+// identity. It can update an off-screen variant during profile-set generation
+// as well as the currently visible working view.
+function visualTargetStrategy(target, lens) {
+  return Object.assign(
+    { lens, objective: PERSONA_PRESETS[lens]?.objective || 'engage', brief: '', customRole: '' },
+    cloneViewData(target?.strategy || target?.profileStrategy) || {},
+    { lens }
+  );
+}
+
+function imageFailureMessage(response, expectedCount) {
+  const errors = Array.isArray(response?.results) ? response.results.filter(item => item?.error) : [];
+  if (response?.error?.code === 'image_provider_disabled') return 'Recommendation visuals need the shared image service. Remove the Advanced text-model override or retry with the default backend.';
+  if (response?.error?.code === 'rate_limited' || errors.some(item => /429|rate/i.test(item.error || ''))) return 'Recommendation visuals are temporarily rate-limited. Retry this view in a moment.';
+  if (response?.error?.code === 'timeout' || errors.some(item => /timeout|abort/i.test(item.error || ''))) return 'Recommendation visual generation timed out. Retry this view to finish the images.';
+  if (expectedCount) return 'Recommendation visuals could not be created yet. Retry this view, or add images manually.';
+  return '';
+}
+
+function personaImageContext(owner, lens) {
+  return JSON.stringify({ brandName: owner.brandName, sourceUrl: owner._aiContext?.sourceUrl,
+    profileType: owner.profileType, strategy: visualTargetStrategy(personaView(owner, lens), lens) });
+}
+
+async function generatePersonaRecommendationImagesForTarget(lens, target, options = {}) {
+  const owner = state;
+  const strategy = visualTargetStrategy(target, lens);
+  const recommendations = Array.isArray(target?.recommendations?.items) ? target.recommendations.items : [];
+  const missing = recommendations.filter((item, index) => item?.title && !item.image && (options.onlyIndex == null || index === options.onlyIndex));
+  const profileSet = ensureProfileSet();
+  const label = getProfileStrategyLabel(strategy);
+  if (!missing.length) {
+    profileSet.visuals[lens] = { state: 'ready', updatedAt: new Date().toISOString(), count: recommendations.length };
+    return { state: 'ready', changed: false };
+  }
+  if (!window.LocalAI?.generatePersonaRecommendationImages) {
+    const message = 'Recommendation visual service is unavailable. You can retry later or add images manually.';
+    profileSet.visuals[lens] = { state: 'failed', message, updatedAt: new Date().toISOString(), count: 0 };
+    return { state: 'failed', changed: false, message };
+  }
+
+  const requestId = (personaVisualRequests.get(lens) || 0) + 1;
+  personaVisualRequests.set(lens, requestId);
+  profileSet.visuals[lens] = { state: 'generating', updatedAt: new Date().toISOString(), count: 0 };
+  if (options.announce) setPersonaVisualStatus(`Creating ${label} recommendation visuals…`);
+  const expectedTitles = recommendations.map(item => item?.title || '');
+  const expectedImages = recommendations.map(item => item?.image || '');
+  const expectedContext = personaImageContext(owner, lens);
+
+  try {
+    const response = await window.LocalAI.generatePersonaRecommendationImages({
+      brandName: owner.brandName,
+      industry: owner._industry || 'generic',
+      profileType: owner.profileType,
+      recommendations: recommendations.map((item, index) => ({ title: item.title, image: options.onlyIndex != null && index !== options.onlyIndex ? (item.image || 'skip') : (item.image || '') })),
+      strategy
+    });
+    if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    if (personaImageContext(owner, lens) !== expectedContext) {
+      profileSet.visuals[lens] = { state: 'pending', message: 'This view changed. Retry visuals for the updated brief.', count: 0 };
+      return { state: 'superseded', changed: false };
+    }
+    const view = personaView(owner, lens);
+    if (!view) return { state: 'superseded', changed: false };
+    const currentItems = view.recommendations?.items || [];
+    const results = Array.isArray(response?.results) ? response.results : [];
+    let changed = false;
+    results.forEach(result => {
+      const match = /^rec_(\d+)$/.exec(result?.slot || '');
+      const index = match ? Number(match[1]) : -1;
+      const current = currentItems[index];
+      if (result?.imageData && current && !current.image && (current.image || '') === expectedImages[index] && current.title === expectedTitles[index]) {
+        current.image = result.imageData;
+        current.imageSource = 'generated';
+        current.imageForTitle = current.title;
+        changed = true;
+      }
+    });
+    const remaining = currentItems.filter(item => item?.title && !item.image).length;
+    const stateName = remaining === 0 ? 'ready' : changed ? 'partial' : 'failed';
+    const message = remaining ? imageFailureMessage(response, remaining) : '';
+    profileSet.visuals[lens] = { state: stateName, message, updatedAt: new Date().toISOString(), count: currentItems.filter(item => item?.image).length };
+    if (changed) commitPersonaView(owner, lens, view);
+    if (getProfileStrategy().lens === lens) updateProfileStrategyUI();
+    if (options.announce) setPersonaVisualStatus(stateName === 'ready' ? `✓ ${label} recommendation visuals are ready` : message);
+    return { state: stateName, changed, message };
+  } catch (error) {
+    if (state !== owner || personaVisualRequests.get(lens) !== requestId) return { state: 'superseded', changed: false };
+    const message = imageFailureMessage({ error: { code: error?.name === 'AbortError' ? 'timeout' : 'generation_failed' } }, missing.length);
+    profileSet.visuals[lens] = { state: 'failed', message, updatedAt: new Date().toISOString(), count: 0 };
+    if (target === state) updateProfileStrategyUI();
+    if (options.announce) setPersonaVisualStatus(message);
+    console.warn('[UPG] Persona recommendation images were not generated:', error);
+    return { state: 'failed', changed: false, message };
+  }
+}
+
+async function ensurePersonaRecommendationImages(lens) {
+  if (!state._aiContext?.sourceUrl || getProfileStrategy().lens !== lens) return;
+  if (['queued', 'generating'].includes(ensureProfileSet().statuses[lens])) return;
+  if (ensureProfileSet().visuals[lens]?.state === 'generating') return;
+  return generatePersonaRecommendationImagesForTarget(lens, state, { announce: true });
+}
+
+async function retryPersonaRecommendationImages() {
+  await ensurePersonaRecommendationImages(getProfileStrategy().lens);
+}
+
+const brandLogoRequests = new WeakMap();
+const brandLogoStatuses = new WeakMap();
+function renderBrandLogoStatus() {
+  const status = brandLogoStatuses.get(state);
+  setText('brand-logo-status', status?.message || 'Logo images use a white background; initials use the primary brand color.');
+  const retry = document.getElementById('retry-brand-logo');
+  if (retry) {
+    retry.hidden = status?.state !== 'failed';
+    retry.disabled = status?.state === 'loading';
+  }
+}
+function needsBrandLogoNormalization(value) {
+  return /^data:image\/(?:svg\+xml|x-icon|vnd\.microsoft\.icon|ico);base64,/i.test(value || '');
+}
+async function embedSharedBrandLogo(logoUrl, sourceUrl, candidates = []) {
+  if (!window.LocalAI?.embedBrandImage) return;
+  if (/^data:/i.test(logoUrl || '') && !needsBrandLogoNormalization(logoUrl)) return;
+  const owner = state, originalLogo = owner.logo;
+  const request = {};
+  brandLogoRequests.set(owner, request);
+  const active = () => state === owner && brandLogoRequests.get(owner) === request && owner.logo === originalLogo && owner._aiContext?.sourceUrl === sourceUrl;
+  const choices = [...new Set([logoUrl, ...candidates].filter(value => typeof value === 'string' && value))].slice(0, 6);
+  if (!choices.length) return;
+  brandLogoStatuses.set(owner, { state: 'loading', message: 'Finding and preparing a portable customer logo…' });
+  renderBrandLogoStatus();
+  for (const choice of choices) {
+    if (!active()) return;
+    let result;
+    try { result = await window.LocalAI.embedBrandImage(choice); } catch (_) { continue; }
+    if (!active()) return;
+    // Never replace a usable URL with image data the renderer will reject.
+    if (!/^data:image\//i.test(result?.imageData || '') || !safeImageURL(result.imageData)) continue;
+    owner.logo = result.imageData;
+    brandLogoStatuses.set(owner, { state: 'ready', message: 'Customer logo ready · embedded for all views and exports.' });
+    const input = document.getElementById('url-logo');
+    if (input) input.value = '';
+    setImagePreviewFromURL('preview-logo', owner.logo);
+    renderBrandLogoStatus();
+    refreshPreview();
+    return;
+  }
+  if (!active()) return;
+  brandLogoStatuses.set(owner, { state: 'failed', message: 'Could not embed a customer logo. Any existing image was kept; retry or upload a logo below.' });
+  renderBrandLogoStatus();
+}
+function retryBrandLogo() {
+  return embedSharedBrandLogo(state.logo, state._aiContext?.sourceUrl, state._aiContext?.logoCandidates || []);
+}
+function recoverEmbeddedBrandLogo() {
+  if (needsBrandLogoNormalization(state.logo)) return retryBrandLogo();
+}
+
+function onProfileStrategyChange() {
+  const strategy = getProfileStrategy();
+  strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
+  strategy.brief = document.getElementById('strategy-brief')?.value || '';
+  strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
+  setPersonaBrief(state, strategy.lens, strategy.brief);
+  updateProfileStrategyUI();
+  refreshPreview();
+}
+
+function getB2CSections() {
+  state.b2cSections = Object.assign({}, B2C_SECTION_DEFAULTS, state.b2cSections || {});
+  return state.b2cSections;
+}
+
+function getB2BSections() {
+  state.b2bSections = Object.assign({}, B2B_SECTION_DEFAULTS, state.b2bSections || {});
+  return state.b2bSections;
+}
+
+function isB2B() { return state.profileType === 'b2b'; }
+
+function setText(id, value) {
+  const el = document.getElementById(id);
+  if (el) el.textContent = value;
+}
+
+function updateProfileModeUI() {
+  const b2b = isB2B();
+  document.body.classList.toggle('profile-mode-b2b', b2b);
+  const b2cButton = document.getElementById('profile-type-b2c');
+  const b2bButton = document.getElementById('profile-type-b2b');
+  if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); b2cButton.tabIndex = b2b ? -1 : 0; }
+  if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); b2bButton.tabIndex = b2b ? 0 : -1; }
+
+  setText('quickstart-title', b2b ? 'Create an account profile set with AI' : 'Create a customer profile set with AI');
+  setText('quickstart-sub', b2b
+    ? 'Paste the customer’s homepage — AI extracts brand context once, then creates distinct account views with commercial, usage, health, and role-specific actions.'
+    : 'Paste the customer’s homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.');
+  setText('step-2-title', b2b ? 'Account Profile' : 'Profile Card');
+  setText('step-2-sub', b2b ? 'Firmographics, ownership, hierarchy, and account identity shown in the left rail.' : 'The customer’s demographic, contact, and segment membership shown in the left panel.');
+  setText('step-3-title', b2b ? 'Account Metrics & Insights' : 'Insights');
+  setText('step-3-sub', b2b ? 'Configure commercial, product-usage, and customer-health scorecards alongside calculated insights.' : 'Loyalty numbers plus the vertical-specific customer scorecard (e.g. Athlete Insights, Patient Insights).');
+  setText('step-3-insights-heading', b2b ? 'Calculated Insights' : 'Vertical Insights');
+  setText('step-4-title', b2b ? 'Account Signals' : 'Affinities');
+  setText('step-4-sub', b2b ? 'Optionally aggregate contacts’ interests and intent with company-level engagement signals.' : 'The dual-bar affinity chart. Each group has editable items with two configurable series (e.g. Views + Interaction).');
+  setText('step-5-title', b2b ? 'Account Details & Relationships' : 'Preferences, Events & Membership');
+  setText('step-5-sub', b2b ? 'Configure operational details, key stakeholders, products, contracts, and supporting account cards.' : 'The three stacked cards in the middle column.');
+  setText('step-5-preferences-heading', b2b ? 'Account Details' : 'Preferences');
+  setText('step-5-events-heading', b2b ? 'Key Stakeholders' : 'Events');
+  setText('step-5-membership-heading', b2b ? 'Products & Contracts' : 'Membership Details');
+  setText('step-6-title', b2b ? 'Next Best Actions & Account Activity' : 'Einstein Recommendations & Activity');
+  setText('step-6-sub', b2b ? 'The account action center: recommended plays, renewal signals, and relationship activity.' : 'The right column: AI-powered recommendation cards and the engagement timeline.');
+  setText('step-6-recs-heading', b2b ? 'Next Best Actions' : 'Einstein Recommendations');
+  setText('step-6-activity-heading', b2b ? 'Account Activity' : 'Engagement Activity');
+  setText('layout-title', b2b ? 'Account Workspace Widths' : 'Column Widths · 16:9 Canvas');
+  setText('layout-sub', b2b ? 'Adjust the account and action rails. The center workspace fills the remaining 1600 × 900 canvas.' : 'Resize any column. The others rebalance to keep the 1600 × 900 slide width; content is never stretched.');
+  setText('left-col-w-label', b2b ? 'Account Rail' : 'Left Column (Profile)');
+  setText('middle-col-w-label', b2b ? 'Action Rail' : 'Middle Column');
+}
+
+function setProfileType(profileType) {
+  const next = profileType === 'b2b' ? 'b2b' : 'b2c';
+  if ((state.profileType || 'b2c') === next) return;
+  if (!confirm(`Switching to a ${next === 'b2b' ? 'B2B account' : 'B2C individual'} profile starts a new draft and replaces mode-specific fields. Save your current work first if you need to keep it. Continue?`)) return;
+  cancelDraftRequests();
+  resetProjectIdentity();
+
+  const key = state._industry || document.getElementById('brand-industry')?.value || 'recruiting';
+  const nextState = cloneProfileMode(next, key);
+  // Preserve the parts that belong to the customer brand rather than the
+  // generated profile. This makes switching modes feel deliberate, not reset.
+  nextState._industry = key;
+  nextState.brandName = state.brandName || nextState.brandName;
+  nextState.appName = state.appName || nextState.appName;
+  nextState.logo = state.logo || '';
+  nextState.userAvatar = state.userAvatar || '';
+  nextState.userName = state.userName || '';
+  nextState.colors = Object.assign({}, nextState.colors, state.colors || {});
+  nextState.navLinks = Array.isArray(state.navLinks) && state.navLinks.length ? state.navLinks : nextState.navLinks;
+  nextState.layout = Object.assign({}, nextState.layout, state.layout || {});
+  nextState.profileStrategy = Object.assign({}, getProfileStrategy());
+  nextState.profileSet = cloneViewData(ensureProfileSet());
+  nextState._aiContext = cloneViewData(state._aiContext);
+  // B2C and B2B have different data contracts, so their working views begin
+  // fresh after a mode change while retaining the current persona choice.
+  nextState.personaVariants = {};
+  applyPersonaPreset(nextState);
+  applyPersonaSampleTemplate(nextState);
+  snapshotPersonaView(nextState);
+  state = nextState;
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+}
+
+// Debounce the preview iframe refresh — every keystroke otherwise re-parses a big HTML doc.
+let previewTimer = null;
+let lastRenderedPreviewHTML = '';
+let previewContext = null;
+let presentationContext = null;
+
+function cancelDraftRequests() {
+  generationRunId += 1;
+  const button = document.getElementById('quickstart-btn');
+  if (button) button.disabled = false;
+}
+
+function captureOutputSnapshot() {
+  snapshotPersonaView();
+  const snapshot = cloneViewData(state);
+  snapshot._renderRevision = String(++renderRevision);
+  return snapshot;
+}
+
+function renderPreviewNow(snapshot = captureOutputSnapshot()) {
+  clearTimeout(previewTimer);
+  previewTimer = null;
+  const html = renderPreviewDocument(snapshot);
+  lastRenderedPreviewHTML = html;
+  previewContext = { owner: state, lens: snapshot.profileStrategy.lens, revision: snapshot._renderRevision };
+  const iframe = document.getElementById('preview-iframe');
+  if (iframe) iframe.srcdoc = html;
+  return html;
+}
+
+// The live preview is the source of truth for the "Preview & Present"
+// experience. Keep the exact document we put into the iframe so Present
+// never performs a second, potentially different render after a persona
+// switch or an in-flight async update has changed the editor state.
+function renderPreviewDocument(profileState = state) {
+  return generateProfileHTML(cloneViewData(profileState));
+}
+
+function refreshPreview() {
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => renderPreviewNow(), 120);
+}
+
+function getPresentationDocument() {
+  // Flush pending keystrokes/persona changes before presenting. All delivery
+  // surfaces consume the same immutable snapshot, not an old iframe document.
+  const html = renderPreviewNow();
+  presentationContext = Object.assign({}, previewContext);
+  return html;
+}
+
+window.addEventListener('message', event => {
+  if (!['upg:account-tab-change', 'upg:layout-status'].includes(event.data?.type)) return;
+  if (event.data.type === 'upg:account-tab-change' && !['overview', 'people', 'sales', 'success', 'related'].includes(event.data.tab)) return;
+  const preview = document.getElementById('preview-iframe');
+  const presentation = document.getElementById('presentation-iframe');
+  const context = event.source === preview?.contentWindow ? previewContext : event.source === presentation?.contentWindow ? presentationContext : null;
+  if (!context || context.owner !== state || context.lens !== getProfileStrategy().lens || event.data.revision !== context.revision) return;
+  if (event.data.type === 'upg:layout-status') {
+    const { height, viewport } = event.data;
+    if (!Number.isFinite(height) || !Number.isFinite(viewport) || viewport <= 0) return;
+    setText('layout-fit-status', height > viewport + 2
+      ? 'Scrollable profile · Move optional modules to Suggested for a shorter screenshot.'
+      : 'Fits the first screen · Activity and recommendation lists can still scroll.');
+    return;
+  }
+  state.accountViewTab = event.data.tab;
+  snapshotPersonaView();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
+  if (event.source === presentation?.contentWindow) refreshPreview();
+});
+
+// Same logical widescreen viewport as presentation/export; the editor only
+// scales the frame, it never asks the renderer for a different arrangement.
+function fitPreviewScale() {
+  const stage = document.getElementById('preview-stage');
+  const iframe = document.getElementById('preview-iframe');
+  if (!stage || !iframe) return;
+  stage.style.aspectRatio = `${PROFILE_CANVAS.width} / ${PROFILE_CANVAS.height}`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  const fit = getCanvasFit(stage.clientWidth, stage.clientWidth * PROFILE_CANVAS.height / PROFILE_CANVAS.width);
+  iframe.style.transform = `scale(${fit.scale})`;
+}
+window.addEventListener('resize', fitPreviewScale);
+
+// ─── STATE ↔ DOM binding ────────────────────────────────────
+
+function fillStaticFields() {
+  if (!state.profileType) state.profileType = 'b2c';
+  getProfileStrategy();
+  document.getElementById('brand-name').value = state.brandName || '';
+  document.getElementById('brand-industry').value = state._industry || 'recruiting';
+  document.getElementById('app-name').value = state.appName || 'Data Cloud';
+  document.getElementById('url-logo').value = state.logo && !state.logo.startsWith('data:') ? state.logo : '';
+  setImagePreviewFromURL('preview-logo', state.logo);
+  renderBrandLogoStatus();
+
+  document.getElementById('url-user-avatar').value = state.userAvatar && !state.userAvatar.startsWith('data:') ? state.userAvatar : '';
+  setImagePreviewFromURL('preview-user-avatar', state.userAvatar);
+
+  document.getElementById('color-primary').value = state.colors.primary;
+  document.getElementById('hex-primary').value = state.colors.primary;
+  document.getElementById('color-accent').value = state.colors.accent;
+  document.getElementById('hex-accent').value = state.colors.accent;
+  document.getElementById('color-secondary').value = state.colors.secondary;
+  document.getElementById('hex-secondary').value = state.colors.secondary;
+  document.getElementById('color-menu').value = state.colors.menu;
+  document.getElementById('hex-menu').value = state.colors.menu;
+  document.getElementById('color-menuText').value = state.colors.menuText;
+  document.getElementById('hex-menuText').value = state.colors.menuText;
+  document.getElementById('color-pageBg').value = state.colors.pageBg || '#EAF5FE';
+  document.getElementById('hex-pageBg').value = state.colors.pageBg || '#EAF5FE';
+
+  syncLayoutControls();
+
+  document.getElementById('profile-name').value = state.profile.name;
+  document.getElementById('profile-city').value = state.profile.city;
+  document.getElementById('profile-customerId').value = state.profile.customerId;
+  document.getElementById('profile-email').value = state.profile.email;
+  document.getElementById('profile-phone').value = state.profile.phone;
+  document.getElementById('secondary-email-include').checked = !!state.profile.secondaryEmailInclude;
+  document.getElementById('secondary-email-label').value = state.profile.secondaryEmailLabel || 'Secondary Email';
+  document.getElementById('secondary-email-value').value = state.profile.secondaryEmail || '';
+  document.getElementById('profile-address').value = state.profile.address;
+  document.getElementById('profile-segment').value = state.profile.segment;
+  document.getElementById('url-photo').value = state.profile.photo && !state.profile.photo.startsWith('data:') ? state.profile.photo : '';
+  setImagePreviewFromURL('preview-photo', state.profile.photo);
+
+  document.getElementById('loyalty-title').value = state.loyalty.title;
+  document.getElementById('loyalty-memberId').value = state.loyalty.memberId;
+  document.getElementById('loyalty-tier').value = state.loyalty.tier;
+  document.getElementById('loyalty-points').value = state.loyalty.points;
+  document.getElementById('loyalty-redeemedPoints').value = state.loyalty.redeemedPoints;
+
+  document.getElementById('insights-title').value = state.insights.title;
+  document.getElementById('affinities-title').value = state.affinities.title;
+  document.getElementById('seriesA-label').value = state.affinities.seriesA.label;
+  document.getElementById('seriesA-color').value = state.affinities.seriesA.color;
+  document.getElementById('seriesA-color-hex').value = state.affinities.seriesA.color;
+  document.getElementById('seriesB-label').value = state.affinities.seriesB.label;
+  document.getElementById('seriesB-color').value = state.affinities.seriesB.color;
+  document.getElementById('seriesB-color-hex').value = state.affinities.seriesB.color;
+
+  document.getElementById('preferences-title').value = state.preferences.title;
+  document.getElementById('preferences-icon').value = state.preferences.icon || '';
+  document.getElementById('events-title').value = state.events.title;
+  document.getElementById('events-icon').value = state.events.icon || '';
+  document.getElementById('membership-title').value = state.membership.title;
+  document.getElementById('membership-icon').value = state.membership.icon || '';
+  document.getElementById('recs-title').value = state.recommendations.title;
+  document.getElementById('activity-title').value = state.activity.title;
+  document.getElementById('tab-name').value = state.tabName;
+
+  const account = state.account || {};
+  const metrics = state.accountMetrics || {};
+  updateAccountPhotoUI();
+  const fillAccount = (id, value) => { const el = document.getElementById(id); if (el) el.value = value || ''; };
+  fillAccount('account-name', account.name);
+  fillAccount('account-headquarters', account.headquarters);
+  fillAccount('account-id', account.accountId);
+  fillAccount('account-industry', account.industry);
+  fillAccount('account-type', account.type);
+  fillAccount('account-owner', account.owner);
+  fillAccount('account-website', account.website);
+  fillAccount('account-employees', account.employees);
+  fillAccount('account-tier', account.tier);
+  fillAccount('account-parent', account.parentAccount);
+  fillAccount('account-address', account.address);
+  fillAccount('metric-revenue', metrics.revenue);
+  fillAccount('metric-revenue-trend', metrics.revenueTrend);
+  fillAccount('metric-pipeline', metrics.pipeline);
+  fillAccount('metric-usage-score', metrics.usageScore);
+  fillAccount('metric-usage-trend', metrics.usageTrend);
+  fillAccount('metric-active-users', metrics.activeUsers);
+  fillAccount('metric-health-score', metrics.healthScore);
+  fillAccount('metric-health-trend', metrics.healthTrend);
+  fillAccount('metric-support-cases', metrics.supportCases);
+  fillAccount('metric-renewal-date', metrics.renewalDate);
+  const affinityToggle = document.getElementById('account-affinities-include');
+  if (affinityToggle) affinityToggle.checked = state.affinities.includeAggregate !== false;
+  if (isB2B()) {
+    const sections = getB2BSections();
+    Object.keys(B2B_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2b-section-${key.replace(/[A-Z]/g, match => '-' + match.toLowerCase())}`);
+      if (toggle) toggle.checked = sections[key] !== false;
+    });
+  } else {
+    const sections = getB2CSections();
+    Object.keys(B2C_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2c-section-${key}`);
+      if (toggle) toggle.checked = sections[key] !== false;
+    });
+  }
+  updateProfileModeUI();
+  updateProfileStrategyUI();
+}
+
+function readStaticFields() {
+  const strategy = getProfileStrategy();
+  strategy.objective = document.getElementById('strategy-objective')?.value || strategy.objective;
+  strategy.brief = document.getElementById('strategy-brief')?.value || '';
+  strategy.customRole = document.getElementById('strategy-custom-role')?.value.trim() || '';
+  setPersonaBrief(state, strategy.lens, strategy.brief);
+  state.brandName = document.getElementById('brand-name').value;
+  state.appName = document.getElementById('app-name').value;
+  state.colors.primary = document.getElementById('hex-primary').value;
+  state.colors.accent = document.getElementById('hex-accent').value;
+  state.colors.secondary = document.getElementById('hex-secondary').value;
+  state.colors.menu = document.getElementById('hex-menu').value;
+  state.colors.menuText = document.getElementById('hex-menuText').value;
+  state.colors.pageBg = document.getElementById('hex-pageBg').value;
+
+  state.profile.name = document.getElementById('profile-name').value;
+  state.profile.city = document.getElementById('profile-city').value;
+  state.profile.customerId = document.getElementById('profile-customerId').value;
+  state.profile.email = document.getElementById('profile-email').value;
+  state.profile.phone = document.getElementById('profile-phone').value;
+  state.profile.secondaryEmailInclude = document.getElementById('secondary-email-include').checked;
+  state.profile.secondaryEmailLabel = document.getElementById('secondary-email-label').value;
+  state.profile.secondaryEmail = document.getElementById('secondary-email-value').value;
+  state.profile.address = document.getElementById('profile-address').value;
+  state.profile.segment = document.getElementById('profile-segment').value;
+
+  state.loyalty.title = document.getElementById('loyalty-title').value;
+  state.loyalty.memberId = document.getElementById('loyalty-memberId').value;
+  state.loyalty.tier = document.getElementById('loyalty-tier').value;
+  state.loyalty.points = document.getElementById('loyalty-points').value;
+  state.loyalty.redeemedPoints = document.getElementById('loyalty-redeemedPoints').value;
+
+  state.insights.title = document.getElementById('insights-title').value;
+  state.affinities.title = document.getElementById('affinities-title').value;
+  state.affinities.seriesA.label = document.getElementById('seriesA-label').value;
+  state.affinities.seriesA.color = document.getElementById('seriesA-color').value;
+  state.affinities.seriesB.label = document.getElementById('seriesB-label').value;
+  state.affinities.seriesB.color = document.getElementById('seriesB-color').value;
+
+  state.preferences.title = document.getElementById('preferences-title').value;
+  state.preferences.icon = document.getElementById('preferences-icon').value;
+  state.events.title = document.getElementById('events-title').value;
+  state.events.icon = document.getElementById('events-icon').value;
+  state.membership.title = document.getElementById('membership-title').value;
+  state.membership.icon = document.getElementById('membership-icon').value;
+  state.recommendations.title = document.getElementById('recs-title').value;
+  state.activity.title = document.getElementById('activity-title').value;
+  state.tabName = document.getElementById('tab-name').value;
+
+  if (isB2B()) {
+    if (!state.account) state.account = {};
+    if (!state.accountMetrics) state.accountMetrics = {};
+    const readAccount = (id) => document.getElementById(id)?.value || '';
+    state.account.name = readAccount('account-name');
+    state.account.headquarters = readAccount('account-headquarters');
+    state.account.accountId = readAccount('account-id');
+    state.account.industry = readAccount('account-industry');
+    state.account.type = readAccount('account-type');
+    state.account.owner = readAccount('account-owner');
+    state.account.website = readAccount('account-website');
+    state.account.employees = readAccount('account-employees');
+    state.account.tier = readAccount('account-tier');
+    state.account.parentAccount = readAccount('account-parent');
+    state.account.address = readAccount('account-address');
+    state.accountMetrics.revenue = readAccount('metric-revenue');
+    state.accountMetrics.revenueTrend = readAccount('metric-revenue-trend');
+    state.accountMetrics.pipeline = readAccount('metric-pipeline');
+    state.accountMetrics.usageScore = readAccount('metric-usage-score');
+    state.accountMetrics.usageTrend = readAccount('metric-usage-trend');
+    state.accountMetrics.activeUsers = readAccount('metric-active-users');
+    state.accountMetrics.healthScore = readAccount('metric-health-score');
+    state.accountMetrics.healthTrend = readAccount('metric-health-trend');
+    state.accountMetrics.supportCases = readAccount('metric-support-cases');
+    state.accountMetrics.renewalDate = readAccount('metric-renewal-date');
+    state.affinities.includeAggregate = !!document.getElementById('account-affinities-include')?.checked;
+    const sections = getB2BSections();
+    Object.keys(B2B_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2b-section-${key.replace(/[A-Z]/g, match => '-' + match.toLowerCase())}`);
+      if (toggle) sections[key] = toggle.checked;
+    });
+    state.tabName = state.account.name || state.tabName;
+  } else {
+    const sections = getB2CSections();
+    Object.keys(B2C_SECTION_DEFAULTS).forEach(key => {
+      const toggle = document.getElementById(`b2c-section-${key}`);
+      if (toggle) sections[key] = toggle.checked;
+    });
+  }
+}
+
+// Called by every input onchange. Read → re-render dynamic lists that
+// depend on state? No — dynamic lists own their own state via row edits.
+function onFieldChange() {
+  readStaticFields();
+  refreshPreview();
+}
+
+function onHexChange(key) {
+  const v = document.getElementById('hex-' + key).value;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+    document.getElementById('color-' + key).value = v;
+    onFieldChange();
+  }
+}
+
+function syncLayoutControls() {
+  const b2b = state.profileType === 'b2b';
+  // Do not reinterpret legacy B2B middleColWidth: it has always been the
+  // contextual action rail, not the center workspace.
+  const widths = b2b ? {
+    leftColWidth: boundedWidth(state.layout?.leftColWidth, 240, 390, 290),
+    middleColWidth: boundedWidth(state.layout?.middleColWidth, 230, 390, 320)
+  } : getProfileColumnWidths(state.layout);
+  const ids = { leftColWidth: 'left-col-w', middleColWidth: 'middle-col-w', rightColWidth: 'right-col-w' };
+  for (const [field, value] of Object.entries(widths)) {
+    const input = document.getElementById(ids[field]);
+    const bounds = b2b ? (field === 'leftColWidth' ? [240, 390] : [230, 390]) : PROFILE_COLUMN_BOUNDS[field];
+    if (input) { input.min = bounds[0]; input.max = bounds[1]; input.value = value; }
+    setText(ids[field] + '-val', value + 'px');
+  }
+  const right = document.getElementById('right-col-width-control');
+  if (right) right.hidden = b2b;
+}
+
+// Every slider redistributes the same fixed canvas budget. Merely opening an
+// old project does not migrate its saved layout; editing explicitly does.
+function onLayoutChange(field, value) {
+  if (!Object.prototype.hasOwnProperty.call(PROFILE_COLUMN_BOUNDS, field) || !Number.isFinite(Number(value))) return;
+  if (state.profileType === 'b2b') {
+    if (field === 'rightColWidth') return;
+    const min = field === 'leftColWidth' ? 240 : 230;
+    state.layout = Object.assign({}, state.layout, { [field]: boundedWidth(value, min, 390, field === 'leftColWidth' ? 290 : 320) });
+  } else state.layout = Object.assign({}, state.layout, resizeProfileColumns(state.layout, field, value));
+  syncLayoutControls();
+  refreshPreview();
+}
+function resetLayoutWidths() {
+  state.layout = state.profileType === 'b2b' ? { leftColWidth: 290, middleColWidth: 320 } : getProfileColumnWidths();
+  syncLayoutControls();
+  refreshPreview();
+}
+function onColorChange() {
+  ['primary', 'accent', 'secondary', 'menu', 'menuText', 'pageBg'].forEach(k => {
+    document.getElementById('hex-' + k).value = document.getElementById('color-' + k).value;
+  });
+  onFieldChange();
+}
+function onSeriesHexChange(which) {
+  const v = document.getElementById(`series${which}-color-hex`).value;
+  if (/^#[0-9a-fA-F]{6}$/.test(v)) {
+    document.getElementById(`series${which}-color`).value = v;
+    onFieldChange();
+  }
+}
+
+function onIndustryChange() {
+  if (!confirm('Switching industry will replace all field values with the new industry\'s defaults. Continue?')) {
+    document.getElementById('brand-industry').value = state._industry || 'recruiting';
+    return;
+  }
+  const key = document.getElementById('brand-industry').value;
+  cancelDraftRequests();
+  resetProjectIdentity();
+  const strategy = Object.assign({}, getProfileStrategy());
+  state = cloneProfileMode(state.profileType || 'b2c', key);
+  state._industry = key;
+  state.brandName = INDUSTRY_DEFAULTS[key].label;
+  state.logo = '';
+  state.userAvatar = '';
+  state.profileStrategy = strategy;
+  state.personaVariants = {};
+  applyPersonaPreset();
+  applyPersonaSampleTemplate();
+  snapshotPersonaView();
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+}
+
+// ─── DYNAMIC LIST RENDERERS ─────────────────────────────────
+
+function renderInsights() {
+  const c = document.getElementById('insights-container');
+  c.innerHTML = state.insights.items.map((it, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="text" value="${escAttr(it.icon)}" class="col-span-1 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none text-center" oninput="state.insights.items[${i}].icon=this.value; refreshPreview()" title="Icon/emoji">
+        <input type="text" value="${escAttr(it.label)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Label" oninput="state.insights.items[${i}].label=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(it.value)}" class="col-span-6 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Value" oninput="state.insights.items[${i}].value=this.value; refreshPreview()">
+        <button class="col-span-1 icon-btn danger" onclick="removeInsight(${i})">×</button>
+      </div>
+    </div>`).join('');
+}
+function addInsight() { state.insights.items.push({ icon: '📊', label: 'New Metric', value: '—' }); renderInsights(); refreshPreview(); }
+function removeInsight(i) { state.insights.items.splice(i, 1); renderInsights(); refreshPreview(); }
+
+function renderAffinityGroups() {
+  const c = document.getElementById('affinity-groups-container');
+  c.innerHTML = state.affinities.groups.map((g, gi) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-3">
+        <input type="text" value="${escAttr(g.name)}" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" placeholder="Group name" oninput="state.affinities.groups[${gi}].name=this.value; refreshPreview()">
+        <button class="icon-btn danger" onclick="removeAffinityGroup(${gi})">Remove group</button>
+      </div>
+      <div class="space-y-2">
+        ${g.items.map((it, ii) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Label" oninput="state.affinities.groups[${gi}].items[${ii}].label=this.value; refreshPreview()">
+            <div class="col-span-3 flex items-center gap-1">
+              <span class="text-[10px] font-600 text-gray-500">A</span>
+              <input type="range" min="0" max="100" value="${it.a}" class="flex-1" oninput="state.affinities.groups[${gi}].items[${ii}].a=+this.value; this.nextElementSibling.textContent=this.value+'%'; refreshPreview()">
+              <span class="text-[10px] w-8 text-right text-gray-500">${it.a}%</span>
+            </div>
+            <div class="col-span-3 flex items-center gap-1">
+              <span class="text-[10px] font-600 text-gray-500">B</span>
+              <input type="range" min="0" max="100" value="${it.b}" class="flex-1" oninput="state.affinities.groups[${gi}].items[${ii}].b=+this.value; this.nextElementSibling.textContent=this.value+'%'; refreshPreview()">
+              <span class="text-[10px] w-8 text-right text-gray-500">${it.b}%</span>
+            </div>
+            <button class="col-span-2 icon-btn danger" onclick="removeAffinityItem(${gi}, ${ii})">Remove</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addAffinityItem(${gi})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+}
+function addAffinityGroup() { state.affinities.groups.push({ name: 'New Group', items: [{ label: 'Item', a: 50, b: 50 }] }); renderAffinityGroups(); refreshPreview(); }
+function removeAffinityGroup(i) { state.affinities.groups.splice(i, 1); renderAffinityGroups(); refreshPreview(); }
+function addAffinityItem(gi) { state.affinities.groups[gi].items.push({ label: 'New', a: 50, b: 50 }); renderAffinityGroups(); refreshPreview(); }
+function removeAffinityItem(gi, ii) { state.affinities.groups[gi].items.splice(ii, 1); renderAffinityGroups(); refreshPreview(); }
+
+function renderPreferences() {
+  const c = document.getElementById('preferences-container');
+  c.innerHTML = state.preferences.items.map((it, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="text" value="${escAttr(it.label)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Label" oninput="state.preferences.items[${i}].label=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(it.value)}" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Value" oninput="state.preferences.items[${i}].value=this.value; refreshPreview()">
+        <button class="col-span-1 icon-btn danger" onclick="removePreference(${i})">×</button>
+      </div>
+    </div>`).join('');
+}
+function addPreference() { state.preferences.items.push({ label: 'New', value: '' }); renderPreferences(); refreshPreview(); }
+function removePreference(i) { state.preferences.items.splice(i, 1); renderPreferences(); refreshPreview(); }
+
+function renderEvents() {
+  const c = document.getElementById('events-container');
+  const b2b = isB2B();
+  c.innerHTML = state.events.items.map((ev, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="text" value="${escAttr(ev.name)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Stakeholder name' : 'Event name'}" oninput="state.events.items[${i}].name=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.date)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Role' : 'Date'}" oninput="state.events.items[${i}].date=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(ev.confirmation)}" class="col-span-3 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="${b2b ? 'Title' : 'Confirmation #'}" oninput="state.events.items[${i}].confirmation=this.value; refreshPreview()">
+        <button class="col-span-1 icon-btn danger" onclick="removeEvent(${i})">×</button>
+      </div>
+    </div>`).join('');
+}
+function addEvent() { state.events.items.push({ name: isB2B() ? 'New Stakeholder' : 'New Event', date: '', confirmation: '' }); renderEvents(); refreshPreview(); }
+function removeEvent(i) { state.events.items.splice(i, 1); renderEvents(); refreshPreview(); }
+
+function renderMembership() {
+  const c = document.getElementById('membership-container');
+  c.innerHTML = state.membership.items.map((it, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="text" value="${escAttr(it.label)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Label" oninput="state.membership.items[${i}].label=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(it.value)}" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Value" oninput="state.membership.items[${i}].value=this.value; refreshPreview()">
+        <button class="col-span-1 icon-btn danger" onclick="removeMembership(${i})">×</button>
+      </div>
+    </div>`).join('');
+}
+function addMembership() { state.membership.items.push({ label: 'New', value: '' }); renderMembership(); refreshPreview(); }
+function removeMembership(i) { state.membership.items.splice(i, 1); renderMembership(); refreshPreview(); }
+
+// Extra cards — user-added cards in the middle column to fill vertical
+// space. Each card owns a title, icon (emoji or image URL/data URL),
+// and any number of label/value rows.
+function renderExtraCards() {
+  const c = document.getElementById('extra-cards-container');
+  normalizeCustomModules();
+  c.innerHTML = state.extraCards.map((card, ci) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-2">
+        <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.extraCards[${ci}].title=this.value; refreshPreview()">
+        <select aria-label="${escAttr(card.title || 'Middle-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('extraCards', ${ci}, this.value)">
+          <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
+          <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
+          <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
+        </select>
+        <button class="icon-btn danger" onclick="removeExtraCard(${ci})">Remove card</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center mb-2">
+        <input type="text" value="${escAttr(card.icon || '')}" placeholder="Icon (emoji or image URL)" class="col-span-9 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none font-mono" oninput="state.extraCards[${ci}].icon=this.value; refreshPreview()">
+        <div id="drop-extra-icon-${ci}" class="col-span-3 drop-zone-sf p-2 text-center cursor-pointer text-[10px]">📷 Upload</div>
+      </div>
+      <div class="space-y-2">
+        ${(card.items || []).map((it, ri) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" placeholder="Label" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].label=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(it.value)}" placeholder="Value" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.extraCards[${ci}].items[${ri}].value=this.value; refreshPreview()">
+            <button class="col-span-1 icon-btn danger" onclick="removeExtraCardRow(${ci}, ${ri})">×</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addExtraCardRow(${ci})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+
+  // Wire icon drop zones for each extra card
+  state.extraCards.forEach((_, ci) => {
+    attachDropZone(`drop-extra-icon-${ci}`, null, (dataUrl) => {
+      state.extraCards[ci].icon = dataUrl;
+      renderExtraCards();
+      refreshPreview();
+    });
+  });
+}
+function addExtraCard() {
+  normalizeCustomModules();
+  state.extraCards.push({
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: 'New Section',
+    icon: '📋',
+    items: [
+      { label: 'Field 1', value: '' },
+      { label: 'Field 2', value: '' }
+    ],
+    placement: 'middle', visibility: 'visible'
+  });
+  renderExtraCards();
+  refreshPreview();
+}
+function removeExtraCard(i) { state.extraCards.splice(i, 1); renderExtraCards(); refreshPreview(); }
+function addExtraCardRow(ci) { state.extraCards[ci].items.push({ label: '', value: '' }); renderExtraCards(); refreshPreview(); }
+function removeExtraCardRow(ci, ri) { state.extraCards[ci].items.splice(ri, 1); renderExtraCards(); refreshPreview(); }
+
+// Right-column custom cards — render under Membership Details in the
+// right-bottom-left column, opposite Engagement Activity. Same shape
+// as middle-column extraCards to keep the editor familiar.
+function renderRightExtraCards() {
+  const c = document.getElementById('right-extra-cards-container');
+  if (!c) return;
+  normalizeCustomModules();
+  c.innerHTML = state.rightExtraCards.map((card, ci) => `
+    <div class="row-card">
+      <div class="flex items-center gap-2 mb-2">
+        <input type="text" value="${escAttr(card.title)}" placeholder="Card title" class="flex-1 px-2 py-1.5 border border-gray-300 rounded text-sm font-600 outline-none" oninput="state.rightExtraCards[${ci}].title=this.value; refreshPreview()">
+        <select aria-label="${escAttr(card.title || 'Right-column card')} visibility" class="px-2 py-1.5 border border-gray-300 rounded text-xs font-600 outline-none" onchange="setCustomCardVisibility('rightExtraCards', ${ci}, this.value)">
+          <option value="visible" ${card.visibility === 'visible' ? 'selected' : ''}>Shown</option>
+          <option value="suggested" ${card.visibility === 'suggested' ? 'selected' : ''}>Suggested</option>
+          <option value="hidden" ${card.visibility === 'hidden' ? 'selected' : ''}>Hidden</option>
+        </select>
+        <button class="icon-btn danger" onclick="removeRightExtraCard(${ci})">Remove card</button>
+      </div>
+      <div class="grid grid-cols-12 gap-2 items-center mb-2">
+        <input type="text" value="${escAttr(card.icon || '')}" placeholder="Icon (emoji or image URL)" class="col-span-9 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none font-mono" oninput="state.rightExtraCards[${ci}].icon=this.value; refreshPreview()">
+        <div id="drop-right-extra-icon-${ci}" class="col-span-3 drop-zone-sf p-2 text-center cursor-pointer text-[10px]">📷 Upload</div>
+      </div>
+      <div class="space-y-2">
+        ${(card.items || []).map((it, ri) => `
+          <div class="grid grid-cols-12 gap-2 items-center">
+            <input type="text" value="${escAttr(it.label)}" placeholder="Label" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.rightExtraCards[${ci}].items[${ri}].label=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(it.value)}" placeholder="Value" class="col-span-7 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" oninput="state.rightExtraCards[${ci}].items[${ri}].value=this.value; refreshPreview()">
+            <button class="col-span-1 icon-btn danger" onclick="removeRightExtraCardRow(${ci}, ${ri})">×</button>
+          </div>`).join('')}
+      </div>
+      <button onclick="addRightExtraCardRow(${ci})" class="mt-2 px-3 py-1.5 border border-dashed border-gray-300 text-gray-500 text-xs font-600 rounded-lg hover:border-blue-400 hover:text-blue-600 w-full">+ Add Row</button>
+    </div>`).join('');
+
+  state.rightExtraCards.forEach((_, ci) => {
+    attachDropZone(`drop-right-extra-icon-${ci}`, null, (dataUrl) => {
+      state.rightExtraCards[ci].icon = dataUrl;
+      renderRightExtraCards();
+      refreshPreview();
+    });
+  });
+}
+function addRightExtraCard() {
+  normalizeCustomModules();
+  state.rightExtraCards.push({
+    moduleId: `module-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+    title: 'New Section',
+    icon: '📋',
+    items: [
+      { label: 'Field 1', value: '' },
+      { label: 'Field 2', value: '' }
+    ],
+    placement: 'right', visibility: 'visible'
+  });
+  renderRightExtraCards();
+  refreshPreview();
+}
+function removeRightExtraCard(i) { state.rightExtraCards.splice(i, 1); renderRightExtraCards(); refreshPreview(); }
+function addRightExtraCardRow(ci) { state.rightExtraCards[ci].items.push({ label: '', value: '' }); renderRightExtraCards(); refreshPreview(); }
+function removeRightExtraCardRow(ci, ri) { state.rightExtraCards[ci].items.splice(ri, 1); renderRightExtraCards(); refreshPreview(); }
+
+function setCustomCardVisibility(bucket, index, visibility) {
+  normalizeCustomModules();
+  const card = state[bucket]?.[index];
+  if (!card) return;
+  card.visibility = visibility;
+  renderAll();
+  refreshPreview();
+}
+
+function findCustomModule(moduleId) {
+  normalizeCustomModules();
+  for (const bucket of ['extraCards', 'rightExtraCards']) {
+    const index = state[bucket].findIndex(card => card.moduleId === moduleId);
+    if (index !== -1) return { bucket, index, card: state[bucket][index] };
+  }
+  return null;
+}
+
+function moveCustomModule(moduleId, destination) {
+  if (!['middle', 'right', 'suggested', 'hidden'].includes(destination)) return;
+  const found = findCustomModule(moduleId);
+  if (!found) return;
+  const [card] = state[found.bucket].splice(found.index, 1);
+  if (['suggested', 'hidden'].includes(destination)) {
+    card.visibility = destination;
+    state[card.placement === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+  } else {
+    card.placement = destination;
+    card.visibility = 'visible';
+    state[destination === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+  }
+  renderAll();
+  refreshPreview();
+  restoreModuleFocus(moduleId, 'move');
+  setText('module-composer-status', `${card.title} moved to ${destination}.`);
+}
+
+function restoreModuleFocus(moduleId, action) {
+  const row = [...document.querySelectorAll('[data-module-id]')].find(node => node.dataset.moduleId === moduleId);
+  row?.querySelector(`[data-module-action="${action}"]`)?.focus();
+}
+function reorderCustomModule(moduleId, delta) {
+  const found = findCustomModule(moduleId);
+  if (!found || ![-1, 1].includes(delta)) return;
+  const cards = state[found.bucket];
+  let next = found.index + delta;
+  while (next >= 0 && next < cards.length && cards[next].visibility !== found.card.visibility) next += delta;
+  if (next < 0 || next >= cards.length) return;
+  [cards[next], cards[found.index]] = [cards[found.index], cards[next]];
+  renderAll(); refreshPreview(); restoreModuleFocus(moduleId, delta < 0 ? 'up' : 'down');
+  setText('module-composer-status', `${found.card.title} moved ${delta < 0 ? 'up' : 'down'}.`);
+}
+
+function onModuleDragStart(event, moduleId) {
+  event.dataTransfer.effectAllowed = 'move';
+  event.dataTransfer.setData('text/plain', moduleId);
+}
+
+function allowModuleDrop(event) {
+  event.preventDefault();
+  event.currentTarget.classList.add('module-composer-drop-active');
+}
+
+function clearModuleDrop(event) {
+  event.currentTarget.classList.remove('module-composer-drop-active');
+}
+
+function dropModule(event, destination) {
+  event.preventDefault();
+  clearModuleDrop(event);
+  moveCustomModule(event.dataTransfer.getData('text/plain'), destination);
+}
+
+function renderModuleComposer() {
+  const container = document.getElementById('module-composer');
+  if (!container) return;
+  const modules = getCustomModules();
+  const zones = {
+    middle: modules.filter(card => card.visibility === 'visible' && card.placement === 'middle'),
+    right: modules.filter(card => card.visibility === 'visible' && card.placement === 'right'),
+    suggested: modules.filter(card => card.visibility !== 'visible')
+  };
+  const zone = (key, title, description) => `
+    <div class="module-composer-zone" ondragover="allowModuleDrop(event)" ondragleave="clearModuleDrop(event)" ondrop="dropModule(event, '${key}')">
+      <div class="module-composer-zone-title">${title}</div>
+      <p>${description}</p>
+      ${zones[key].length ? zones[key].map(card => `
+        <div class="module-composer-card" data-module-id="${escAttr(card.moduleId)}" style="flex-wrap:wrap" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
+          <span class="module-composer-grip">⠿</span><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
+          <select data-module-action="move" aria-label="Move ${escAttr(card.title)}" onchange="moveCustomModule('${escAttr(card.moduleId)}',this.value)">${[['middle','Middle column'],['right','Right column'],['suggested','Suggested library'],['hidden','Hidden']].map(([value, label]) => `<option value="${value}" ${value === (card.visibility === 'visible' ? card.placement : card.visibility) ? 'selected' : ''}>${label}</option>`).join('')}</select>
+          <button type="button" data-module-action="up" aria-label="Move ${escAttr(card.title)} up" onclick="reorderCustomModule('${escAttr(card.moduleId)}',-1)">↑</button>
+          <button type="button" data-module-action="down" aria-label="Move ${escAttr(card.title)} down" onclick="reorderCustomModule('${escAttr(card.moduleId)}',1)">↓</button>
+        </div>`).join('') : `<div class="module-composer-empty">Drop a card here</div>`}
+    </div>`;
+  container.innerHTML = `${zone('middle', 'Middle column', 'Below preferences')}${zone('right', 'Right column', 'Below products / offers')}${zone('suggested', 'Suggested library', 'Available but not on the first screen')}`;
+}
+
+function renderRecs() {
+  const c = document.getElementById('recs-container');
+  c.innerHTML = state.recommendations.items.map((rec, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-start">
+        <div class="col-span-11 space-y-2">
+          <div class="grid grid-cols-2 gap-2">
+            <input type="text" value="${escAttr(rec.eyebrow)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Eyebrow (e.g. Next Best Action:)" oninput="state.recommendations.items[${i}].eyebrow=this.value; refreshPreview()">
+            <input type="text" value="${escAttr(rec.cta)}" class="px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Button text" oninput="state.recommendations.items[${i}].cta=this.value; refreshPreview()">
+          </div>
+          <input type="text" value="${escAttr(rec.title)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="updateRecommendationTitle(${i},this.value)">
+          <input type="text" value="${escAttr(/^data:/i.test(rec.image || '') ? '' : rec.image)}" class="w-full px-2 py-1.5 border border-gray-300 rounded text-xs outline-none font-mono" placeholder="Image URL" oninput="setRecommendationImage(${i},this.value,'manual')">
+          <p id="rec-image-status-${i}" class="text-xs text-slate-500">${escHTML(recommendationImageLabel(rec))}</p>
+          <button type="button" class="text-xs underline" onclick="regenerateRecommendationImage(${i})">Generate image for this action</button>
+          <div id="rec-drop-${i}" class="drop-zone-sf p-3 text-center cursor-pointer">
+            ${rec.image ? `<img src="${escAttr(safeImageURL(rec.image))}" alt="Recommendation image" class="w-full h-20 object-cover rounded mb-2">` : ''}
+            <p class="text-[11px] text-gray-500">📷 Drop image or click to upload</p>
+          </div>
+        </div>
+        <button class="col-span-1 icon-btn danger" onclick="removeRec(${i})">×</button>
+      </div>
+    </div>`).join('');
+  // Wire drop zones after render
+  const owner = state;
+  state.recommendations.items.forEach((item, i) => {
+    attachDropZone(`rec-drop-${i}`, null, (dataUrl) => {
+      if (state !== owner || state.recommendations.items[i] !== item) return;
+      setRecommendationImage(i, dataUrl, 'uploaded');
+      renderRecs();
+      refreshPreview();
+    });
+  });
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+}
+function recommendationImageLabel(rec) {
+  if (!rec.image) return 'Image missing — retry generation or upload an image.';
+  if (rec.imageForTitle && rec.imageForTitle !== rec.title) return 'Action changed — review this image or generate a new one.';
+  return rec.imageSource === 'generated' ? 'AI-generated for this action' : rec.imageSource === 'uploaded' ? 'Your uploaded image' : 'Provided image';
+}
+function updateRecommendationTitle(index, title) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.title = title; setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+function setRecommendationImage(index, image, source) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  item.image = image; item.imageSource = source; item.imageForTitle = item.title;
+  const items = state.recommendations.items;
+  ensureProfileSet().visuals[getProfileStrategy().lens] = { state: items.every(row => row.image) ? 'ready' : 'partial', count: items.filter(row => row.image).length };
+  setText(`rec-image-status-${index}`, recommendationImageLabel(item)); refreshPreview();
+}
+async function regenerateRecommendationImage(index) {
+  const item = state.recommendations.items[index]; if (!item) return;
+  if (item.image && !confirm('Replace this action’s image with a new AI-generated image?')) return;
+  item.image = ''; item.imageSource = 'pending'; renderRecs(); refreshPreview();
+  await generatePersonaRecommendationImagesForTarget(getProfileStrategy().lens, state, { announce: true, onlyIndex: index });
+}
+function addRec() { state.recommendations.items.push({ eyebrow: 'Recommended:', title: 'New Recommendation', cta: 'Suggest', image: '' }); renderRecs(); refreshPreview(); }
+function removeRec(i) { state.recommendations.items.splice(i, 1); renderRecs(); refreshPreview(); }
+
+function renderActivity() {
+  const c = document.getElementById('activity-container');
+  c.innerHTML = state.activity.items.map((it, i) => `
+    <div class="row-card">
+      <div class="grid grid-cols-12 gap-2 items-center">
+        <input type="text" value="${escAttr(it.icon)}" class="col-span-1 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none text-center" oninput="state.activity.items[${i}].icon=this.value; refreshPreview()" title="Icon/emoji">
+        <input type="text" value="${escAttr(it.title)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Title" oninput="state.activity.items[${i}].title=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(it.body)}" class="col-span-4 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Body (HTML allowed)" oninput="state.activity.items[${i}].body=this.value; refreshPreview()">
+        <input type="text" value="${escAttr(it.time)}" class="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-sm outline-none" placeholder="Time" oninput="state.activity.items[${i}].time=this.value; refreshPreview()">
+        <button class="col-span-1 icon-btn danger" onclick="removeActivity(${i})">×</button>
+      </div>
+    </div>`).join('');
+}
+function addActivity() { state.activity.items.push({ icon: '🎯', title: 'New Event', body: '', time: 'just now' }); renderActivity(); refreshPreview(); }
+function removeActivity(i) { state.activity.items.splice(i, 1); renderActivity(); refreshPreview(); }
+
+function renderNavLinks() {
+  const c = document.getElementById('nav-links-container');
+  c.innerHTML = state.navLinks.map((l, i) => `
+    <span class="inline-flex items-center gap-1.5 bg-gray-100 text-gray-700 px-3 py-1.5 rounded-full text-xs font-600">
+      ${escHTML(l)}
+      <button class="text-gray-400 hover:text-red-500" onclick="removeNavLink(${i})">×</button>
+    </span>`).join('');
+}
+function addNavLink() {
+  const inp = document.getElementById('new-nav-link');
+  const v = inp.value.trim();
+  if (!v) return;
+  state.navLinks.push(v);
+  inp.value = '';
+  renderNavLinks();
+  refreshPreview();
+}
+function removeNavLink(i) { state.navLinks.splice(i, 1); renderNavLinks(); refreshPreview(); }
+
+// ─── ESCAPE HELPERS (for wizard-side rendering) ─────────────
+function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/"/g, '&quot;'); }
+function escHTML(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+
+// ─── STEP NAVIGATION ────────────────────────────────────────
+function goToStep(n) {
+  currentStep = Math.max(0, Math.min(TOTAL_STEPS - 1, n));
+  document.querySelectorAll('.step-panel').forEach(p => {
+    p.classList.toggle('active', +p.dataset.step === currentStep);
+  });
+  document.querySelectorAll('#step-indicators .step-dot').forEach(d => {
+    const i = +d.dataset.step;
+    d.classList.toggle('active', i === currentStep);
+    d.classList.toggle('completed', i < currentStep);
+    if (i === currentStep) d.setAttribute('aria-current', 'step'); else d.removeAttribute('aria-current');
+  });
+  document.getElementById('btn-prev').classList.toggle('hidden', currentStep === 0);
+  document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Preview & Present' : 'Next →';
+  const heading = document.querySelector('.step-panel.active h2');
+  if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.renderStudioUI?.();
+}
+function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); else openPresentation(); }
+function prevStep() { if (currentStep > 0) goToStep(currentStep - 1); }
+
+// ─── URL & IMAGE INPUTS ─────────────────────────────────────
+function onLogoUrlChange() {
+  const v = document.getElementById('url-logo').value.trim();
+  state.logo = v;
+  brandLogoRequests.delete(state);
+  brandLogoStatuses.delete(state);
+  renderBrandLogoStatus();
+  setImagePreviewFromURL('preview-logo', v);
+  refreshPreview();
+}
+function onUserAvatarUrlChange() {
+  const v = document.getElementById('url-user-avatar').value.trim();
+  state.userAvatar = v;
+  setImagePreviewFromURL('preview-user-avatar', v);
+  refreshPreview();
+}
+function onPhotoUrlChange() {
+  const v = document.getElementById('url-photo').value.trim();
+  state.profile.photo = v;
+  setImagePreviewFromURL('preview-photo', v);
+  refreshPreview();
+}
+
+function updateAccountPhotoUI() {
+  const photo = state.account?.logo || '';
+  const input = document.getElementById('url-account-photo');
+  if (input) input.value = photo.startsWith('data:') ? '' : photo;
+  setImagePreviewFromURL('preview-account-photo', photo);
+  document.getElementById('remove-account-photo')?.classList.toggle('hidden', !photo);
+}
+
+function setAccountPhoto(photo) {
+  if (!state.account) state.account = {};
+  // Account identity is shared across persona views; the Step 1 brand logo
+  // remains independent. Use the existing account.logo export/save field.
+  state.account.logo = String(photo || '').trim();
+  updateAccountPhotoUI();
+  refreshPreview();
+}
+
+function onAccountPhotoUrlChange() {
+  setAccountPhoto(document.getElementById('url-account-photo').value);
+}
+
+// ─── START OVER + EXPORT ───────────────────────────────────
+function startOver() {
+  if (!confirm('Reset everything back to industry defaults?')) return;
+  cancelDraftRequests();
+  resetProjectIdentity();
+  const profileType = state.profileType || 'b2c';
+  const key = document.getElementById('brand-industry').value || 'generic';
+  state = profileType === 'b2b' ? cloneAccountIndustry(key) : cloneTonyRobbinsStarter();
+  state._industry = profileType === 'b2b' ? key : 'generic';
+  applyPersonaPreset();
+  applyPersonaSampleTemplate();
+  snapshotPersonaView();
+  fillStaticFields();
+  renderAll();
+  goToStep(0);
+  refreshPreview();
+}
+
+async function downloadHTML() {
+  const snapshot = captureOutputSnapshot();
+  // Convert bundled starter artwork to data URLs before downloading so the
+  // exported HTML continues to show its recommendation images anywhere.
+  if (typeof hydrateBundledStarterImages === 'function') await hydrateBundledStarterImages(snapshot);
+  const html = generateProfileHTML(snapshot);
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const name = ((snapshot.profileType === 'b2b' ? snapshot.account?.name : snapshot.profile?.name) || 'profile').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  const strategy = getProfileStrategy(snapshot);
+  const persona = getProfileStrategyLabel(strategy).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'profile';
+  a.download = `unified-profile-${name}-${persona}.html`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+async function buildIntegrationArtifact(profile = captureOutputSnapshot()) {
+  // Keep the API payload self-contained so an external presentation tool can
+  // render the same profile the UPG user saved, without knowing our editor
+  // implementation details.
+  const strategy = getProfileStrategy(profile);
+  const profileType = profile.profileType === 'b2b' ? 'b2b' : 'b2c';
+  const subject = profileType === 'b2b'
+    ? (profile.account?.name || profile.tabName || 'Account')
+    : (profile.profile?.name || profile.tabName || 'Unified Profile');
+  // Do not duplicate large inline AI images into the saved-project payload.
+  // The profile state already retains them; a compact rendered export is made
+  // available when it can be safely persisted alongside that state.
+  const rawHtml = generateProfileHTML(profile).replace(/(src=["'])(assets\/[^"']+)/g, (_, before, assetPath) => `${before}${new URL(assetPath, window.location.href).href}`);
+  const canPersistRender = rawHtml.length <= 350000 && !/src=["']data:/i.test(rawHtml);
+  return {
+    schemaVersion: 'upg.profile.v1',
+    generatedAt: new Date().toISOString(),
+    profileType,
+    persona: strategy.lens,
+    personaLabel: getProfileStrategyLabel(strategy),
+    availablePersonas: Object.keys(profile.personaVariants || { [strategy.lens]: {} }),
+    subject,
+    brand: {
+      name: profile.brandName || '',
+      appName: profile.appName || '',
+      logo: /^data:/i.test(profile.logo || '') ? '' : (profile.logo || ''),
+      colors: Object.assign({}, profile.colors || {})
+    },
+    renderedHtml: canPersistRender ? rawHtml : '',
+    renderStatus: canPersistRender ? 'ready' : 'renderable'
+  };
+}
+
+function fitPresentationScale() {
+  const canvas = document.getElementById('presentation-canvas');
+  const stage = document.getElementById('presentation-stage');
+  const iframe = document.getElementById('presentation-iframe');
+  if (!canvas || !stage || !iframe) return;
+  const fit = getCanvasFit(canvas.clientWidth, canvas.clientHeight);
+  stage.style.width = `${fit.width}px`;
+  stage.style.height = `${fit.height}px`;
+  iframe.style.width = `${PROFILE_CANVAS.width}px`;
+  iframe.style.height = `${PROFILE_CANVAS.height}px`;
+  iframe.style.transform = `scale(${fit.scale})`;
+}
+
+let closeActivePresentation = null;
+function openPresentation() {
+  closeActivePresentation?.();
+  const overlay = document.createElement('div');
+  overlay.id = 'presentation-overlay';
+  overlay.setAttribute('role', 'dialog');
+  overlay.setAttribute('aria-modal', 'true');
+  overlay.setAttribute('aria-label', 'Unified profile presentation');
+  overlay.className = 'presentation-overlay';
+  overlay.innerHTML = `<div id="presentation-toolbar" class="presentation-toolbar"><div><strong>Unified Profile Presentation · 16:9</strong><p id="presentation-status" role="status" aria-live="polite">Full screen hides these controls. Press Esc to return. Capture only the profile rectangle if your display is not 16:9.</p></div><div class="presentation-controls"><button id="presentation-fullscreen" type="button">Full screen · clean capture</button><button id="presentation-close" type="button">Close</button></div></div><div id="presentation-canvas" tabindex="-1" aria-label="Widescreen profile canvas. Press Escape to exit full screen."><div id="presentation-stage"><iframe id="presentation-iframe" title="Unified profile presentation" sandbox="allow-scripts" style="width:${PROFILE_CANVAS.width}px;height:${PROFILE_CANVAS.height}px;"></iframe></div></div>`;
+  document.body.appendChild(overlay);
+  const canvas = document.getElementById('presentation-canvas');
+  const resizeObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(fitPresentationScale) : null;
+  resizeObserver?.observe(canvas);
+  const close = () => {
+    resizeObserver?.disconnect();
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    releaseDialogFocus('presentation-overlay');
+    overlay.remove();
+    presentationContext = null;
+    if (closeActivePresentation === close) closeActivePresentation = null;
+  };
+  closeActivePresentation = close;
+  overlay.querySelector('#presentation-close').addEventListener('click', close);
+  overlay.querySelector('#presentation-fullscreen').addEventListener('click', async () => {
+    try {
+      if (!canvas.requestFullscreen) throw new Error('fullscreen_unavailable');
+      // Only the profile canvas enters fullscreen; no toolbar, padding, or
+      // editor chrome becomes part of the screenshot.
+      await canvas.requestFullscreen();
+      if (closeActivePresentation !== close) return;
+      canvas.focus();
+      fitPresentationScale();
+    } catch (_) {
+      if (closeActivePresentation !== close) return;
+      overlay.querySelector('#presentation-status').textContent = 'Full screen is unavailable or was blocked. You can still capture the 16:9 profile rectangle below, or allow full screen and try again.';
+    }
+  });
+  overlay.addEventListener('click', event => { if (event.target === overlay) close(); });
+  document.getElementById('presentation-iframe').srcdoc = getPresentationDocument();
+  activateDialogFocus('presentation-overlay', () => {
+    if (document.fullscreenElement === canvas) document.exitFullscreen?.()?.catch?.(() => {});
+    else close();
+  }, 'presentation-close');
+  requestAnimationFrame(fitPresentationScale);
+  setTimeout(fitPresentationScale, 100);
+}
+window.addEventListener('resize', fitPresentationScale);
+document.addEventListener('fullscreenchange', () => {
+  const canvas = document.getElementById('presentation-canvas');
+  const toolbar = document.getElementById('presentation-toolbar');
+  if (toolbar) toolbar.hidden = document.fullscreenElement === canvas;
+  setTimeout(fitPresentationScale, 0);
+  if (!document.fullscreenElement) document.getElementById('presentation-fullscreen')?.focus();
+});
+
+function copyHTML() {
+  const html = renderPreviewNow();
+  showCopyModal(html);
+  tryCopyToClipboard(html);
+}
+
+function tryCopyToClipboard(html, sourceTextarea) {
+  const flashToast = () => {
+    const s = document.getElementById('copy-success');
+    if (!s) return;
+    s.classList.remove('hidden');
+    setTimeout(() => s.classList.add('hidden'), 2200);
+  };
+  const flashModalStatus = (msg, ok) => {
+    const st = document.getElementById('copy-modal-status');
+    if (!st) return;
+    st.textContent = msg;
+    st.className = 'text-sm font-600 ' + (ok ? 'text-green-700' : 'text-red-700');
+    setTimeout(() => { st.textContent = ''; st.className = 'text-sm font-600'; }, 2500);
+  };
+  const legacyCopy = () => {
+    try {
+      const ta = sourceTextarea || document.getElementById('copy-modal-textarea');
+      if (!ta) return false;
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, ta.value.length);
+      const ok = document.execCommand('copy');
+      return !!ok;
+    } catch (e) { return false; }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(html).then(() => {
+      flashToast();
+      flashModalStatus('✓ Copied to clipboard', true);
+    }).catch(() => {
+      if (legacyCopy()) {
+        flashToast();
+        flashModalStatus('✓ Copied to clipboard', true);
+      } else {
+        flashModalStatus('Copy blocked — select the text and press ⌘/Ctrl+C', false);
+      }
+    });
+  } else if (legacyCopy()) {
+    flashToast();
+    flashModalStatus('✓ Copied to clipboard', true);
+  } else {
+    flashModalStatus('Select the text and press ⌘/Ctrl+C to copy', false);
+  }
+}
+
+function showCopyModal(html) {
+  let modal = document.getElementById('copy-modal');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'copy-modal';
+    modal.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(15,23,42,0.55);display:flex;align-items:center;justify-content:center;padding:24px;';
+    modal.innerHTML = `
+      <div style="background:#fff;border-radius:12px;max-width:900px;width:100%;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 25px 50px -12px rgba(0,0,0,0.35);overflow:hidden;">
+        <div style="padding:16px 20px;border-bottom:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;">
+          <div style="font-weight:700;font-size:15px;color:#0f172a;">Copy Profile HTML</div>
+          <button id="copy-modal-close-x" aria-label="Close copy dialog" style="background:none;border:none;font-size:22px;line-height:1;cursor:pointer;color:#64748b;padding:4px 8px;">×</button>
+        </div>
+        <div style="padding:12px 20px;font-size:13px;color:#475569;">Select-all is already applied. Click <b>Copy</b> below, or press ⌘/Ctrl+C.</div>
+        <div style="padding:0 20px 12px;flex:1;overflow:hidden;display:flex;">
+          <textarea id="copy-modal-textarea" readonly spellcheck="false" style="width:100%;flex:1;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:12px;line-height:1.4;border:1px solid #cbd5e1;border-radius:8px;padding:10px;resize:none;background:#f8fafc;color:#0f172a;"></textarea>
+        </div>
+        <div style="padding:12px 20px 16px;border-top:1px solid #e5e7eb;display:flex;align-items:center;justify-content:space-between;gap:12px;">
+          <div id="copy-modal-status" role="status" aria-live="polite" class="text-sm font-600"></div>
+          <div style="display:flex;gap:8px;">
+            <button id="copy-modal-close" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:1px solid #cbd5e1;background:#fff;color:#0f172a;cursor:pointer;">Close</button>
+            <button id="copy-modal-copy" style="padding:8px 16px;font-size:13px;font-weight:600;border-radius:8px;border:none;background:#0176d3;color:#fff;cursor:pointer;">Copy</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+    const close = () => { releaseDialogFocus('copy-modal'); modal.remove(); };
+    modal.addEventListener('click', (e) => { if (e.target === modal) close(); });
+    modal.querySelector('#copy-modal-close').addEventListener('click', close);
+    modal.querySelector('#copy-modal-close-x').addEventListener('click', close);
+    modal.querySelector('#copy-modal-copy').addEventListener('click', () => {
+      const ta = document.getElementById('copy-modal-textarea');
+      tryCopyToClipboard(ta ? ta.value : html, ta);
+    });
+    modal.setAttribute('aria-label', 'Copy profile HTML');
+    modal.querySelector('#copy-modal-textarea').setAttribute('aria-label', 'Exported profile HTML');
+    activateDialogFocus('copy-modal', close, 'copy-modal-textarea');
+  }
+  const ta = document.getElementById('copy-modal-textarea');
+  if (ta) {
+    ta.value = html;
+    setTimeout(() => { ta.focus(); ta.select(); }, 40);
+  }
+}
+
+function exportForCloudy() {
+  downloadHTML();
+  window.open('https://sfdc.co/cloudy', '_blank', 'noopener');
+  const hint = document.getElementById('cloudy-hint');
+  if (hint) {
+    hint.classList.remove('hidden');
+    setTimeout(() => hint.classList.add('hidden'), 6000);
+  }
+}
+
+// ─── AI-driven ingest — apply parsed profile from URL analysis ─
+function sanitizeAIActivityBody(value) {
+  // Keep the useful lightweight emphasis AI can provide, while removing inline
+  // color declarations that can make copy disappear against a white card.
+  return String(value || '')
+    .replace(/\sstyle\s*=\s*(['"])[^'"]*color\s*:[^;'"]*;?[^'"]*\1/gi, '')
+    .replace(/\sstyle\s*=\s*([^\s>]*color\s*:[^;\s>]*[^\s>]*)/gi, '');
+}
+
+function applyAIProfile(ai, strategyOverride, profileSetOverride, requestedType = state.profileType) {
+  UPGContract.validateAIProfile(ai, { profileType: requestedType });
+  // Preserve current industry unless AI came back with something else.
+  const industry = ai.industry && INDUSTRY_DEFAULTS[ai.industry] ? ai.industry : (state._industry || 'recruiting');
+  const profileType = requestedType === 'b2b' ? 'b2b' : 'b2c';
+  const base = cloneProfileMode(profileType, industry);
+  base._industry = industry;
+  base._aiContext = {
+    sourceUrl: ai?._meta?.source_url || '',
+    provider: ai?._meta?.provider || '',
+    analyzedAt: new Date().toISOString(),
+    logoCandidates: (Array.isArray(ai?._meta?.logo_candidates) ? ai._meta.logo_candidates : []).filter(value => typeof value === 'string').slice(0, 6)
+  };
+  base.profileStrategy = Object.assign({}, strategyOverride || getProfileStrategy());
+  base.profileSet = cloneViewData(profileSetOverride || ensureProfileSet());
+
+  base.brandName = ai.brandName || base.brandName || state.brandName;
+  base.appName = ai.appName || base.appName;
+  base.tabName = ai.tabName || (profileType === 'b2b' ? ai.account?.name : ai.profile?.name) || base.tabName;
+
+  if (ai.colors) {
+    if (ai.colors.primary)   base.colors.primary = ai.colors.primary;
+    if (ai.colors.secondary) base.colors.secondary = ai.colors.secondary;
+  }
+  // Keep the Salesforce navigation and recommendation canvas legible after
+  // AI analysis. Users can still choose different values manually in Step 1.
+  base.colors.accent = '#FFFFFF';
+  base.colors.menu = '#FFFFFF';
+  base.colors.menuText = '#000000';
+
+  // Missing AI fields are unknown, never facts inherited from the demo seed.
+  ['profile', 'loyalty', 'account', 'accountMetrics'].forEach(key => {
+    if (base[key]) base[key] = Object.fromEntries(Object.keys(base[key]).map(field => [field, field === 'secondaryEmailInclude' ? false : '']));
+  });
+  ['profile', 'loyalty', 'insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(k => {
+    if (ai[k]) base[k] = Object.assign({}, base[k], ai[k]);
+  });
+  if (Array.isArray(base.recommendations?.items)) {
+    base.recommendations.items = base.recommendations.items.map(item => Object.assign({}, item, {
+      image: item.image || '', imageSource: item.image ? 'generated' : 'pending', imageForTitle: item.title
+    }));
+  }
+  if (Array.isArray(base.activity?.items)) {
+    base.activity.items = base.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
+  }
+  if (profileType === 'b2b') {
+    if (ai.account) base.account = Object.assign({}, base.account, ai.account);
+    if (ai.accountMetrics) base.accountMetrics = Object.assign({}, base.accountMetrics, ai.accountMetrics);
+    base.profileType = 'b2b';
+    base.tabName = ai.tabName || base.account.name || base.tabName;
+  }
+  if (profileType !== 'b2b' && Array.isArray(ai.navLinks) && ai.navLinks.length) base.navLinks = ai.navLinks;
+  // AI may identify valuable additional modules. Keep them in the builder as
+  // suggestions so the initial profile remains a single presentable screen.
+  base.extraCards = [];
+  base.rightExtraCards = [];
+  if (Array.isArray(ai.extraCards)) {
+    const aiCards = ai.extraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `ai-middle-${index + 1}`,
+      placement: 'middle', visibility: index === 0 ? 'visible' : 'suggested', origin: 'ai'
+    }));
+    base.extraCards = (base.extraCards || []).concat(aiCards);
+  }
+  if (Array.isArray(ai.rightExtraCards)) {
+    const aiCards = ai.rightExtraCards.map((card, index) => Object.assign({}, card, {
+      moduleId: card.moduleId || `ai-right-${index + 1}`,
+      placement: 'right', visibility: 'suggested', origin: 'ai'
+    }));
+    base.rightExtraCards = (base.rightExtraCards || []).concat(aiCards);
+  }
+  normalizeCustomModules(base);
+  base.railFields = cloneViewData(ai.railFields || []);
+  // The AI supplies the content, while the selected viewer lens owns the
+  // information hierarchy and section names shown to the presenter.
+  applyPersonaPreset(base);
+  // New website analysis replaces modeled profile content, so previously
+  // saved working views are no longer a safe match for this customer.
+  base.personaVariants = {};
+  snapshotPersonaView(base);
+
+  // Brand assets come from the website, never an unrelated sample or AI guess.
+  base.logo = base._aiContext.logoCandidates[0] || ai._meta?.favicon || '';
+
+  if (UPGContract.companyKey(base._aiContext.sourceUrl) !== UPGContract.companyKey(state._aiContext?.sourceUrl)) resetProjectIdentity();
+  base.schemaVersion = 2;
+  state = base;
+  document.getElementById('brand-industry').value = industry;
+  fillStaticFields();
+  renderAll();
+  refreshPreview();
+  // The website favicon is a shared brand asset. Embed it once so every
+  // persona preview and exported profile uses the same stable logo data.
+  embedSharedBrandLogo(state.logo, state._aiContext.sourceUrl, state._aiContext.logoCandidates).catch(error => console.warn('[UPG] Could not embed customer logo:', error));
+}
+
+function mergePersonaOverlay(target, overlay) {
+  UPGContract.validateAIProfile(overlay, { profileType: target.profileType, overlay: true });
+  if (Array.isArray(overlay.railFields)) {
+    target.railFields ||= [];
+    overlay.railFields.forEach(field => {
+      const existing = target.railFields.find(item => item.label.toLowerCase() === field.label.toLowerCase());
+      if (!existing) target.railFields.push(Object.assign({}, cloneViewData(field), { id: `ai-field-${Date.now()}-${Math.random().toString(36).slice(2)}`, visible: true }));
+    });
+  }
+  ['insights', 'affinities', 'preferences', 'events', 'membership', 'recommendations', 'activity'].forEach(key => {
+    if (overlay[key] && typeof overlay[key] === 'object') target[key] = Object.assign({}, target[key] || {}, cloneViewData(overlay[key]));
+  });
+  if (Array.isArray(target.activity?.items)) {
+    target.activity.items = target.activity.items.map(item => Object.assign({}, item, { body: sanitizeAIActivityBody(item.body) }));
+  }
+  ['extraCards', 'rightExtraCards'].forEach(key => {
+    if (!Array.isArray(overlay[key])) return;
+    target[key] ||= [];
+    overlay[key].forEach(card => {
+      const existing = target[key].find(item => item.origin === 'ai' && item.title.toLowerCase() === card.title.toLowerCase());
+      if (existing) {
+        // Keep visible/edited cards. Refresh unselected alternatives in place.
+        if (existing.visibility === 'suggested') Object.assign(existing, cloneViewData(card), { moduleId: existing.moduleId });
+      } else {
+        target[key].push(Object.assign({}, cloneViewData(card), { moduleId: `ai-${Date.now()}-${Math.random().toString(36).slice(2)}`, origin: 'ai', placement: key === 'rightExtraCards' ? 'right' : 'middle', visibility: 'suggested' }));
+      }
+    });
+  });
+  normalizeCustomModules(target);
+}
+
+function createPersonaVariantFromOverlay(lens, overlay, strategy, owner = state) {
+  const working = cloneViewData(owner);
+  working.profileStrategy = Object.assign({}, strategy, { lens });
+  if (!working.personaVariants || typeof working.personaVariants !== 'object') working.personaVariants = {};
+  delete working.personaVariants[lens];
+  working.extraCards = [];
+  working.rightExtraCards = [];
+  working.railFields = [];
+  working.profileStrategy = Object.assign({}, strategy, { lens });
+  mergePersonaOverlay(working, overlay);
+  if (working.extraCards.length) working.extraCards[0].visibility = 'visible';
+  // The persona owns headers and section hierarchy; the overlay owns content.
+  applyPersonaPreset(working);
+  snapshotPersonaView(working, lens);
+  return working.personaVariants[lens];
+}
+
+function renderAll() {
+  if (typeof renderRailFields === 'function') renderRailFields();
+  renderInsights();
+  renderAffinityGroups();
+  renderPreferences();
+  renderEvents();
+  renderMembership();
+  renderExtraCards();
+  renderRightExtraCards();
+  renderModuleComposer();
+  renderRecs();
+  renderActivity();
+  renderNavLinks();
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof labelEditorControls === 'function') labelEditorControls();
+}
+
+// ─── SAASY AUTH / SAVE PROJECTS ─────────────────────────────
+const SAASY_TOOL = 'upg';
+let currentProjectId = null;
+let currentProjectName = null;
+let currentProjectRevision = null;
+let currentProjectOwner = null;
+let projectSaveInFlight = false;
+let projectSaveAttemptKey = null;
+let projectSaveAttempt = null;
+
+function resetProjectIdentity() {
+  currentProjectId = null;
+  currentProjectName = null;
+  currentProjectRevision = null;
+  currentProjectOwner = null;
+  projectSaveAttemptKey = null;
+  projectSaveAttempt = null;
+}
+
+function syncAuthUI() {
+  if (!window.SaasyAuth) return;
+  const btn = document.getElementById('btn-auth');
+  const emailEl = document.getElementById('auth-email');
+  const accountBtn = document.getElementById('btn-account');
+  const accountLabel = document.getElementById('account-label');
+  const accountInitial = document.getElementById('account-initial');
+  const accountEmail = document.getElementById('account-menu-email');
+  if (SaasyAuth.isSignedIn()) {
+    const email = SaasyAuth.getEmail() || '';
+    btn.classList.add('hidden');
+    emailEl.classList.add('hidden');
+    accountBtn?.classList.remove('hidden');
+    accountBtn?.classList.add('flex');
+    if (accountLabel) accountLabel.textContent = email.split('@')[0] || 'Account';
+    if (accountInitial) accountInitial.textContent = (email[0] || 'U').toUpperCase();
+    if (accountEmail) accountEmail.textContent = email;
+  } else {
+    btn.textContent = 'Sign In';
+    btn.classList.remove('hidden');
+    emailEl.classList.add('hidden');
+    accountBtn?.classList.add('hidden');
+    accountBtn?.classList.remove('flex');
+    closeAccountMenu();
+  }
+}
+
+async function onAuthButtonClick() {
+  if (!window.SaasyAuth) {
+    alert(window.__saasyAuthLoadError
+      ? 'The sign-in service could not be reached. Reload this page while connected to the Salesforce network, then try again.'
+      : 'The sign-in service is still loading. Please wait a moment and try again.');
+    return;
+  }
+  if (SaasyAuth.isSignedIn()) return toggleAccountMenu();
+  try {
+    await SaasyAuth.signIn();
+    syncAuthUI();
+  } catch (e) {
+    // user cancelled sign-in — nothing to do
+  }
+}
+
+function toggleAccountMenu() {
+  const menu = document.getElementById('account-menu');
+  const button = document.getElementById('btn-account');
+  if (!menu || !button) return;
+  const isOpen = !menu.classList.contains('hidden');
+  menu.classList.toggle('hidden', isOpen);
+  button.setAttribute('aria-expanded', String(!isOpen));
+}
+
+function closeAccountMenu() {
+  const menu = document.getElementById('account-menu');
+  const button = document.getElementById('btn-account');
+  menu?.classList.add('hidden');
+  button?.setAttribute('aria-expanded', 'false');
+}
+
+function openMyProjectsFromMenu() {
+  closeAccountMenu();
+  openMyProjects();
+}
+
+function signOutFromMenu() {
+  if (!window.SaasyAuth) return;
+  SaasyAuth.signOut();
+  closeSettings();
+  syncAuthUI();
+}
+
+let mostRecentApiKey = '';
+
+async function openSettings() {
+  if (!window.SaasyAuth) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  closeAccountMenu();
+  document.getElementById('settings-modal')?.classList.remove('hidden');
+  activateDialogFocus('settings-modal', closeSettings);
+  const email = SaasyAuth.getEmail() || '';
+  const label = document.getElementById('settings-account-email');
+  const initial = document.getElementById('settings-account-initial');
+  if (label) label.textContent = email;
+  if (initial) initial.textContent = (email[0] || 'U').toUpperCase();
+  await refreshApiKeySettings();
+}
+
+function closeSettings() {
+  closeApiMcpGuide();
+  releaseDialogFocus('settings-modal');
+  document.getElementById('settings-modal')?.classList.add('hidden');
+  hideCreateApiKeyForm();
+  dismissCreatedApiKey();
+}
+
+function openApiMcpGuide() {
+  const origin = /^https?:$/.test(window.location.protocol) ? window.location.origin : 'Available on the deployed UPG app';
+  const restBase = document.getElementById('api-mcp-rest-base');
+  const endpoint = document.getElementById('api-mcp-endpoint');
+  if (restBase) restBase.textContent = origin;
+  if (endpoint) endpoint.textContent = origin.startsWith('http') ? `${origin}/mcp` : origin;
+  document.getElementById('api-mcp-guide-modal')?.classList.remove('hidden');
+  activateDialogFocus('api-mcp-guide-modal', closeApiMcpGuide);
+}
+
+function closeApiMcpGuide() {
+  releaseDialogFocus('api-mcp-guide-modal');
+  document.getElementById('api-mcp-guide-modal')?.classList.add('hidden');
+}
+
+function showCreateApiKeyForm() {
+  const form = document.getElementById('api-key-create-form');
+  form?.classList.remove('hidden');
+  document.getElementById('api-key-create-error')?.classList.add('hidden');
+  setTimeout(() => document.getElementById('api-key-name')?.focus(), 0);
+}
+
+function hideCreateApiKeyForm() {
+  document.getElementById('api-key-create-form')?.classList.add('hidden');
+  const input = document.getElementById('api-key-name');
+  if (input) input.value = '';
+  const generation = document.getElementById('api-key-enable-generation');
+  if (generation) generation.checked = false;
+}
+
+function dismissCreatedApiKey() {
+  mostRecentApiKey = '';
+  document.getElementById('api-key-reveal')?.classList.add('hidden');
+  const value = document.getElementById('api-key-reveal-value');
+  if (value) value.textContent = '';
+}
+
+function formatSettingsDate(value) {
+  if (!value) return 'Never';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? '—' : date.toLocaleDateString();
+}
+
+async function refreshApiKeySettings() {
+  const list = document.getElementById('api-key-list');
+  if (!list || !window.SaasyAuth) return;
+  list.innerHTML = '<div class="text-sm text-slate-400 py-3">Loading API keys…</div>';
+  try {
+    const body = await SaasyAuth.listApiKeys({ tool: SAASY_TOOL });
+    const keys = body.apiKeys || [];
+    if (!keys.length) {
+      list.innerHTML = '<div class="text-center text-sm text-slate-400 py-8">No API keys yet. Create one to enable external tool access.</div>';
+      return;
+    }
+    list.innerHTML = `<div class="overflow-x-auto"><table class="w-full text-sm"><thead class="text-left text-[11px] uppercase tracking-wide text-slate-400"><tr><th class="pb-3 pr-4">Name</th><th class="pb-3 pr-4">Key</th><th class="pb-3 pr-4">Access</th><th class="pb-3 pr-4">Created</th><th class="pb-3 pr-4">Last used</th><th class="pb-3"></th></tr></thead><tbody>${keys.map(key => { const generation = Array.isArray(key.scopes) && key.scopes.includes('generations:write'); return `<tr class="border-t border-slate-100"><td class="py-3 pr-4 font-600 text-slate-700">${escHTML(key.name)}</td><td class="py-3 pr-4"><code class="text-xs bg-slate-100 rounded px-2 py-1 text-slate-600">${escHTML(key.keyPrefix)}••••••••</code></td><td class="py-3 pr-4"><span class="text-xs ${generation ? 'text-emerald-700 bg-emerald-50' : 'text-slate-600 bg-slate-100'} rounded-full px-2 py-1">${generation ? 'Generation enabled' : 'Read-only'}</span></td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.createdAt)}</td><td class="py-3 pr-4 text-slate-500">${formatSettingsDate(key.lastUsedAt)}</td><td class="py-3 text-right"><button onclick="revokeApiKeyFromSettings('${String(key.id).replace(/'/g, '')}')" class="text-xs text-red-600 hover:text-red-800">Revoke</button></td></tr>`; }).join('')}</tbody></table></div>`;
+  } catch (e) {
+    list.innerHTML = '<div class="text-sm text-red-600 py-3">Could not load API keys. Please try again.</div>';
+  }
+}
+
+async function createApiKeyFromSettings() {
+  const input = document.getElementById('api-key-name');
+  const error = document.getElementById('api-key-create-error');
+  const button = document.getElementById('api-key-create-button');
+  const name = input?.value.trim() || '';
+  const generationEnabled = Boolean(document.getElementById('api-key-enable-generation')?.checked);
+  if (!name) {
+    if (error) { error.textContent = 'Enter a name for this connection.'; error.classList.remove('hidden'); }
+    input?.focus();
+    return;
+  }
+  if (!window.SaasyAuth) return;
+  button?.setAttribute('disabled', 'disabled');
+  if (error) error.classList.add('hidden');
+  try {
+    const scopes = generationEnabled
+      ? ['profiles:read', 'exports:read', 'generations:write', 'profiles:write']
+      : ['profiles:read', 'exports:read'];
+    const body = await SaasyAuth.createApiKey({ tool: SAASY_TOOL, name, scopes });
+    mostRecentApiKey = body.key || '';
+    const value = document.getElementById('api-key-reveal-value');
+    if (value) value.textContent = mostRecentApiKey;
+    document.getElementById('api-key-reveal')?.classList.remove('hidden');
+    hideCreateApiKeyForm();
+    await refreshApiKeySettings();
+  } catch (e) {
+    if (error) { error.textContent = 'Could not create this API key. Please try again.'; error.classList.remove('hidden'); }
+  } finally {
+    button?.removeAttribute('disabled');
+  }
+}
+
+async function copyCreatedApiKey() {
+  if (!mostRecentApiKey) return;
+  try {
+    await navigator.clipboard.writeText(mostRecentApiKey);
+  } catch (e) {
+    const value = document.getElementById('api-key-reveal-value');
+    const range = document.createRange();
+    range.selectNodeContents(value);
+    const selection = window.getSelection();
+    selection?.removeAllRanges();
+    selection?.addRange(range);
+    document.execCommand('copy');
+  }
+}
+
+async function revokeApiKeyFromSettings(id) {
+  if (!confirm('Revoke this API key? Any connected tool using it will stop working.')) return;
+  if (!window.SaasyAuth) return;
+  try {
+    await SaasyAuth.revokeApiKey(id);
+    await refreshApiKeySettings();
+  } catch (e) {
+    alert('Could not revoke this API key. Please try again.');
+  }
+}
+
+async function saveCurrentProject() {
+  if (!window.SaasyAuth) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  openSaveProjectModal();
+}
+
+function openSaveProjectModal() {
+  projectSaveAttemptKey = createProjectSaveAttemptKey();
+  const input = document.getElementById('save-project-name-input');
+  input.value = currentProjectName || state.brandName || '';
+  const actions = document.getElementById('save-project-modal-actions');
+  actions.innerHTML = `<button data-save-action onclick="confirmSaveProject(true)" class="btn-primary-sf flex-1 py-2 text-xs">Save preview copy</button>`;
+  document.getElementById('save-project-modal').classList.remove('hidden');
+  activateDialogFocus('save-project-modal', closeSaveProjectModal, 'save-project-name-input');
+  setTimeout(() => input.focus(), 0);
+}
+
+function closeSaveProjectModal() {
+  if (projectSaveInFlight) return;
+  releaseDialogFocus('save-project-modal');
+  document.getElementById('save-project-modal').classList.add('hidden');
+  projectSaveAttemptKey = null;
+}
+
+function createProjectSaveAttemptKey() {
+  const value = globalThis.crypto?.randomUUID?.() || `${Date.now()}_${Math.random().toString(36).slice(2)}_${Math.random().toString(36).slice(2)}`;
+  return `upg_save_${value.replace(/[^A-Za-z0-9_-]/g, '')}`;
+}
+
+function getProjectSourceUrl() {
+  const raw = String(state._aiContext?.sourceUrl || document.getElementById('quickstart-url')?.value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
+    url.hash = '';
+    return url.toString();
+  } catch (_) {
+    return raw.slice(0, 2048);
+  }
+}
+
+function setProjectSaveBusy(busy) {
+  const modal = document.getElementById('save-project-modal');
+  if (!modal) return;
+  modal.querySelectorAll('button, input').forEach(control => { control.disabled = busy; });
+  modal.querySelectorAll('[data-save-action]').forEach(button => {
+    if (busy) {
+      if (!button.dataset.originalLabel) button.dataset.originalLabel = button.textContent;
+      button.textContent = 'Saving…';
+    } else if (button.dataset.originalLabel) {
+      button.textContent = button.dataset.originalLabel;
+      delete button.dataset.originalLabel;
+    }
+  });
+}
+
+function buildProjectPayloadForSave() {
+  const payload = JSON.parse(JSON.stringify(state));
+  // The active view is present both at the root and in personaVariants because
+  // it was just snapshotted. Keep its editable root copy, but omit only the
+  // redundant inline image bytes from the duplicate snapshot. When this
+  // project is reopened, switching away and back refreshes that snapshot.
+  const activeLens = payload.profileStrategy?.lens;
+  const activeSnapshot = activeLens && payload.personaVariants?.[activeLens];
+  activeSnapshot?.recommendations?.items?.forEach(item => {
+    if (/^data:/i.test(item?.image || '')) item.image = '';
+  });
+  const bytes = new TextEncoder().encode(JSON.stringify(payload)).byteLength;
+  if (bytes > MAX_SAVED_PROJECT_BYTES) throw new Error('project_payload_too_large');
+  return payload;
+}
+
+function isRejectedSession(error) {
+  return ['invalid_token', 'missing_token'].includes(String(error?.message || ''));
+}
+
+async function saveProjectWithSessionRecovery(options, ownerEmail = SaasyAuth.getEmail?.()) {
+  // Defense at the network boundary: even restored/stale callers cannot update
+  // an existing cloud project from this preview. Preserve the attempt key.
+  options = previewCopySaveOptions(options);
+  if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
+  try {
+    return await SaasyAuth.saveProject(options);
+  } catch (error) {
+    // An update may have committed before its response was lost. Recognize
+    // that exact content on a revision conflict without overwriting newer edits.
+    if ((error.code || error.message) === 'revision_conflict' && options.id && SaasyAuth.loadProject && (!ownerEmail || SaasyAuth.getEmail?.() === ownerEmail)) {
+      const saved = await SaasyAuth.loadProject(options.id);
+      if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
+      if (saved.tool === SAASY_TOOL && saved.name === options.name && (saved.source_url || '') === (options.sourceUrl || '') && UPGContract.canonicalJSON(saved.payload) === UPGContract.canonicalJSON(options.payload)) return saved;
+    }
+    if (!isRejectedSession(error)) throw error;
+
+    // The shared auth widget clears an invalid local JWT on a 401. Ask Magic
+    // for a fresh DID-backed app session, then retry the *same* save once.
+    // The idempotency key makes this safe even if the original request reached
+    // the server but its response was lost in transit.
+    try {
+      await SaasyAuth.signIn({ expectedEmail: ownerEmail });
+      if (ownerEmail && SaasyAuth.getEmail?.() !== ownerEmail) throw new Error('account_changed');
+      syncAuthUI();
+    } catch (error) {
+      syncAuthUI();
+      if (error.message === 'account_changed') throw error;
+      throw new Error('session_refresh_cancelled');
+    }
+    return SaasyAuth.saveProject(options);
+  }
+}
+
+function previewCopySaveOptions(options) {
+  const name = String(options.name || 'Untitled Profile').replace(/^(?:Preview\s*·\s*)+/i, '').trim();
+  return Object.assign({}, options, { id: null, saveAsCopy: true, expectedRevision: undefined, name: `Preview · ${name || 'Untitled Profile'}` });
+}
+
+async function confirmSaveProject(asNew) {
+  if (projectSaveInFlight) return;
+  projectSaveInFlight = true;
+  setProjectSaveBusy(true);
+  try {
+    readStaticFields();
+    snapshotPersonaView();
+    const saveOwner = state;
+    const ownerEmail = SaasyAuth.getEmail?.();
+    if (currentProjectOwner && currentProjectOwner !== ownerEmail) throw new Error('account_changed');
+    const input = document.getElementById('save-project-name-input');
+    const name = previewCopySaveOptions({ name: input.value.trim() || state.brandName }).name;
+    const id = null;
+    const sourceUrl = getProjectSourceUrl();
+    const payload = buildProjectPayloadForSave();
+    delete payload.integrationArtifact;
+    const signature = JSON.stringify({ payload, id, name, sourceUrl, ownerEmail, asNew: true });
+    if (!projectSaveAttempt || projectSaveAttempt.signature !== signature) {
+      const idempotencyKey = createProjectSaveAttemptKey();
+      payload.integrationArtifact = await buildIntegrationArtifact(payload);
+      if (new TextEncoder().encode(JSON.stringify(payload)).byteLength > MAX_SAVED_PROJECT_BYTES) throw new Error('project_payload_too_large');
+      projectSaveAttempt = { signature, options: previewCopySaveOptions({ tool: SAASY_TOOL, name, payload, idempotencyKey, sourceUrl }) };
+    }
+    const project = await saveProjectWithSessionRecovery(projectSaveAttempt.options, ownerEmail);
+    if (state === saveOwner) {
+      currentProjectId = null;
+      currentProjectName = project.name;
+      currentProjectRevision = null;
+      currentProjectOwner = ownerEmail;
+      if (typeof persistDraftRecovery === 'function') await persistDraftRecovery();
+    }
+    projectSaveInFlight = false;
+    projectSaveAttempt = null;
+    closeSaveProjectModal();
+    const s = document.getElementById('save-project-success');
+    s.textContent = 'Preview copy saved. Your original projects were not changed.';
+    s.classList.remove('hidden');
+    setTimeout(() => s.classList.add('hidden'), 2200);
+  } catch (e) {
+    const message = ['payload_too_large', 'project_payload_too_large'].includes(e.message)
+      ? 'This project has more image data than can be saved at once. Remove a few recommendation images or save fewer persona views, then try again.'
+      : e.message === 'session_refresh_cancelled'
+        ? 'Your saved sign-in session is no longer valid. Complete the sign-in prompt to refresh it, then save again.'
+      : e.message === 'account_changed' ? 'The signed-in account changed. Your draft was kept and was not saved to another account. Sign in with the original account or deliberately start a new workspace.'
+      : e.message === 'revision_conflict' ? 'This project was updated in another session. Your draft was kept. Save as New to preserve a copy, or reload the latest project before updating.'
+      : e.message;
+    alert('Could not save project: ' + message);
+  } finally {
+    projectSaveInFlight = false;
+    setProjectSaveBusy(false);
+  }
+}
+
+async function openMyProjects() {
+  if (!window.SaasyAuth) return;
+  const panel = document.getElementById('my-projects-panel');
+  if (!panel.classList.contains('hidden')) { closeMyProjects(); return; }
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  panel.classList.remove('hidden');
+  const list = document.getElementById('my-projects-list');
+  list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">Loading…</div>';
+  try {
+    const projects = await SaasyAuth.listProjects({ tool: SAASY_TOOL });
+    if (!projects.length) {
+      list.innerHTML = '<div class="px-4 py-4 text-xs text-gray-400">No saved projects yet.</div>';
+      return;
+    }
+    list.innerHTML = '<p class="px-4 py-3 text-xs text-slate-600">Projects open as detached copies. Preview cannot update or delete existing projects.</p>';
+    projects.forEach(p => {
+      const row = document.createElement('div');
+      row.className = 'px-4 py-3 flex items-center justify-between gap-2';
+      row.innerHTML = `
+        <div class="flex-1 min-w-0">
+          <div class="text-sm font-600 text-gray-700 truncate">${escHTML(p.name)}</div>
+          <div class="text-[11px] text-gray-400">${new Date(p.updated_at).toLocaleDateString()}</div>
+        </div>
+        <div class="flex gap-1 shrink-0">
+          <button class="icon-btn" data-action="load">Open as copy</button>
+        </div>`;
+      row.querySelector('[data-action="load"]').onclick = () => loadProjectAndHydrate(p.id);
+      list.appendChild(row);
+    });
+  } catch (e) {
+    list.innerHTML = '<div class="px-4 py-4 text-xs text-red-500">Failed to load projects.</div>';
+  }
+}
+
+function closeMyProjects() {
+  document.getElementById('my-projects-panel').classList.add('hidden');
+}
+
+async function deleteProjectFromList(id, row) {
+  alert('Cloud project deletion is disabled in Preview. Use the original app to manage existing projects.');
+}
+
+async function loadProjectAndHydrate(id) {
+  try {
+    if (typeof draftReady !== 'undefined' && draftReady && !confirm('Open this project as a preview copy and replace the current editor? The original online project will stay unchanged. Download or save your current edits first if needed.')) return;
+    const owner = state;
+    readStaticFields();
+    const expectedDraft = JSON.stringify(state);
+    const expectedSourceUrl = document.getElementById('quickstart-url')?.value;
+    const expectedEmail = SaasyAuth.getEmail?.();
+    const project = await SaasyAuth.loadProject(id);
+    if (project.tool !== SAASY_TOOL) throw new Error('This project belongs to a different tool and cannot be opened in UPG.');
+    UPGContract.validateSavedProfile(project.payload);
+    if (state !== owner) return;
+    readStaticFields();
+    if (SaasyAuth.getEmail?.() !== expectedEmail) throw new Error('Your signed-in account changed. Select the project again from the correct account.');
+    if (JSON.stringify(state) !== expectedDraft || document.getElementById('quickstart-url')?.value !== expectedSourceUrl) throw new Error('The editor changed while this project was loading. Your edits were kept; load it again when you are ready.');
+    const hydrated = cloneViewData(project.payload);
+    if (hydrated.personaVariants) Object.values(hydrated.personaVariants).forEach(variant => {
+      UPGContract.validateSavedProfile(Object.assign({}, hydrated, variant));
+    });
+    cancelDraftRequests();
+    state = hydrated;
+    currentProjectId = null;
+    currentProjectName = project.name;
+    currentProjectRevision = null;
+    currentProjectOwner = SaasyAuth.getEmail?.();
+    document.getElementById('quickstart-url').value = project.source_url || state._aiContext?.sourceUrl || '';
+    document.getElementById('brand-industry').value = state._industry || 'recruiting';
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+    closeMyProjects();
+    goToStep(0);
+    recoverEmbeddedBrandLogo();
+  } catch (e) {
+    alert('Could not load project: ' + e.message);
+  }
+}
+
+async function hydrateFromProjectId() {
+  if (!window.SaasyAuth) return;
+  const id = new URLSearchParams(window.location.search).get('projectId');
+  if (!id) return;
+  if (!SaasyAuth.isSignedIn()) {
+    try { await SaasyAuth.signIn(); syncAuthUI(); } catch (e) { return; }
+  }
+  await loadProjectAndHydrate(id);
+}
+
+// ─── QUICK START (AI URL analysis) ──────────────────────────
+function friendlyError(err) {
+  // Compose a message from the code plus any upstream detail the Worker
+  // passed through. This is far more useful than the bare `default_failed`
+  // string the user sees when the shared backend has an issue.
+  const code = err.code || '';
+  const upstream = err.upstream ? ` upstream: ${err.upstream}` : '';
+  const upstreamStatus = err.upstreamStatus ? ` (status ${err.upstreamStatus})` : '';
+  const upstreamBody = err.upstreamBody ? ` — ${err.upstreamBody}` : '';
+
+  const suggest = ' Try again in a moment, or open Advanced and paste your own Anthropic key (sk-ant-…) to bypass the shared backend.';
+
+  const map = {
+    missing_api_key: 'Add your API key in Advanced (sk-ant-… or sk-…), or clear it to use the shared default.',
+    default_not_configured: `The shared backend isn't set up with an LLM key yet. Paste your own key in Advanced.`,
+    default_rate_limited: `The shared backend is rate-limited (too many recent requests).${suggest}`,
+    default_timeout: `The shared backend didn't respond within 45s.${suggest}`,
+    default_unavailable: `Shared backend unavailable${upstream}${upstreamStatus}${upstreamBody}.${suggest}`,
+    default_failed: `Shared backend call failed (HTTP ${err.status || '?'})${upstream}${upstreamStatus}${upstreamBody}.${suggest}`,
+    default_connection_stale: 'The connection to the shared UPG service could not be restored. This can happen after the tab has been inactive or the service has restarted. Refresh this page to re-establish the connection, then try again.',
+    default_network: `The shared UPG service could not be reached at ${err.endpoint || 'the default URL'}. If this tab has been open for a while, refresh this page to re-establish the connection, then try again.`,
+    default_empty_response: `Shared backend returned no content.${suggest}`,
+    anthropic_bad_key: 'Anthropic rejected the API key. Check it in the Anthropic Console.',
+    anthropic_forbidden: `Your Anthropic key doesn't allow browser-access header calls to this model.`,
+    anthropic_rate_limited: 'Anthropic rate-limited the request. Wait a moment and retry.',
+    anthropic_overloaded: 'Anthropic is overloaded. Retry in a moment.',
+    anthropic_empty_response: 'Anthropic returned no content. Retry or switch tiers.',
+    sfgateway_bad_key: 'SF Gateway rejected the key.',
+    sfgateway_forbidden: 'SF Gateway forbade the request.',
+    sfgateway_rate_limited: 'SF Gateway rate-limited the request.',
+    invalid_url: `That URL doesn't look right — include the domain (e.g. ncsasports.org).`
+  };
+  return map[code] || err.message || String(err);
+}
+
+async function refreshSharedBackendConnection() {
+  if (typeof persistDraftRecovery === 'function' && !(await persistDraftRecovery()) && !confirm('Local recovery is unavailable. Reload anyway? Save online or download HTML first to keep your work.')) return;
+  window.location.reload();
+}
+
+function showQuickStartError(err) {
+  const errBox = document.getElementById('quickstart-error');
+  if (!errBox) return;
+  const code = err?.code || '';
+  const reconnect = code === 'default_connection_stale' || code === 'default_network';
+  const refreshButton = reconnect
+    ? ' <button type="button" class="quickstart-refresh-button" onclick="refreshSharedBackendConnection()">Refresh & reconnect</button>'
+    : '';
+  errBox.innerHTML = `<span>${escHTML(friendlyError(err))}</span>${refreshButton}`;
+  errBox.style.display = 'block';
+}
+
+// When the shared backend fails, auto-open Advanced so the user can drop
+// in their own key without hunting for it.
+function nudgeToAdvancedIfDefaultFailed(code) {
+  if (!code || !code.startsWith('default_')) return;
+  const panel = document.getElementById('quickstart-settings');
+  if (panel && !panel.classList.contains('open')) panel.classList.add('open');
+  if (panel) document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', 'true');
+}
+
+async function onPersonalizeCurrentPersona() {
+  readStaticFields();
+  const sourceUrl = state._aiContext?.sourceUrl || document.getElementById('quickstart-url')?.value.trim();
+  const owner = state;
+  const strategy = cloneViewData(getProfileStrategy());
+  const errBox = document.getElementById('quickstart-error');
+  if (!sourceUrl) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add a customer URL and create a profile set before personalizing a view.';
+    return;
+  }
+  if (strategy.lens === 'custom' && !strategy.customRole) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add who will use this custom profile before personalizing it.';
+    document.getElementById('strategy-custom-role')?.focus();
+    return;
+  }
+  if (!window.LocalAI?.collectCustomerContext || !window.LocalAI?.generatePersonaOverlay) return;
+  errBox.style.display = 'none';
+  const status = document.getElementById('quickstart-status');
+  const label = getProfileStrategyLabel(strategy);
+  snapshotPersonaView(owner);
+  const before = personaFingerprint(owner, strategy.lens);
+  const working = cloneViewData(owner);
+  const requestId = (personaTextRequests.get(strategy.lens) || 0) + 1;
+  personaTextRequests.set(strategy.lens, requestId);
+  const current = () => state === owner && personaTextRequests.get(strategy.lens) === requestId;
+  const previousStatus = ensureProfileSet(owner).statuses[strategy.lens];
+  owner.profileSet.statuses[strategy.lens] = 'generating';
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
+  try {
+    const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
+    if (!current()) return;
+    const sharedIdentity = working.profileType === 'b2b'
+      ? { brandName: working.brandName, account: working.account, accountMetrics: working.accountMetrics }
+      : { brandName: working.brandName, profile: working.profile, loyalty: working.loyalty };
+    const overlay = await window.LocalAI.generatePersonaOverlay(context, sharedIdentity, {
+      profileType: working.profileType,
+      strategy: Object.assign({}, strategy)
+    });
+    if (!current()) return;
+    if (personaFingerprint(owner, strategy.lens) !== before) {
+      owner.profileSet.statuses[strategy.lens] = 'edited';
+      status.textContent = 'Your view changed while AI was working. Those edits were kept. Choose Update view again to apply your latest requirements.';
+      return;
+    }
+    mergePersonaOverlay(working, overlay);
+    applyPersonaPreset(working);
+    snapshotPersonaView(working, strategy.lens);
+    ensureProfileSet(owner).statuses[strategy.lens] = 'ready';
+    commitPersonaView(owner, strategy.lens, working.personaVariants[strategy.lens]);
+    // New recommendation actions need their own role-aware art, so let the
+    // established visual generator fill only blank slots after the content.
+    generatePersonaRecommendationImagesForTarget(strategy.lens, owner.personaVariants[strategy.lens]);
+    status.textContent = `✓ ${label} view personalized with its own recommendations and signals`;
+  } catch (error) {
+    if (!current()) return;
+    owner.profileSet.statuses[strategy.lens] = previousStatus === 'ready' ? 'edited' : 'failed';
+    showQuickStartError(error);
+    nudgeToAdvancedIfDefaultFailed(error.code);
+    status.textContent = '';
+  } finally {
+    if (current() && typeof renderProfileProgress === 'function') renderProfileProgress();
+  }
+}
+
+async function onQuickStartAnalyze() {
+  const url = document.getElementById('quickstart-url').value.trim();
+  readStaticFields();
+  const requestedStrategy = getProfileStrategy();
+  const profileSetConfig = readProfileSetConfig();
+  snapshotPersonaView();
+  const originalOwner = state;
+  const originalDraft = JSON.stringify(state);
+  const requestedType = state.profileType || 'b2c';
+  const leadLens = profileSetConfig.selectedLenses.includes(requestedStrategy.lens)
+    ? requestedStrategy.lens : profileSetConfig.selectedLenses[0];
+  const strategy = {
+    lens: leadLens,
+    objective: profileSetConfig.strategies[leadLens]?.objective || PERSONA_PRESETS[leadLens].objective,
+    brief: profileSetConfig.briefs[leadLens] || '',
+    customRole: leadLens === 'custom' ? profileSetConfig.customRole : ''
+  };
+  const errBox = document.getElementById('quickstart-error');
+  if (!url) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Enter the customer website URL before creating a profile set.';
+    document.getElementById('quickstart-url')?.focus();
+    return;
+  }
+  if (profileSetConfig.selectedLenses.includes('custom') && (!profileSetConfig.customRole || !profileSetConfig.briefs.custom)) {
+    errBox.style.display = 'block';
+    errBox.textContent = 'Add a custom role and its initial decision goal before creating a custom view.';
+    document.getElementById(!profileSetConfig.customRole ? 'profile-set-custom-role' : 'profile-set-custom-brief')?.focus();
+    return;
+  }
+  const btn = document.getElementById('quickstart-btn');
+  const status = document.getElementById('quickstart-status');
+  const runId = ++generationRunId;
+  errBox.style.display = 'none';
+  errBox.textContent = '';
+  btn.disabled = true;
+  status.innerHTML = '<div class="spinner"></div> Starting…';
+
+  const setStatus = (label) => { if (runId === generationRunId) { status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; if (typeof renderProfileProgress === 'function') renderProfileProgress(); } };
+
+  try {
+    if (!window.LocalAI) throw new Error('LocalAI module not loaded');
+    const ai = await window.LocalAI.analyzeCustomerURL(url, {
+      profileType: requestedType,
+      strategy,
+      onStatus: (phase) => {
+        if (phase === 'fetching') setStatus('Fetching customer page…');
+        else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
+        else if (phase === 'analyzing') setStatus('Analyzing customer context…');
+        else if (phase === 'generating_images') setStatus('Creating on-brand profile imagery…');
+      }
+    });
+    if (runId !== generationRunId || state !== originalOwner) return;
+    if (JSON.stringify(state) !== originalDraft) {
+      status.textContent = 'Your draft changed while the customer was being analyzed. Your edits were kept. Create the profile set again when you are ready.';
+      return;
+    }
+    UPGContract.validateAIProfile(ai, { profileType: requestedType });
+    const sourceContext = ai._sourceContext;
+    delete ai._sourceContext;
+    const nextProfileSet = {
+      selectedLenses: profileSetConfig.selectedLenses,
+      briefs: profileSetConfig.briefs,
+      statuses: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, lens === leadLens ? 'ready' : 'queued'])),
+      visuals: Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, { state: lens === leadLens ? 'generating' : 'queued', count: 0 }])),
+      customRole: profileSetConfig.customRole,
+      createdAt: new Date().toISOString()
+    };
+    ai._meta = Object.assign({}, ai._meta, { source_url: sourceContext?.url || ai._meta?.source_url || url });
+    applyAIProfile(ai, strategy, nextProfileSet, requestedType);
+    const owner = state;
+    const active = () => runId === generationRunId && state === owner;
+    // Seed queued variants once so simply visiting one does not look like an
+    // edit. Any real edits after this point win over later generated results.
+    profileSetConfig.selectedLenses.filter(lens => lens !== leadLens).forEach(lens => {
+      const seed = cloneViewData(owner);
+      restorePersonaView(seed, lens);
+      snapshotPersonaView(seed, lens);
+      owner.personaVariants[lens] = seed.personaVariants[lens];
+    });
+    const generationViews = Object.fromEntries(profileSetConfig.selectedLenses.map(lens => [lens, personaFingerprint(owner, lens)]));
+    syncProfileSetConfigUI();
+
+    // The lead analysis asks for visuals too, but retry any blank recommendation
+    // slots here so every selected view follows one reliable completion path.
+    setStatus(`Preparing ${PERSONA_PRESETS[leadLens].label} recommendation visuals (1 of ${profileSetConfig.selectedLenses.length})…`);
+    await generatePersonaRecommendationImagesForTarget(leadLens, state, { announce: false });
+    if (!active()) return;
+
+    // The first role establishes the shared customer identity. Every other
+    // view is generated from the same scrape and identity, so presenters get
+    // a coherent profile set instead of four unrelated fictional customers.
+    const sharedIdentity = requestedType === 'b2b'
+      ? { brandName: owner.brandName, account: owner.account, accountMetrics: owner.accountMetrics }
+      : { brandName: owner.brandName, profile: owner.profile, loyalty: owner.loyalty };
+    const remainingLenses = profileSetConfig.selectedLenses.filter(lens => lens !== leadLens);
+    for (let index = 0; index < remainingLenses.length; index += 1) {
+      const lens = remainingLenses[index];
+      const personaStrategy = {
+        lens,
+        objective: profileSetConfig.strategies[lens]?.objective || PERSONA_PRESETS[lens].objective,
+        brief: profileSetConfig.briefs[lens] || '',
+        customRole: lens === 'custom' ? profileSetConfig.customRole : ''
+      };
+      state.profileSet.statuses[lens] = 'generating';
+      const before = generationViews[lens];
+      setStatus(`Preparing ${PERSONA_PRESETS[lens].label} view (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
+      try {
+        const overlay = await window.LocalAI.generatePersonaOverlay(sourceContext, sharedIdentity, {
+          profileType: requestedType,
+          strategy: personaStrategy
+        });
+        if (!active()) return;
+        if (personaFingerprint(owner, lens) !== before) {
+          owner.profileSet.statuses[lens] = 'edited';
+          continue;
+        }
+        const variant = createPersonaVariantFromOverlay(lens, overlay, personaStrategy, owner);
+        commitPersonaView(owner, lens, variant);
+        owner.profileSet.statuses[lens] = 'ready';
+        setStatus(`Creating ${PERSONA_PRESETS[lens].label} recommendation visuals (${index + 2} of ${profileSetConfig.selectedLenses.length})…`);
+        await generatePersonaRecommendationImagesForTarget(lens, owner.personaVariants[lens], { announce: false });
+        if (!active()) return;
+      } catch (overlayError) {
+        if (!active()) return;
+        // A ready-to-edit template is still more useful than losing the full
+        // generation because one secondary persona encountered a transient LLM error.
+        console.warn(`[UPG] ${lens} profile-set overlay failed:`, overlayError);
+        state.profileSet.statuses[lens] = 'template-ready';
+        state.profileSet.visuals[lens] = { state: 'failed', message: 'The persona content could not be completed, so its recommendation visuals were not created.', updatedAt: new Date().toISOString(), count: 0 };
+      }
+    }
+    if (!active()) return;
+    snapshotPersonaView();
+    fillStaticFields();
+    renderAll();
+    refreshPreview();
+    const kind = isB2B() ? 'account profile' : 'individual profile';
+    const ready = profileSetConfig.selectedLenses.filter(lens => owner.profileSet.statuses[lens] === 'ready').length;
+    status.textContent = `Created ${ready} of ${profileSetConfig.selectedLenses.length} ${kind} views from ${new URL(url.startsWith('http') ? url : 'https://' + url).hostname}. ${ready < profileSetConfig.selectedLenses.length ? 'Other views kept their draft/template. Select a view and update it to retry.' : 'Open a team tab to personalize it further.'}`;
+  } catch (e) {
+    if (runId !== generationRunId) return;
+    showQuickStartError(e);
+    nudgeToAdvancedIfDefaultFailed(e.code);
+    status.textContent = '';
+  } finally {
+    if (runId === generationRunId) btn.disabled = false;
+  }
+}
+
+function toggleQuickStartSettings() {
+  const open = document.getElementById('quickstart-settings').classList.toggle('open');
+  document.getElementById('quickstart-settings-toggle')?.setAttribute('aria-expanded', String(open));
+}
+
+function refreshProviderBadge() {
+  if (!window.LocalAI) return;
+  const badge = document.getElementById('quickstart-mode-badge');
+  const note = document.getElementById('quickstart-note');
+  if (!badge || !note) return;
+  const p = window.LocalAI.currentProvider();
+  badge.classList.remove('byok');
+  if (p === 'default') {
+    badge.textContent = 'Default backend';
+    note.innerHTML = 'Works out of the box — routes through a shared backend that holds the LLM API key. Open <b>Advanced</b> to use your own key or Worker.';
+  } else if (p === 'anthropic') {
+    badge.textContent = 'Your Anthropic key';
+    badge.classList.add('byok');
+    note.innerHTML = 'Using your own Anthropic key from Advanced. Clear it to switch back to the default backend.';
+  } else if (p === 'sfgateway') {
+    badge.textContent = 'Your SF LLM Gateway key';
+    badge.classList.add('byok');
+    note.innerHTML = 'Using your own SF LLM Gateway key. Clear it to switch back to the default backend.';
+  }
+}
+
+function onLocalAIKeyChange() {
+  const v = document.getElementById('quickstart-api-key').value;
+  if (window.LocalAI) window.LocalAI.setKey(v);
+  refreshProviderBadge();
+}
+function clearLocalAIKey() {
+  document.getElementById('quickstart-api-key').value = '';
+  if (window.LocalAI) window.LocalAI.setKey('');
+  refreshProviderBadge();
+}
+function onScraperEndpointChange() {
+  const v = document.getElementById('quickstart-scraper-url').value;
+  if (window.LocalAI) window.LocalAI.setScraperEndpoint(v);
+}
+
+// ─── INIT ───────────────────────────────────────────────────
+function bootstrap() {
+  state._industry = state._industry || 'generic';
+  ensureProfileSet();
+  applyPersonaPreset();
+  applyPersonaSampleTemplate();
+  snapshotPersonaView();
+  fillStaticFields();
+  syncProfileSetConfigUI();
+  renderAll();
+  initializeDraftRecovery();
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistDraftRecovery(); });
+  document.addEventListener('keydown', event => {
+    const radio = event.target.closest?.('[role="radio"]');
+    const group = radio?.closest('[role="radiogroup"]');
+    if (!group || !['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+    const radios = [...group.querySelectorAll('[role="radio"]')]; const index = radios.indexOf(radio);
+    const next = event.key === 'Home' ? 0 : event.key === 'End' ? radios.length - 1 : (index + (['ArrowLeft','ArrowUp'].includes(event.key) ? -1 : 1) + radios.length) % radios.length;
+    event.preventDefault(); radios.forEach((item, i) => { item.tabIndex = i === next ? 0 : -1; }); radios[next].click(); radios[next].focus();
+  });
+  if (typeof hydrateBundledStarterImages === 'function') {
+    hydrateBundledStarterImages(state).then(() => refreshPreview());
+  }
+
+  // A no-op warm-up on returning to a long-idle tab gives the shared Heroku
+  // route a chance to recover before the user starts an expensive generation.
+  window.addEventListener('focus', () => {
+    window.LocalAI?.warmSharedBackend?.().catch(() => {});
+  });
+
+  attachDropZone('drop-logo', 'preview-logo', (dataUrl) => {
+    state.logo = dataUrl;
+    brandLogoRequests.delete(state);
+    brandLogoStatuses.delete(state);
+    renderBrandLogoStatus();
+    document.getElementById('url-logo').value = '';
+    refreshPreview();
+  });
+  attachDropZone('drop-user-avatar', 'preview-user-avatar', (dataUrl) => {
+    state.userAvatar = dataUrl;
+    document.getElementById('url-user-avatar').value = '';
+    refreshPreview();
+  });
+  attachDropZone('drop-photo', 'preview-photo', (dataUrl) => {
+    state.profile.photo = dataUrl;
+    document.getElementById('url-photo').value = '';
+    refreshPreview();
+  });
+  attachDropZone('drop-account-photo', 'preview-account-photo', setAccountPhoto);
+
+  // Section icon uploaders — write the data URL into the text input so the
+  // user can still see (and clear) what's set.
+  ['preferences', 'events', 'membership'].forEach(key => {
+    attachDropZone(`drop-${key}-icon`, null, (dataUrl) => {
+      state[key].icon = dataUrl;
+      document.getElementById(`${key}-icon`).value = dataUrl;
+      refreshPreview();
+    });
+  });
+
+  // Load persisted API key / scraper endpoint if any
+  if (window.LocalAI) {
+    const k = window.LocalAI.getKey();
+    if (k) document.getElementById('quickstart-api-key').value = k;
+    if (window.LocalAI.hasCustomScraperEndpoint()) {
+      document.getElementById('quickstart-scraper-url').value = window.LocalAI.getScraperEndpoint();
+    }
+    refreshProviderBadge();
+  }
+
+  refreshPreview();
+  fitPreviewScale();
+  // Rescale after images/webfonts settle so the iframe's transform stays crisp
+  requestAnimationFrame(fitPreviewScale);
+  setTimeout(fitPreviewScale, 400);
+
+  syncAuthUI();
+  hydrateFromProjectId();
+}
+
+// Script may load before or after DOMContentLoaded (index.html injects
+// script tags dynamically). Bootstrap in either case.
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', bootstrap);
+} else {
+  bootstrap();
+}

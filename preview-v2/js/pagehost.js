@@ -1,0 +1,393 @@
+// ============================================================
+// pagehost.js — Shared prompt/scrape helpers used by localai.js
+// ============================================================
+// A pared-down version of the Loyalty Portal's pagehost module.
+// It exposes:
+//   - window.UPG_Shared.normalizeURL(u)
+//   - window.UPG_Shared.extractCoreHTML(html, url)
+//   - window.UPG_Shared.SYSTEM_PROMPT
+//   - window.UPG_Shared.buildUserPrompt(scraped)
+//   - window.UPG_Shared.parseAIResponseText(text)
+// The BYOK client in localai.js uses these to turn a raw
+// customer URL into a Unified Profile object.
+// ============================================================
+
+(function () {
+  function normalizeURL(raw) {
+    if (!raw) return null;
+    let u = raw.trim();
+    if (!/^https?:\/\//i.test(u)) u = 'https://' + u;
+    try { return new URL(u).toString(); }
+    catch { return null; }
+  }
+
+  function extractCoreHTML(html, url) {
+    const logoCandidates = window.UPGBrandLogo.extractLogoCandidates(html, url);
+    const doc = new DOMParser().parseFromString(html, 'text/html');
+    doc.querySelectorAll('script, style, noscript, svg, iframe, template').forEach(n => n.remove());
+
+    const title = doc.querySelector('title')?.textContent?.trim() || '';
+    const description =
+      doc.querySelector('meta[name="description"]')?.getAttribute('content') ||
+      doc.querySelector('meta[property="og:description"]')?.getAttribute('content') || '';
+    const siteName = doc.querySelector('meta[property="og:site_name"]')?.getAttribute('content') || '';
+    const ogImage = doc.querySelector('meta[property="og:image"]')?.getAttribute('content') || '';
+
+    const favicon = logoCandidates[0] || '';
+
+    const bodyText = (doc.body?.innerText || doc.body?.textContent || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 8000);
+
+    const headings = Array.from(doc.querySelectorAll('h1, h2, h3'))
+      .map(h => h.textContent.trim())
+      .filter(Boolean)
+      .slice(0, 30)
+      .join('\n');
+
+    const navLinkCandidates = Array.from(doc.querySelectorAll('nav a, header a'))
+      .map(a => a.textContent.trim())
+      .filter(t => t && t.length < 30)
+      .slice(0, 15);
+
+    return { url, title, siteName, description, ogImage, favicon, logoCandidates, headings, navLinkCandidates, bodyText };
+  }
+
+  const SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Data Cloud unified customer profile for a specific customer.
+
+You will receive scraped content from a customer's website. Extract brand identity and generate a realistic, on-brand unified profile — a fictional but plausible individual member/customer/patient/client/athlete/etc. — that the customer's marketing or engagement team would recognize as accurate to their business.
+
+Return ONLY a single JSON object matching the schema below. No preamble, no markdown fences, no trailing prose.
+
+Schema:
+{
+  "brandName": string,
+  "industry": "recruiting" | "retail" | "healthcare" | "financial" | "generic",
+  "appName": string,     // e.g. "Data Cloud", "Marketing Cloud"
+  "tabName": string,     // usually the demo profile's name — shown in the top-right nav tab
+  "colors": {
+    "primary":  "#RRGGBB",   // brand-dark, used for text + primary accents
+    "accent":   "#RRGGBB",   // brand highlight (buttons, active indicators)
+    "secondary":"#RRGGBB",   // near-white wash
+    "menu":     "#RRGGBB",   // background of the app-nav bar (often white)
+    "menuText": "#RRGGBB"    // text color inside the app-nav bar
+  },
+  "navLinks": [ string ],    // 6-8 items — real Data Cloud sections (Home, Data Streams, Segments, Activations, Data Lake Objects, Data Model, Identity Resolutions, Calculated Insights). Keep these exact when unsure.
+
+  "profile": {
+    "name": string,          // realistic fictional person for this industry
+    "city": "City, ST",
+    "customerId": string,    // 8-digit number
+    "email": "name@gmail.com",
+    "parentEmail": string,   // ONLY for recruiting/education/youth; else ""
+    "phone": "(NNN) NNN-NNNN",
+    "address": "Street\\nCity, ST ZIP",
+    "segment": string        // 4-5 comma-separated segment memberships this customer would be in
+  },
+
+  "loyalty": {
+    "title": string,         // e.g. "Loyalty Insights", "Relationship Insights", "Wellness Rewards"
+    "memberId": string,
+    "tier": string,          // brand-appropriate tier name
+    "points": string,
+    "redeemedPoints": string
+  },
+
+  "insights": {
+    "title": string,         // vertical-flavored: "Athlete Insights", "Patient Insights", "Shopper Insights", "Client Insights"
+    "items": [               // 6 items
+      { "icon": "emoji", "label": string, "value": string }
+    ]
+  },
+
+  "affinities": {
+    "title": "Affinities",
+    "seriesA": { "label": string, "color": "#RRGGBB" },  // e.g. Views / Browse / Research / Interest
+    "seriesB": { "label": string, "color": "#RRGGBB" },  // e.g. Interaction / Purchase / Transactions / Engagement
+    "groups": [              // 3-4 groups
+      { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] }
+    ]
+  },
+
+  "preferences": {
+    "title": string,         // "Athlete Preferences", "Customer Preferences", etc.
+    "items": [ { "label": string, "value": string } ]  // 4 items
+  },
+
+  "events": {
+    "title": string,         // e.g. "Events (All Brands)", "Recent Visits"
+    "items": [ { "name": string, "date": "M/D/YY - M/D/YY", "confirmation": string } ]  // 1-3 items
+  },
+
+  "membership": {
+    "title": string,         // e.g. "NCSA Membership Details"
+    "items": [ { "label": string, "value": string } ]  // 2-3 items
+  },
+
+  "recommendations": {
+    "title": "Einstein Recommendations",
+    "items": [               // 2 items — Next Best Action + Recommended
+      {
+        "eyebrow": "Next Best Action:" | "Recommended:",
+        "title": string,     // action-oriented, brand-appropriate
+        "cta": string,       // 1-2 word button label
+        "image": ""          // leave empty; the app fills a default
+      }
+    ]
+  },
+
+  "activity": {
+    "title": "Engagement Activity",
+    "items": [               // AT LEAST 4 items, prefer 5-6 — reverse chronological
+      { "icon": "emoji", "title": string, "body": "may include <b>bold</b> or <span style='color:#RRGGBB'>colored</span> HTML — use SINGLE quotes for HTML attributes to keep the JSON string valid", "time": string }
+    ]
+  },
+
+  "extraCards": [            // 0-2 OPTIONAL suggested cards for the manual builder; not shown on the first screen by default
+    {
+      "title": string,       // vertical-appropriate category (e.g. "Coaching History", "Skills Assessment", "Family Info")
+      "icon": "emoji",       // single emoji
+      "items": [ { "label": string, "value": string } ]   // 3-5 rows
+    }
+  ],
+
+  "rightExtraCards": [       // 0-1 OPTIONAL suggested card for the manual builder
+    {
+      "title": string,       // e.g. "Recent Communications", "Program Enrollment", "Referral Sources"
+      "icon": "emoji",
+      "items": [ { "label": string, "value": string } ]   // 2-3 rows
+    }
+  ]
+}
+
+Rules:
+- The profile MUST feel specific to this customer's business — not generic.
+- If the site is a sports recruiting / education / youth-athletics brand, use industry:"recruiting" and include parentEmail.
+- Colors should match the customer's actual visual brand where discernible from the page, but use a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
+- Numbers in insights/affinities/loyalty should be plausible for this industry (e.g. AUM for wealth mgmt, RFM for retail).
+- **COMPOSITION MATTERS** — SEs screenshot one 1600×900 (16:9 widescreen) profile canvas onto slides. The standard profile modules must form a complete, useful single-screen story: use 2-3 affinity groups with 2-3 items each, 2 recommendations, and 5-6 concise activity items. Only return an extraCard when it adds genuine optional value; it is presented in the builder as a suggested module rather than being placed on the first screen automatically. Keep labels short and messages scannable.
+- Keep all recommendation copy and standard labels suitable for dark text on white cards. Do not use white text or inline styles that reduce contrast.
+- A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs purchase/expansion signals and commercial actions; Service needs churn, case, sentiment, and save actions; Marketing needs journey, channel, content, and campaign engagement; Customer Success needs health, adoption, renewal, and value-realization actions. For Custom, the supplied role and decision request override these default patterns. Adapt every supporting module to that lens while keeping the customer internally consistent.
+- Return ONLY the JSON. No explanation.`;
+
+  const B2B_SYSTEM_PROMPT = `You are a brand analyst helping a Salesforce Solution Engineer build a demo Salesforce Data Cloud unified ACCOUNT profile for a specific customer.
+
+You will receive scraped content from a customer website. Extract brand identity and generate a realistic, on-brand B2B account — a fictional but plausible company that buys from this customer's business. The account dashboard must feel appropriate for a sales, customer success, or account-management user.
+
+Return ONLY one JSON object. No preamble, markdown fences, or trailing prose. All commercial, product-usage, and score data is modeled demo data; make it internally consistent and plausible, never claim it was sourced from the website.
+
+Schema:
+{
+  "profileType": "b2b",
+  "brandName": string,
+  "industry": "recruiting" | "retail" | "healthcare" | "financial" | "generic",
+  "appName": string,
+  "tabName": string,
+  "colors": { "primary": "#RRGGBB", "accent": "#RRGGBB", "secondary": "#RRGGBB", "menu": "#RRGGBB", "menuText": "#RRGGBB" },
+  "navLinks": [string],
+  "account": {
+    "name": string, "headquarters": "City, ST", "accountId": string,
+    "industry": string, "type": string, "owner": string, "website": string,
+    "employees": string, "address": "Street\\nCity, ST ZIP", "tier": string,
+    "parentAccount": string
+  },
+  "accountMetrics": {
+    "revenue": string, "revenueTrend": string, "pipeline": string,
+    "usageScore": string, "usageTrend": string, "activeUsers": string,
+    "healthScore": string, "healthTrend": string, "supportCases": string,
+    "renewalDate": string
+  },
+  "insights": { "title": "Calculated Insights", "items": [ { "icon": "emoji", "label": string, "value": string } ] },
+  "affinities": {
+    "title": "Account Interests & Signals", "includeAggregate": true,
+    "seriesA": { "label": string, "color": "#RRGGBB" },
+    "seriesB": { "label": string, "color": "#RRGGBB" },
+    "groups": [ { "name": string, "items": [ { "label": string, "a": 0-100, "b": 0-100 } ] } ]
+  },
+  "preferences": { "title": "Account Details", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "events": { "title": "Key Stakeholders", "icon": "emoji", "items": [ { "name": string, "date": string, "confirmation": string } ] },
+  "membership": { "title": "Products & Contracts", "icon": "emoji", "items": [ { "label": string, "value": string } ] },
+  "recommendations": { "title": "Next Best Actions", "items": [ { "eyebrow": string, "title": string, "cta": string, "image": "" } ] },
+  "activity": { "title": "Account Activity", "items": [ { "icon": "emoji", "title": string, "body": string, "time": string } ] },
+  "extraCards": [ { "title": string, "icon": "emoji", "items": [ { "label": string, "value": string } ] } ], // optional builder suggestions
+  "rightExtraCards": []
+}
+
+Rules:
+- The account must be a fictional organization that credibly buys from the analyzed customer's business; it is not the analyzed customer itself.
+- Account metrics must include revenue/ARR or spend, pipeline, usage, health, support, and renewal context. Use realistic rounded demo values.
+- Return 6 calculated insights, including Account Health, Expansion Propensity, Renewal/Churn Risk, Stakeholder Coverage, Product Adoption, and Engagement Score.
+- Include 2 affinity groups that combine aggregate people signals with account engagement. Explain scale only through the labels; do not invent source citations.
+- Put 3 named people in events, using date for their buying-committee role and confirmation for their job title.
+- Populate Products & Contracts, 2 next-best actions, and 5-6 account activity items. Return a Billing/Renewal extra card only when it adds optional detail; it is offered in the builder rather than forced onto the first visible account screen. The output should be dense enough to screenshot cleanly.
+- Keep the workspace screenshot-ready: use concise labels, short action titles, and only the most decision-useful details. Do not use white text or inline styling that could reduce contrast on white cards.
+- Keep actual brand colors discernible from the page when possible, but specify a white menu, black menu text, and white accent. The generator owns those neutral Salesforce-chrome defaults and may ignore other values for them.
+- A PROFILE STRATEGY appears in the user prompt. Treat its viewer persona and objective as authoritative: Sales needs opportunity, buying-committee, expansion, and commercial actions; Service needs account risk, support, entitlement, and save actions; Marketing needs account intent, campaign, content, and journey engagement; Customer Success needs adoption, renewal, stakeholder, and health actions. For Custom, the supplied role and decision request override these default patterns.
+- Return ONLY the JSON. No explanation.`;
+
+  function getSystemPrompt(profileType) {
+    return profileType === 'b2b' ? B2B_SYSTEM_PROMPT : SYSTEM_PROMPT;
+  }
+
+  function buildUserPrompt(scraped, opts = {}) {
+    const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
+    const strategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, opts.strategy || {});
+    return `Customer URL: ${scraped.url}
+Site title: ${scraped.title || '(not extracted)'}
+Description: ${scraped.description || '(not extracted)'}
+Site name (og): ${scraped.siteName || '(not extracted)'}
+
+Headings on the homepage:
+${scraped.headings || '(none extracted)'}
+
+Nav links seen: ${scraped.navLinkCandidates.join(' • ') || '(none)'}
+
+Body text (truncated):
+${scraped.bodyText.slice(0, 5000) || '(no body text extracted — analyze from URL/domain alone)'}
+
+Profile strategy (this controls the generated working view):
+- Viewer persona: ${strategy.lens}
+- Custom profile role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not supplied)') : '(not applicable)'}
+- Primary objective: ${strategy.objective}
+- Additional context from the presenter: ${strategy.brief || '(none)'}
+- Prioritize signals, supporting modules, and next-best actions that help this persona achieve the objective. Keep the same fictional person/account internally consistent. Website facts establish brand context; operational signals and scores are modeled demo data.
+- Additional profile-card fields requested by the presenter belong in optional "railFields": [{"label": "Events attended", "value": "3", "visible": true}]. Use them for identity/summary fields, and extraCards for multi-field topics such as call coaching. Do not copy the example values unless relevant.
+- Distinguish brand facts actually present in the source from modeled demo metrics. Do not portray modeled operational metrics as externally verified. Every next-best action must respond to a specific insight or recent activity and its image must depict that action in this company's business context.
+
+Generate the ${profileType} Unified Profile JSON per the schema.`;
+  }
+
+  // A profile set keeps one fictional person/account and brand identity while
+  // giving each team a different decision-ready working view. This prompt
+  // intentionally returns only the per-persona overlay, not a second profile.
+  function buildPersonaOverlayPrompt(scraped, sharedProfile, opts = {}) {
+    const profileType = opts.profileType === 'b2b' ? 'b2b account' : 'b2c individual';
+    const strategy = Object.assign({ lens: 'sales', objective: 'convert', brief: '', customRole: '' }, opts.strategy || {});
+    const identity = JSON.stringify(UPGContract.textIdentity(sharedProfile || {}), null, 2);
+    return `Customer URL: ${scraped.url}
+Site title: ${scraped.title || '(not extracted)'}
+Description: ${scraped.description || '(not extracted)'}
+Headings: ${scraped.headings || '(none extracted)'}
+Body text (truncated): ${scraped.bodyText.slice(0, 3500) || '(no body text extracted)'}
+
+This is the shared identity already established for the profile set. Do NOT change it or return brand/profile/account fields:
+${identity}
+
+Create ONLY this ${profileType} persona overlay as JSON with exactly these keys:
+{
+  "insights": { "items": [{ "icon": string, "label": string, "value": string }] },
+  "affinities": { "seriesA": {"label": string, "color": "#RRGGBB"}, "seriesB": {"label": string, "color": "#RRGGBB"}, "groups": [{"name": string, "items": [{"label": string, "a": number, "b": number}]}] },
+  "preferences": { "items": [{"label": string, "value": string}] },
+  "events": { "items": [{"name": string, "date": string, "confirmation": string}] },
+  "membership": { "items": [{"label": string, "value": string}] },
+  "recommendations": { "items": [{"eyebrow": string, "title": string, "cta": string, "image": ""}] },
+  "activity": { "items": [{"icon": string, "title": string, "body": string, "time": string}] },
+  "extraCards": [{"title": string, "icon": string, "items": [{"label": string, "value": string}]}],
+  "rightExtraCards": [{"title": string, "icon": string, "items": [{"label": string, "value": string}]}]
+}
+
+Viewer persona: ${strategy.lens}
+Custom role: ${strategy.lens === 'custom' ? (strategy.customRole || '(not supplied)') : '(not applicable)'}
+Primary objective: ${strategy.objective}
+Additional requirements: ${strategy.brief || '(none)'}
+
+Use the role's standard blueprint as the foundation, then add the stated requirements as useful insights, fields, activities, or suggested cards. Optional railFields: [{"label": string, "value": string, "visible": true}] supplies additional profile-card fields requested for this view. Preserve shared identity and commercial facts; do not invent contradictory account-level metrics. Every recommended action must have a supporting insight or activity, distinct from other role blueprints. Operational metrics are modeled demo data, never verified source facts. Produce 6 concise insights, 2 recommendation actions, 6-8 varied activity items, and 0-2 genuinely valuable suggested cards. Keep all copy dark-text-safe for white Salesforce cards. Return only JSON.`;
+  }
+
+  // Tolerant JSON parser — handles the three common ways AI models
+  // produce technically-invalid JSON:
+  //   1) Markdown fences (```json ... ```)
+  //   2) Prose wrappers around the JSON block
+  //   3) Truncation mid-object (hit max_tokens)
+  //   4) Trailing commas / smart-quote characters
+  function parseAIResponseText(text) {
+    if (!text) throw new Error('Empty AI response');
+
+    // 1) Strip Markdown fences
+    let t = text.trim();
+    if (t.startsWith('```')) {
+      t = t.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
+    }
+
+    // 2) Grab from first { to last }
+    const first = t.indexOf('{');
+    const last = t.lastIndexOf('}');
+    if (first >= 0 && last > first) t = t.slice(first, last + 1);
+
+    // 3) Happy path
+    try { return JSON.parse(t); } catch (_) { /* fall through */ }
+
+    // 4) Strip trailing commas before } or ] — a very common AI mistake
+    const noTrailingCommas = t.replace(/,\s*([}\]])/g, '$1');
+    try { return JSON.parse(noTrailingCommas); } catch (_) { /* fall through */ }
+
+    // 5) Truncation-recovery: if the response was cut off mid-object, walk
+    //    forward tracking string/escape state + brace depth. Close what's
+    //    open and re-parse.
+    const recovered = attemptTruncationRecovery(t);
+    if (recovered) {
+      try { return JSON.parse(recovered); } catch (_) { /* fall through */ }
+    }
+
+    // 6) Give up. Log the raw text so the SE can inspect via devtools.
+    console.error('[UPG] JSON parse failed. Raw model output:', text);
+    const err = new Error('AI returned malformed JSON. Try Analyze again — usually transient.');
+    err.raw = text;
+    throw err;
+  }
+
+  // Walk the string char-by-char honoring string/escape state; find the
+  // last balanced position and close any still-open constructs.
+  function attemptTruncationRecovery(s) {
+    let inString = false;
+    let escape = false;
+    const stack = [];
+    let lastSafe = -1;
+
+    for (let i = 0; i < s.length; i++) {
+      const c = s[i];
+      if (escape) { escape = false; continue; }
+      if (inString) {
+        if (c === '\\') { escape = true; continue; }
+        if (c === '"') inString = false;
+        continue;
+      }
+      if (c === '"') { inString = true; continue; }
+      if (c === '{' || c === '[') { stack.push(c); continue; }
+      if (c === '}' || c === ']') {
+        const want = c === '}' ? '{' : '[';
+        if (stack.length && stack[stack.length - 1] === want) {
+          stack.pop();
+          if (stack.length === 0) lastSafe = i + 1;
+        }
+      }
+    }
+
+    // If we ended inside a string, cut back to the last comma at safe depth
+    if (inString) {
+      const cutIdx = s.lastIndexOf(',');
+      if (cutIdx > 0) return attemptTruncationRecovery(s.slice(0, cutIdx));
+      return null;
+    }
+
+    if (stack.length === 0) return null;
+
+    let truncated = s;
+    if (lastSafe > 0) {
+      const tail = s.slice(lastSafe);
+      const cutIdx = tail.lastIndexOf(',');
+      truncated = s.slice(0, lastSafe) + (cutIdx > 0 ? tail.slice(0, cutIdx) : '');
+    } else {
+      const cutIdx = s.lastIndexOf(',');
+      if (cutIdx > 0) truncated = s.slice(0, cutIdx);
+    }
+
+    // Close what's still open
+    let closer = '';
+    for (let i = stack.length - 1; i >= 0; i--) closer += (stack[i] === '{' ? '}' : ']');
+    return truncated.replace(/,\s*$/, '') + closer;
+  }
+
+  window.UPG_Shared = { normalizeURL, extractCoreHTML, SYSTEM_PROMPT, getSystemPrompt, buildUserPrompt, buildPersonaOverlayPrompt, parseAIResponseText };
+})();
