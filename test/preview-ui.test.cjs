@@ -84,6 +84,25 @@ test('preview branding retains readable blue accents', () => {
   }
   assert.ok(contrast('ffffff', '075dcc') >= 4.5, 'Selected view');
   assert.ok(contrast('064eb2', 'ffffff') >= 4.5, 'Primary toolbar action');
+  for (const background of ['e8f1ff', 'dbeafe']) {
+    assert.ok(contrast('164e99', background) >= 4.5, 'Unselected profile title');
+    assert.ok(contrast('345b87', background) >= 4.5, 'Unselected profile description');
+  }
+  assert.ok(contrast('ffffff', '004eae') >= 4.5, 'Selected profile hover');
+  assert.ok(contrast('526b8e', 'f7faff') >= 4.5, 'Customer URL placeholder');
+  assert.ok(contrast('397bd2', 'f7faff') >= 3, 'Customer URL border');
+});
+
+test('profile type and customer URL accents preserve distinct selection and focus states', () => {
+  assert.match(css, /\.profile-type-option \{[^}]*background: #e8f1ff; border-color: #397bd2;/);
+  assert.match(css, /\.profile-type-option span \{[^}]*opacity: 1;/, 'Descriptions must not inherit the original translucent text');
+  assert.match(css, /\.profile-type-option\.active \{ background: var\(--studio-blue\); border-color: var\(--studio-blue\);/);
+  assert.match(css, /\.profile-type-option\.active strong, \.studio-app \.profile-type-option\.active span \{ color: #fff;/);
+  assert.match(css, /\.studio-app #wizard-col #quickstart-url \{[^}]*border: 2px solid #397bd2;/, 'URL border must outrank generic field styling');
+  assert.match(css, /#quickstart-url:focus-visible \{ outline: 2px solid var\(--studio-blue\); outline-offset: 2px;/);
+  const forcedColors = css.slice(css.indexOf('@media (forced-colors:'));
+  assert.match(forcedColors, /\.profile-type-option\.active \{ outline: 2px solid Highlight;/);
+  assert.match(forcedColors, /#quickstart-url:focus-visible \{ outline-color: Highlight;/);
 });
 
 function harness() {

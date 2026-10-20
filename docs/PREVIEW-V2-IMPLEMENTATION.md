@@ -92,6 +92,14 @@ the taller header. This changes only the trial editor, not the original app.
 Verification: 197 automated tests and 16 DOM checks passed; browser paint
 verification remains unavailable.
 
+The profile-type buttons now use a solid blue selected state with white text and
+a lighter blue unselected state. The customer URL field has a persistent 2px blue
+border, a subtle blue-tinted surface, larger text and an explicit keyboard focus
+outline. These preview-only accents follow the Apple-design guidance on clear
+states; forced-colors selection/focus cues and full-opacity text remain legible.
+Verification: 198 automated tests and 16 DOM checks passed, including text and
+field-border contrast assertions. Browser paint verification remains unavailable.
+
 An additional regression was found during the DOM workflow audit: simply visiting
 a queued view caused native color-input normalization and empty optional fields
 to look like manual edits. Preview generation now compares those equivalent values
