@@ -112,6 +112,49 @@ exercise this actual client pipeline using deferred HTTP fixtures.
 
 ## Reproduce verification
 
+### Field finder and wording cleanup
+
+Rollback checkpoint: `rollback/preview-before-field-finder-2026-10-20` at
+`2d449b6`, backed up to GitHub before this change.
+
+TaskCreate/TaskUpdate remain unavailable; this checklist tracks the focused pass:
+
+- [x] Shorten workspace context, keep draft recovery actionable, and move the
+  simulated-data explanation into a native disclosure.
+- [x] Add a local field finder for the selected view and shared customer settings.
+- [x] Complete regression, DOM workflow and accessibility source review.
+- [x] Prepare the preview release; hosting confirmation is recorded in the chat.
+
+The Apple-design skill informed the quieter hierarchy and contextual feedback.
+Completed generation no longer leaves a list of redundant ready messages;
+generation, missing-image and retry states stay visible. The preview toolbar
+reports screen fit, with shorter-layout guidance only when it overflows. Browser
+backup feedback does not claim an online save. Blue profile choices, the URL
+outline and the larger logo are retained.
+
+Use **Find something to edit**, or Command-K / Control-K, to search field labels,
+actual generated text, current values and module titles across the seven editor
+sections. A result opens its section, expands disclosures, focuses the control
+and briefly outlines it. Results include shared-setting and suggested/hidden
+module context; navigation never makes a hidden module visible. Search performs
+no AI requests and does not inspect the sandboxed output iframe. After a view,
+mode or project change, stale results are rejected and refreshed. Provider keys
+and image payloads are excluded. The accessibility skill informed combobox
+roles/state, keyboard interaction, native labels and focus handling.
+
+Verification: 199 automated tests, 18 full-editor DOM checks and 18 dedicated
+finder DOM checks passed. Source review for SC 1.3.1 form labels, SC 2.1.1
+keyboard, and SC 4.1.2 role/value: no outstanding findings (`[]` for each).
+The keyboard-selection reset found during independent review was corrected and
+covered by a mutation-refresh regression. Browser paint and screen-reader
+verification remain unperformed because the required preview tools are absent.
+
+Additional DOM verification:
+
+```sh
+UPG_JSDOM_PATH=/path/to/node_modules/jsdom node scripts/check-preview-search.cjs
+```
+
 ```sh
 node --test test/*.test.cjs
 UPG_JSDOM_PATH=/path/to/node_modules/jsdom node scripts/check-preview-dom.cjs

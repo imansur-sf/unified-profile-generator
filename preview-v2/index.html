@@ -286,7 +286,7 @@
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
   </style>
-  <link rel="stylesheet" href="studio.css?v=preview-v2-blue-inputs-4">
+  <link rel="stylesheet" href="studio.css?v=preview-v2-find-5">
 </head>
 <body class="min-h-screen studio-app">
   <a class="studio-skip-link" href="#wizard-col">Skip to editor</a>
@@ -373,20 +373,35 @@
     <section class="editor-context" id="selected-view-bar" aria-label="Current view and output actions">
       <div>
         <div class="editor-context-label" id="studio-project-name">Your customer workspace</div>
-        <strong id="selected-view-name">Editing Sales</strong>
-        <span id="selected-view-status" role="status" aria-live="polite" aria-atomic="true"></span>
-        <p id="draft-status" class="editor-note" role="status" aria-live="polite">Unsaved draft</p>
-        <p id="layout-fit-status" class="editor-note" role="status" aria-live="polite">Checking first-screen fit…</p>
+        <strong id="selected-view-name" hidden>Editing Sales</strong>
+        <p id="draft-status" class="editor-note" role="status" aria-live="polite">Not saved online</p>
       </div>
       <div class="editor-context-actions"><button type="button" class="studio-button" onclick="studioPersonalizeView()">Personalize this view <span aria-hidden="true">↗</span></button></div>
     </section>
-    <p class="editor-note" id="demo-data-note"><strong>Demo data:</strong> Starter and AI-generated profiles contain simulated customer facts for presentations. Review and edit them before use; they do not represent live CRM records.</p>
+    <details class="studio-data-note" id="demo-data-note">
+      <summary>Simulated demo data · Review before presenting <span aria-hidden="true">ⓘ</span></summary>
+      <p>Starter and AI-generated profiles contain simulated customer facts for presentations. Review and edit them before use; they do not represent live CRM records.</p>
+    </details>
   </div>
   <div class="studio-workspace-shell max-w-[1400px] mx-auto px-4 py-6">
     <div class="flex gap-6" id="main-layout">
 
       <!-- LEFT: WIZARD FORM -->
       <div class="w-full lg:w-[52%] shrink-0" id="wizard-col" tabindex="-1">
+        <div class="studio-search" id="studio-search">
+          <label for="studio-search-input">Find something to edit</label>
+          <div class="studio-search-field">
+            <svg aria-hidden="true" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></svg>
+            <input id="studio-search-input" type="search" placeholder="Search text, fields, or modules…" role="combobox" aria-autocomplete="list" aria-expanded="false" aria-controls="studio-search-results" autocomplete="off" spellcheck="false">
+            <kbd id="studio-search-shortcut" aria-hidden="true">⌘K</kbd>
+          </div>
+          <div id="studio-search-popover" class="studio-search-popover" hidden>
+            <p id="studio-search-context" class="studio-search-context">Current view and shared settings</p>
+            <div id="studio-search-results" role="listbox" aria-label="Matching editable fields"></div>
+            <p id="studio-search-empty" class="studio-search-empty">Search the words you see in your profile.</p>
+          </div>
+          <span id="studio-search-status" class="sr-only" role="status" aria-live="polite" aria-atomic="true"></span>
+        </div>
 
         <!-- STEP 1: Brand & Colors -->
         <div class="step-panel active fade-in" data-step="0">
@@ -395,8 +410,8 @@
           <div class="quickstart" id="quickstart-panel">
             <div class="quickstart-inner">
               <div class="quickstart-eyebrow">Start with your customer</div>
-              <div class="quickstart-title" id="quickstart-title">Create a customer profile set with AI</div>
-              <div class="quickstart-sub" id="quickstart-sub">Paste the customer's homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.</div>
+              <div class="quickstart-title" id="quickstart-title">Create your customer views</div>
+              <div class="quickstart-sub" id="quickstart-sub">Enter a customer website to create personalized views for your teams.</div>
               <div class="profile-type-switch" role="radiogroup" aria-label="Profile type">
                 <button type="button" id="profile-type-b2c" class="profile-type-option active" onclick="setProfileType('b2c')" role="radio" aria-checked="true" tabindex="0">
                   <strong>Individual · B2C</strong><span>Generate a person-level unified profile.</span>
@@ -406,12 +421,12 @@
                 </button>
               </div>
               <div class="quickstart-row">
-                <label for="quickstart-url" class="sr-only">Customer homepage URL</label>
+                <label for="quickstart-url" class="studio-field-label">Customer website</label>
                 <input type="text" id="quickstart-url" class="quickstart-input" placeholder="Customer homepage, e.g. https://ncsasports.org" inputmode="url" spellcheck="false" autocomplete="url" aria-describedby="quickstart-error">
               </div>
               <details class="profile-set-panel" id="studio-view-set" open>
                 <summary><span class="profile-set-title">Views to generate</span><span id="studio-view-set-summary">4 selected</span><span class="studio-disclosure-chevron" aria-hidden="true">⌄</span></summary>
-                <div class="profile-set-help">Choose which views AI will create. The view tabs above the preview choose which one you are editing—not which ones will be generated.</div>
+                <div class="profile-set-help">Choose the team views AI will create.</div>
                 <div class="profile-set-choices" role="group" aria-label="Views to create">
                   <label class="profile-set-choice"><input type="checkbox" value="sales" checked> Sales</label>
                   <label class="profile-set-choice"><input type="checkbox" value="service" checked> Service</label>
@@ -426,14 +441,14 @@
                   <textarea id="profile-set-custom-brief" placeholder="e.g. Assess payment risk and revenue opportunities."></textarea>
                 </div>
               </details>
-              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create selected profile views →</button>
+              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create 4 views →</button>
               <div class="quickstart-status" id="quickstart-status" role="status" aria-live="polite" aria-atomic="true"></div>
               <div class="quickstart-error" id="quickstart-error" role="alert" style="display:none;"></div>
               <div id="profile-set-progress" class="profile-set-progress" aria-label="Profile view progress"></div>
               <button type="button" id="profile-set-stop" class="studio-button studio-stop" onclick="stopProfileSetGeneration()" hidden>Stop remaining views</button>
               <div class="strategy-panel" id="studio-personalize-panel">
                 <div class="strategy-label" id="studio-personalize-label">Personalize Sales</div>
-                <p class="studio-field-help">Optional. Add requirements before creation, or refine just this view later.</p>
+                <p class="studio-field-help">Add a scenario, fields, or insights for this team.</p>
                 <div class="custom-role-field" id="custom-role-field" hidden>
                   <label for="strategy-custom-role">Who will use this profile? <span aria-hidden="true">*</span></label>
                   <input id="strategy-custom-role" type="text" maxlength="64" placeholder="e.g. Regional franchise manager" oninput="onProfileStrategyChange()" aria-describedby="custom-role-help">
@@ -451,7 +466,7 @@
                   <label class="studio-field-label" for="strategy-brief">What should this person be able to decide or do?</label>
                   <textarea id="strategy-brief" aria-label="What should this person be able to decide or do?" placeholder="Add a scenario, custom fields, or insights this team needs…" oninput="onProfileStrategyChange()"></textarea>
                 </div>
-                <div class="strategy-blueprint" id="strategy-blueprint"></div>
+                <details class="studio-view-guidance"><summary>What this view focuses on</summary><div class="strategy-blueprint" id="strategy-blueprint"></div></details>
                 <p class="quickstart-note" id="studio-personalize-scope">Only this view will change. Brand and customer identity are shared across your profile set.</p>
                 <button type="button" id="btn-personalize-view" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Update Sales view with AI →</button>
               </div>
@@ -947,13 +962,12 @@
             <section class="rounded-xl border border-blue-100 bg-blue-50/60 p-4 mb-5" aria-labelledby="persona-output-title">
               <div class="flex items-start justify-between gap-4 mb-3">
                 <div>
-                  <h3 id="persona-output-title" class="text-sm font-700 text-gray-800">Persona output</h3>
+                  <h3 id="persona-output-title" class="text-sm font-700 text-gray-800">Selected view</h3>
                   <p id="persona-output-summary" class="text-xs text-gray-600 mt-1">Sales is selected. Present, download, or copy this saved persona view.</p>
                 </div>
-                <span class="text-[10px] uppercase tracking-[0.14em] font-700 text-blue-600 whitespace-nowrap">Switch &amp; export</span>
               </div>
               <div id="persona-output-switcher" class="flex flex-wrap gap-2" role="group" aria-label="Choose a persona output"></div>
-              <p class="text-[11px] leading-4 text-gray-500 mt-3">Each persona keeps its own modules and brief. Downloads include the selected persona in the filename.</p>
+              <p class="text-[11px] leading-4 text-gray-500 mt-3">Downloads include the selected view in the filename.</p>
             </section>
 
             <div class="flex gap-3 mb-3">
@@ -1009,7 +1023,7 @@
       <!-- RIGHT: LIVE PREVIEW -->
       <div class="hidden lg:block flex-1 sticky top-28 self-start" id="preview-col">
         <div class="studio-preview-heading">
-          <div><span class="studio-eyebrow">Your profile views</span><h2 id="studio-preview-title">Sales preview</h2></div>
+          <div><h2 id="studio-preview-title">Sales preview</h2><span id="selected-view-status" role="status" aria-live="polite" aria-atomic="true"></span></div>
           <button type="button" class="studio-button" id="studio-focus-preview" aria-pressed="false" onclick="studioTogglePreviewFocus()">Focus preview</button>
         </div>
         <div class="persona-switch" id="persona-picker" role="radiogroup" aria-label="View to edit and preview">
@@ -1021,15 +1035,15 @@
         </div>
         <div class="preview-shell">
           <div class="preview-chrome px-4 py-2.5 flex items-center gap-2">
-            <span class="studio-live-dot" aria-hidden="true"></span><span>Live preview</span>
             <span class="studio-canvas-size">16:9 · 1600 × 900</span>
+            <span id="layout-fit-status" role="status" aria-live="polite">Checking fit…</span>
             <button type="button" class="studio-preview-expand" onclick="openPresentation()" aria-label="Expand selected view for presentation">Expand <span aria-hidden="true">↗</span></button>
           </div>
           <div class="preview-stage" id="preview-stage">
             <iframe id="preview-iframe" title="Live preview of the selected profile view" sandbox="allow-scripts"></iframe>
           </div>
         </div>
-        <p class="studio-preview-note">Your Salesforce-style output stays true to the selected view. Use <strong>Present</strong> for a full-size, slide-ready screen.</p>
+        <p id="studio-layout-help" class="studio-preview-note" hidden>For a single slide, move optional modules to Suggested in the Modules section.</p>
       </div>
 
     </div>
@@ -1197,7 +1211,7 @@
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
     // without the browser's aggressive JS cache getting in the way.
-    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/brand-logo.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js','js/studio.js'].forEach(src => {
+    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/brand-logo.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js','js/studio.js','js/studio-search.js'].forEach(src => {
       const s = document.createElement('script');
       s.src = src + '?v=' + window.__UPG_BUILD__;
       s.defer = false;

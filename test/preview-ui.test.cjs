@@ -171,6 +171,22 @@ test('real generation and image retry statuses remain visible', () => {
   assert.equal(get('profile-set-progress').hidden, false);
 });
 
+test('completed generation stays quiet and creation count does not interrupt a running request', () => {
+  const { context, get, profile } = harness();
+  profile.profileSet.statuses.service = 'ready';
+  profile.profileSet.visuals = { service: { state: 'ready' } };
+  context.window.renderStudioUI();
+  assert.equal(get('profile-set-progress').hidden, true);
+  assert.equal(get('quickstart-btn').textContent, 'Create 2 views →');
+  get('quickstart-btn').disabled = true;
+  get('quickstart-btn').textContent = 'Creating views…';
+  context.window.renderStudioUI();
+  assert.equal(get('quickstart-btn').textContent, 'Creating views…');
+  profile.profileSet.visuals.service.state = 'partial';
+  context.window.renderStudioUI();
+  assert.equal(get('profile-set-progress').hidden, false, 'Incomplete images retain their recovery actions');
+});
+
 test('view-set disclosure collapses only once and never closes around focused content', () => {
   const { context, get, profile } = harness();
   profile.profileSet.statuses.service = 'ready';

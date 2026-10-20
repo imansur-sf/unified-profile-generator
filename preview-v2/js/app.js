@@ -501,7 +501,7 @@ function renderPersonaOutputSwitcher(strategy = getProfileStrategy()) {
   const container = document.getElementById('persona-output-switcher');
   if (!container) return;
   const label = getProfileStrategyLabel(strategy);
-  setText('persona-output-summary', `${label} is selected. Present, download, or copy this saved persona view.`);
+  setText('persona-output-summary', `Present, download, or copy your ${label} view.`);
   const markup = Object.entries(PERSONA_PRESETS).map(([lens, preset]) => {
     const active = strategy.lens === lens;
     const name = lens === 'custom' && strategy.customRole ? strategy.customRole : preset.label;
@@ -746,10 +746,8 @@ function updateProfileModeUI() {
   if (b2cButton) { b2cButton.classList.toggle('active', !b2b); b2cButton.setAttribute('aria-checked', String(!b2b)); b2cButton.tabIndex = b2b ? -1 : 0; }
   if (b2bButton) { b2bButton.classList.toggle('active', b2b); b2bButton.setAttribute('aria-checked', String(b2b)); b2bButton.tabIndex = b2b ? 0 : -1; }
 
-  setText('quickstart-title', b2b ? 'Create an account profile set with AI' : 'Create a customer profile set with AI');
-  setText('quickstart-sub', b2b
-    ? 'Paste the customer’s homepage — AI extracts brand context once, then creates distinct account views with commercial, usage, health, and role-specific actions.'
-    : 'Paste the customer’s homepage — AI extracts brand identity once, then prepares role-specific unified views you can edit, present, or personalize further.');
+  setText('quickstart-title', b2b ? 'Create your account views' : 'Create your customer views');
+  setText('quickstart-sub', 'Enter a customer website to create personalized views for your teams.');
   setText('step-2-title', b2b ? 'Account Profile' : 'Profile Card');
   setText('step-2-sub', b2b ? 'Firmographics, ownership, hierarchy, and account identity shown in the left rail.' : 'The customer’s demographic, contact, and segment membership shown in the left panel.');
   setText('step-3-title', b2b ? 'Account Metrics & Insights' : 'Insights');
@@ -957,9 +955,10 @@ window.addEventListener('message', event => {
   if (event.data.type === 'upg:layout-status') {
     const { height, viewport } = event.data;
     if (!Number.isFinite(height) || !Number.isFinite(viewport) || viewport <= 0) return;
-    setText('layout-fit-status', height > viewport + 2
-      ? 'Scrollable profile · Move optional modules to Suggested for a shorter screenshot.'
-      : 'Fits the first screen · Activity and recommendation lists can still scroll.');
+    const scrollable = height > viewport + 2;
+    setText('layout-fit-status', scrollable ? 'Scrollable profile' : 'Fits one screen');
+    const help = document.getElementById('studio-layout-help');
+    if (help) help.hidden = !scrollable;
     return;
   }
   state.accountViewTab = event.data.tab;
@@ -1745,7 +1744,7 @@ function escAttr(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;')
 function escHTML(s) { return (s == null ? '' : String(s)).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
 
 // ─── STEP NAVIGATION ────────────────────────────────────────
-function goToStep(n) {
+function goToStep(n, options = {}) {
   currentStep = Math.max(0, Math.min(TOTAL_STEPS - 1, n));
   document.querySelectorAll('.step-panel').forEach(p => {
     p.classList.toggle('active', +p.dataset.step === currentStep);
@@ -1759,9 +1758,9 @@ function goToStep(n) {
   document.getElementById('btn-prev').classList.toggle('hidden', currentStep === 0);
   document.getElementById('btn-next').textContent = currentStep === TOTAL_STEPS - 1 ? 'Preview & Present' : 'Next →';
   const heading = document.querySelector('.step-panel.active h2');
-  if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
+  if (heading && options.focus !== false) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
   if (typeof labelEditorControls === 'function') labelEditorControls();
-  window.scrollTo({ top: 0, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  if (options.scroll !== false) window.scrollTo({ top: 0, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   window.renderStudioUI?.();
 }
 function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); else openPresentation(); }

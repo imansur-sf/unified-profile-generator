@@ -56,9 +56,17 @@ function renderProfileProgress() {
   const strategy = getProfileStrategy();
   const label = getProfileStrategyLabel(strategy);
   const textLabels = { queued: 'Waiting', generating: 'Writing', ready: 'Ready', edited: 'Edits kept', 'template-ready': 'Needs retry', failed: 'Needs retry' };
-  const visualLabels = { queued: 'waiting', generating: 'creating', ready: 'ready', pending: 'needs update', partial: 'partly ready', failed: 'needs retry', stopped: 'stopped · retry when ready' };
+  const visualLabels = { queued: 'waiting', generating: 'creating', ready: 'ready', pending: 'need update', partial: 'partly ready', failed: 'need retry', stopped: 'stopped · retry when ready' };
   setText('selected-view-name', `Editing ${label}`);
-  setText('selected-view-status', `${textLabels[profileSet.statuses[strategy.lens]] || 'Editable sample'} · Images ${visualLabels[profileSet.visuals[strategy.lens]?.state] || 'editable'}`);
+  const textState = profileSet.statuses[strategy.lens];
+  const imageState = profileSet.visuals[strategy.lens]?.state;
+  const statusParts = [];
+  if (!textState) statusParts.push('Sample profile');
+  else if (['queued', 'generating', 'template-ready', 'failed'].includes(textState)) {
+    statusParts.push({ queued: 'Queued', generating: 'Creating view…', 'template-ready': 'Sample profile · View needs retry', failed: 'View needs retry' }[textState]);
+  }
+  if (imageState && imageState !== 'ready') statusParts.push({ queued: 'Images queued', generating: 'Creating images…', pending: 'Images need update', partial: 'Some images missing', failed: 'Images need retry', stopped: 'Image generation stopped' }[imageState] || 'Images need update');
+  setText('selected-view-status', statusParts.join(' · '));
   const personalize = document.getElementById('btn-personalize-view');
   if (personalize) { personalize.textContent = `Update ${label} view with AI`; personalize.disabled = ['queued', 'generating'].includes(profileSet.statuses[strategy.lens]); }
   window.renderStudioUI?.();
@@ -135,6 +143,11 @@ function scheduleDraftRecovery() {
   if (!draftReady || draftPending) return;
   clearTimeout(draftTimer); draftTimer = setTimeout(() => persistDraftRecovery(), 900);
 }
+function setDraftStatus(message, kind = 'backup') {
+  setText('draft-status', message);
+  const status = document.getElementById('draft-status');
+  if (status) status.setAttribute('data-state', kind);
+}
 async function persistDraftRecovery() {
   clearTimeout(draftTimer);
   if (!draftReady || draftPending) return false;
@@ -147,10 +160,10 @@ async function persistDraftRecovery() {
     // Compare against the last *completed* queued write, not the value that
     // happened to be stored when this request was queued (A → B → A).
     if (json === draftLastJSON) return true;
-    await draftStorage('put', record); draftLastJSON = json; setText('draft-status', 'Draft backed up in this browser tab · not saved online'); return true;
+    await draftStorage('put', record); draftLastJSON = json; setDraftStatus('Backed up in this browser'); return true;
   });
   draftWrite = write;
-  try { return await write; } catch (_) { setText('draft-status', 'Local backup unavailable. Save online or download HTML before reloading.'); return false; }
+  try { return await write; } catch (_) { setDraftStatus('Local backup unavailable. Save online or download HTML before leaving.', 'warning'); return false; }
 }
 async function initializeDraftRecovery() {
   try {
@@ -158,10 +171,13 @@ async function initializeDraftRecovery() {
     if (record?.version === 1 && record.profile) {
       UPGContract.validateSavedProfile(record.profile); draftPending = record;
       const status = document.getElementById('draft-status');
-      if (status) status.innerHTML = 'A draft from this browser tab is available. <button type="button" class="underline" onclick="restoreDraftRecovery()">Restore draft</button> · <button type="button" class="underline" onclick="discardDraftRecovery()">Discard backup</button>';
+      if (status) {
+        status.setAttribute('data-state', 'recovery');
+        status.innerHTML = '<strong>Previous draft found</strong><button type="button" class="underline" onclick="restoreDraftRecovery()">Restore</button><button type="button" class="underline" onclick="discardDraftRecovery()">Discard backup</button>';
+      }
     }
     draftReady = true;
-  } catch (_) { setText('draft-status', 'Local recovery unavailable. Save online or download HTML to keep your work.'); }
+  } catch (_) { setDraftStatus('Local backup unavailable. Save online or download HTML to keep your work.', 'warning'); }
 }
 function restoreDraftRecovery() {
   if (!draftPending) return;
@@ -180,11 +196,11 @@ function restoreDraftRecovery() {
   }
   draftPending = null; document.getElementById('quickstart-url').value = record.sourceUrl || '';
   fillStaticFields(); syncProfileSetConfigUI(); renderAll(); goToStep(record.step || 0); refreshPreview();
-  setText('draft-status', 'Preview draft restored. Saving creates a new online copy; original projects stay unchanged.');
+  setDraftStatus('Draft restored · Save a preview copy to keep it online.');
   if (typeof recoverEmbeddedBrandLogo === 'function') recoverEmbeddedBrandLogo();
 }
 async function discardDraftRecovery() {
   if (!confirm('Discard only this tab’s recovery backup? Your editor and online projects stay unchanged.')) return;
   await draftWrite.catch(() => {}); await draftStorage('delete'); draftPending = null; draftLastJSON = '';
-  setText('draft-status', 'Previous backup discarded. New edits will be backed up in this tab.');
+  setDraftStatus('Backup discarded · New edits will be backed up in this browser.');
 }

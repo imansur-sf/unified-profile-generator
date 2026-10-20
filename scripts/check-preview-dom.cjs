@@ -158,6 +158,58 @@ async function main() {
       assert.equal(get('persona-picker').querySelectorAll('[role="radio"]').length, 5);
       assert.match(get('studio-preview-title').textContent, /Sales/);
     });
+    await check('concise context keeps disclosure and recovery feedback available', () => {
+      assert.equal(get('demo-data-note').open, false);
+      assert.match(get('demo-data-note').querySelector('summary').textContent, /Simulated demo data/);
+      assert.match(get('demo-data-note').querySelector('p').textContent, /do not represent live CRM records/);
+      assert.equal(get('selected-view-name').hidden, true);
+      assert.equal(d.querySelector('label[for="quickstart-url"]').textContent, 'Customer website');
+      assert.equal(get('selected-view-status').textContent, 'Sample profile');
+      run("state.profileSet.statuses.sales='ready';state.profileSet.visuals.sales={state:'ready'};renderProfileProgress()");
+      assert.equal(get('selected-view-status').textContent, '');
+      assert.equal(get('profile-set-progress').hidden, true);
+      run("state.profileSet.visuals.sales.state='failed';renderProfileProgress()");
+      assert.match(get('selected-view-status').textContent, /Images need retry/);
+      assert.equal(get('profile-set-progress').hidden, false);
+      assert.ok(get('profile-set-progress').querySelector('button[onclick="retryPersonaVisuals(\'sales\')"]'));
+      run("state.profileSet.statuses={};state.profileSet.visuals={};renderProfileProgress()");
+      run("setDraftStatus('Backed up in this browser')");
+      assert.equal(get('draft-status').textContent, 'Backed up in this browser');
+      run("setDraftStatus('Local backup unavailable', 'warning')");
+      assert.equal(get('draft-status').dataset.state, 'warning');
+      run("setDraftStatus('Not saved online')");
+      const choices = [...d.querySelectorAll('.profile-set-choices input')];
+      const selected = choices.map(input => input.checked);
+      choices.forEach(input => { input.checked = false; }); w.renderStudioUI();
+      assert.equal(get('quickstart-btn').disabled, true);
+      assert.equal(get('quickstart-btn').textContent, 'Choose at least one view');
+      choices[0].checked = true; w.renderStudioUI();
+      assert.equal(get('quickstart-btn').disabled, false);
+      assert.equal(get('quickstart-btn').textContent, 'Create 1 view →');
+      choices.forEach((input, i) => { input.checked = selected[i]; }); w.renderStudioUI();
+    });
+    await check('field finder navigates actual generated editors without changing the profile', async () => {
+      const before = run('JSON.stringify(state)');
+      const title = run('state.recommendations.items[0].title');
+      const target = [...get('recs-container').querySelectorAll('input')].find(input => input.value === title);
+      assert.ok(target, 'Actual recommendation editor missing');
+      const search = get('studio-search-input');
+      search.focus(); search.value = title; await act(search, 'input');
+      assert.ok(get('studio-search-results').children.length);
+      search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true }));
+      assert.ok(d.getElementById(search.getAttribute('aria-activedescendant')));
+      search.dispatchEvent(new w.KeyboardEvent('keydown', { key: 'Enter', bubbles: true })); flushFrames();
+      assert.equal(run('currentStep'), 5);
+      assert.equal(d.activeElement, target);
+      assert.equal(get('studio-search-popover').hidden, true);
+      assert.equal(run('JSON.stringify(state)'), before, 'Finding a field must not edit the profile');
+      search.focus(); search.value = 'Brand Logo'; await act(search, 'input');
+      const logo = [...get('studio-search-results').children].find(option => option.querySelector('.studio-search-result-title').textContent === 'Brand Logo');
+      assert.ok(logo); await act(logo);
+      assert.equal(run('currentStep'), 0);
+      assert.equal(d.activeElement.id, 'url-logo');
+      search.value = '';
+    });
     for (const mode of ['b2c', 'b2b']) await check(`${mode}: all seven steps and generated widescreen document`, async () => {
       await act(get(`profile-type-${mode}`));
       for (let step = 0; step < 7; step++) {

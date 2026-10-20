@@ -33,12 +33,20 @@
     setLabel('studio-project-name', state.brandName ? `${state.brandName} · ${state.profileType === 'b2b' ? 'Account' : 'Individual'} profiles` : 'Your customer workspace');
     const selected = [...document.querySelectorAll('.profile-set-choices input:checked')];
     setLabel('studio-view-set-summary', `${selected.length} selected`);
+    const create = get('quickstart-btn');
+    const creating = typeof isProfileSetGenerationRunning === 'function' ? isProfileSetGenerationRunning() : create?.disabled;
+    if (create && !creating) {
+      create.disabled = !selected.length;
+      setLabel('quickstart-btn', selected.length ? `Create ${selected.length} ${selected.length === 1 ? 'view' : 'views'} →` : 'Choose at least one view');
+    }
     const viewSet = get('studio-view-set');
     const statuses = state.profileSet?.statuses || {};
     const progress = get('profile-set-progress');
     // Sample-only rows repeat the persona choices without conveying progress.
     // Real jobs and image retries always expose their status and recovery actions.
-    if (progress) progress.hidden = !Object.keys(statuses).length && !Object.keys(state.profileSet?.visuals || {}).length;
+    const activeOrFailed = Object.values(statuses).some(value => ['queued', 'generating', 'template-ready', 'failed'].includes(value))
+      || Object.values(state.profileSet?.visuals || {}).some(visual => ['queued', 'generating', 'pending', 'partial', 'failed', 'stopped'].includes(visual.state));
+    if (progress) progress.hidden = !activeOrFailed;
     // Collapse the creation choices once the first real set finishes. Respect
     // the user's later disclosure choices; never snap shut on every update.
     if (!initialGenerationSeen && Object.values(statuses).some(value => value === 'ready')) {
@@ -48,6 +56,7 @@
     // Step navigation should always reveal its inspector if focus mode was on.
     const navigation = document.activeElement?.closest?.('#step-indicators');
     if (navigation && previewFocused) window.studioTogglePreviewFocus(false);
+    window.refreshStudioSearch?.();
   };
 
   window.studioTogglePreviewFocus = function (force) {
