@@ -32,10 +32,11 @@ body.studio-app {
 .studio-preview-notice strong { color: #193d70; margin-right: .375rem; }
 .studio-preview-notice a { color: #164e99; white-space: nowrap; font-weight: 600; text-decoration: underline; text-underline-offset: 3px; }
 .studio-app .app-topbar { background: linear-gradient(110deg, #001e5b 0%, #022ac0 55%, #075dcc 100%); color: #fff; box-shadow: 0 2px 12px rgba(0,30,91,.16); border-bottom: 2px solid #00b3ff; }
-.studio-app .studio-header-inner { max-width: 1920px; min-height: 4.75rem; padding: .375rem 1.5rem; gap: 1.5rem; }
+.studio-app .studio-header-inner { max-width: 1920px; min-height: 5.5rem; padding: .25rem 1.5rem; gap: 1.5rem; }
 .studio-brand { min-width: 0; }
-/* Match the original w-16/h-16 logo at every breakpoint, without shrinking. */
-.studio-brand > div:first-child { width: 4rem; height: 4rem; flex-shrink: 0; }
+/* Keep the logo prominent in the redesigned header at every breakpoint. */
+.studio-brand-logo { width: 5rem; height: 5rem; flex: 0 0 5rem; }
+.studio-brand-logo > img { display: block; width: 100%; height: 100%; object-fit: contain; }
 .studio-app .app-topbar h1 { color: #fff; font-size: 1.0625rem; font-weight: 650; letter-spacing: -.025em; line-height: 1.25; }
 .studio-brand .uppercase { color: #dceaff; font-size: .625rem; letter-spacing: .14em; line-height: 1.8; }
 .studio-header-actions { flex-shrink: 0; }
@@ -96,7 +97,7 @@ body.studio-app {
 .studio-app .studio-workspace-shell { padding-top: 1.125rem; padding-bottom: 2.5rem; }
 .studio-app #main-layout { display: grid; grid-template-columns: minmax(23rem, 27rem) minmax(0,1fr); gap: 1.5rem; align-items: start; }
 .studio-app #wizard-col { width: auto; min-width: 0; container-type: inline-size; }
-.studio-app #preview-col { display: block; min-width: 0; position: sticky; top: 5.75rem; }
+.studio-app #preview-col { display: block; min-width: 0; position: sticky; top: 6.5rem; }
 .studio-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
 .studio-eyebrow { font-size: .6875rem; font-weight: 650; color: #64748b; letter-spacing: .075em; text-transform: uppercase; }
 .studio-preview-heading h2 { color: #193450; font-size: 1.125rem; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }
@@ -157,7 +158,7 @@ body.studio-app {
 .studio-app .profile-set-choice:has(input:checked) { border-color: #b4cdef; background: #edf4ff; color: #1a508e; }
 .studio-app .profile-set-custom { background: #f0f4fa; border-color: #dbe4ef; padding: .75rem; }
 .studio-app .profile-set-custom label, .studio-app .custom-role-field label { color: #405673; font-size: .8125rem; }
-.studio-app .strategy-panel { margin-top: 1.25rem; border: 0; border-top: 1px solid #e0e6ee; padding: 1.25rem 0 0; border-radius: 0; background: transparent; scroll-margin-top: 6rem; }
+.studio-app .strategy-panel { margin-top: 1.25rem; border: 0; border-top: 1px solid #e0e6ee; padding: 1.25rem 0 0; border-radius: 0; background: transparent; scroll-margin-top: 6.75rem; }
 .studio-app .strategy-label { color: #253e5d; font-size: 1.0625rem; font-weight: 650; letter-spacing: -.015em; text-transform: none; }
 .studio-field-help { font-size: .8125rem; color: #607086; line-height: 1.5; margin-top: .375rem; }
 .studio-app .strategy-fields { display: grid; grid-template-columns: minmax(0,1fr); gap: .375rem; margin-top: 1rem; }

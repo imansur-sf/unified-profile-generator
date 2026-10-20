@@ -45,10 +45,20 @@ test('visual-recovery link inherits a readable color on the light inspector surf
   assert.match(css, /\.studio-app \.quickstart-settings-toggle \{ color: #335e90/);
 });
 
-test('preview branding retains the original logo size and readable blue accents', () => {
+test('preview logo stays prominent without shrinking or distorting the original artwork', () => {
   const original = fs.readFileSync(path.join(root, 'index.html'), 'utf8');
-  assert.match(original, /class="w-16 h-16 flex items-center justify-center overflow-hidden"/);
-  assert.match(css, /\.studio-brand > div:first-child \{ width: 4rem; height: 4rem; flex-shrink: 0; \}/);
+  const logoSource = text => text.match(/<img src="([^"]+)" alt="SaaSy Solutions"/)?.[1];
+  assert.ok(logoSource(original));
+  assert.equal(logoSource(html), logoSource(original), 'The original artwork must not change');
+  assert.match(html, /class="studio-brand-logo flex items-center justify-center overflow-hidden"/);
+  assert.match(css, /\.studio-brand-logo \{ width: 5rem; height: 5rem; flex: 0 0 5rem; \}/);
+  assert.match(css, /\.studio-brand-logo > img \{ display: block; width: 100%; height: 100%; object-fit: contain; \}/);
+  assert.doesNotMatch(css.slice(css.indexOf('@media')), /\.studio-brand-logo\s*\{/, 'Narrow layouts must not shrink the logo');
+  assert.match(css, /#preview-col \{[^}]*top: 6\.5rem;/, 'Sticky preview must clear the taller header');
+  assert.match(css, /\.strategy-panel \{[^}]*scroll-margin-top: 6\.75rem;/);
+});
+
+test('preview branding retains readable blue accents', () => {
   assert.match(css, /\.studio-app \.app-topbar \{ background: linear-gradient\(110deg, #001e5b 0%, #022ac0 55%, #075dcc 100%\); color: #fff/);
   assert.match(css, /\.studio-app \.persona-option.active \{ color: #fff; border-color: var\(--studio-blue\); background: var\(--studio-blue\)/);
   assert.match(css, /\.studio-header-actions > \.studio-button-primary \{ background: #fff; color: #064eb2/);

@@ -83,6 +83,15 @@ changed. Verification: 196 automated tests and 16 DOM checks passed, including
 logo-size and foreground/background contrast assertions; no browser paint check
 was available.
 
+The subsequent logo-size refinement increases the preview mark from 4rem to 5rem
+(80px at default text size), following feedback that matching the original's
+nominal 64px box still looked too small. A dedicated non-shrinking wrapper and
+explicit image sizing preserve the original artwork and aspect ratio, including
+at narrow breakpoints. Sticky-preview and personalization scroll offsets clear
+the taller header. This changes only the trial editor, not the original app.
+Verification: 197 automated tests and 16 DOM checks passed; browser paint
+verification remains unavailable.
+
 An additional regression was found during the DOM workflow audit: simply visiting
 a queued view caused native color-input normalization and empty optional fields
 to look like manual edits. Preview generation now compares those equivalent values
