@@ -50,6 +50,12 @@
     return err;
   }
 
+  // A browser stop cannot undo an in-flight provider request, but it must stop
+  // subsequent stages from issuing new requests after that request settles.
+  function requireCurrent(options = {}) {
+    if (typeof options.isCurrent === 'function' && !options.isCurrent()) throw localError('generation_cancelled');
+  }
+
   // ---- KEY / MODEL / ENDPOINT STORAGE ----
   function getApiKey()   { try { return localStorage.getItem(KEY_STORAGE) || ''; } catch { return ''; } }
   function setApiKey(k)  { try { k?.trim() ? localStorage.setItem(KEY_STORAGE, k.trim()) : localStorage.removeItem(KEY_STORAGE); } catch {} }
@@ -93,20 +99,24 @@
   // on return and before a default-backend request so a full generation is not
   // the first request that discovers the problem.
   async function ensureSharedBackendConnection(options = {}) {
+    requireCurrent(options);
     if (currentProvider() !== 'default' || hasCustomScraperEndpoint()) return true;
     const now = Date.now();
     if (!options.force && now - sharedBackendLastHealthyAt < SHARED_BACKEND_HEALTH_TTL_MS) return true;
     const base = getScraperEndpoint();
     for (let attempt = 0; attempt < 2; attempt += 1) {
+      requireCurrent(options);
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 8000);
       try {
         const res = await fetch(`${base}/api/health`, { cache: 'no-store', signal: controller.signal });
+        requireCurrent(options);
         if (res.ok) {
           sharedBackendLastHealthyAt = Date.now();
           return true;
         }
-      } catch (_) {
+      } catch (error) {
+        if (error.code === 'generation_cancelled') throw error;
         // The second attempt uses a fresh request after a brief pause.
       } finally {
         clearTimeout(timeout);
@@ -140,17 +150,19 @@
   }
 
   // ---- LLM ROUTER ----
-  async function callLLM({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
+  async function callLLM({ prompt, system, tier = 'balanced', maxTokens = 4000, isCurrent }) {
+    requireCurrent({ isCurrent });
     const provider = currentProvider();
     if (provider === 'anthropic')  return callAnthropicDirect({ prompt, system, tier, maxTokens });
     if (provider === 'sfgateway')  return callSFGateway({ prompt, system, tier, maxTokens });
-    return callDefaultBackend({ prompt, system, tier, maxTokens });
+    return callDefaultBackend({ prompt, system, tier, maxTokens, isCurrent });
   }
 
   // Heroku server /api/llm — server holds the Gemini API key. No BYOK required.
   // A 60s AbortController guards against slow Gemini responses.
-  async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000 }) {
-    await ensureSharedBackendConnection();
+  async function callDefaultBackend({ prompt, system, tier = 'balanced', maxTokens = 4000, isCurrent }) {
+    await ensureSharedBackendConnection({ isCurrent });
+    requireCurrent({ isCurrent });
     const base = getScraperEndpoint();
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), 60000);
@@ -391,40 +403,51 @@
   }
 
   async function collectCustomerContext(rawUrl, opts = {}) {
+    requireCurrent(opts);
     const url = shared.normalizeURL(rawUrl);
     if (!url) throw localError('invalid_url');
     const onStatus = opts.onStatus || (function() {});
     let scraped = null, fallbackReason = null;
     onStatus('fetching');
+    requireCurrent(opts);
     try {
       const response = await scrape(url);
+      requireCurrent(opts);
       scraped = shared.extractCoreHTML(response.html, response.url);
     } catch (e) {
+      requireCurrent(opts);
+      if (e.code === 'generation_cancelled') throw e;
       fallbackReason = e.code || 'scrape_failed';
       onStatus('fallback_url_only');
     }
+    requireCurrent(opts);
     if (!scraped) scraped = { url: url, title: '', bodyText: '', headings: '', favicon: '', logoCandidates: [], ogImage: '', navLinkCandidates: [] };
     return { scraped, url, fallbackReason };
   }
 
   async function generatePersonaOverlay(context, sharedProfile, opts = {}) {
+    requireCurrent(opts);
     if (!context?.scraped) throw localError('missing_customer_context');
     const profileType = opts.profileType === 'b2b' ? 'b2b' : 'b2c';
     const response = await callLLM({
       prompt: shared.buildPersonaOverlayPrompt(context.scraped, sharedProfile, { profileType, strategy: opts.strategy || {} }),
       system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
       tier: opts.tier || 'balanced',
-      maxTokens: 6500
+      maxTokens: 6500,
+      isCurrent: opts.isCurrent
     });
+    requireCurrent(opts);
     return UPGContract.validateAIProfile(shared.parseAIResponseText(response.text), { profileType, overlay: true });
   }
 
   // ---- MAIN ----
   async function analyzeCustomerURL(rawUrl, opts = {}) {
+    requireCurrent(opts);
     const onStatus = opts.onStatus || (function() {});
     const provider = currentProvider();
     const tier = opts.tier || 'balanced';
-    const context = await collectCustomerContext(rawUrl, { onStatus });
+    const context = await collectCustomerContext(rawUrl, { onStatus, isCurrent: opts.isCurrent });
+    requireCurrent(opts);
     const scraped = context.scraped;
 
     onStatus('analyzing');
@@ -433,8 +456,10 @@
       prompt: shared.buildUserPrompt(scraped, { profileType: profileType, strategy: opts.strategy || {} }),
       system: shared.getSystemPrompt ? shared.getSystemPrompt(profileType) : shared.SYSTEM_PROMPT,
       tier: tier,
-      maxTokens: 8000
+      maxTokens: 8000,
+      isCurrent: opts.isCurrent
     });
+    requireCurrent(opts);
 
     const parsed = UPGContract.validateAIProfile(shared.parseAIResponseText(text), { profileType });
     parsed._meta = {
@@ -458,8 +483,10 @@
     const imagePrompts = buildImagePrompts(parsed, profileType, opts.strategy || {});
     if (imagePrompts.length > 0) {
       onStatus('generating_images');
+      requireCurrent(opts);
       try {
         const imageResponse = await generateImages(imagePrompts);
+        requireCurrent(opts);
         const imageResults = imageResponse.results || [];
         // Map results back into the parsed profile
         for (var r = 0; r < imageResults.length; r++) {
@@ -475,11 +502,14 @@
           }
         }
       } catch (e) {
+        requireCurrent(opts);
+        if (e.code === 'generation_cancelled') throw e;
         console.warn('[UPG] Image generation failed (non-fatal):', e.message);
         // Continue without images — the profile still works
       }
     }
 
+    requireCurrent(opts);
     return parsed;
   }
 

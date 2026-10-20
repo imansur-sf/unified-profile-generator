@@ -7,6 +7,7 @@ let currentStep = 0;
 const personaVisualRequests = new Map();
 const personaTextRequests = new Map();
 let generationRunId = 0;
+let activeProfileSetRun = null;
 let renderRevision = 0;
 const MAX_SAVED_PROJECT_BYTES = 18 * 1024 * 1024;
 // Start with a complete, presentation-ready B2C story. Industry templates
@@ -368,7 +369,18 @@ function personaView(owner, lens) {
 }
 
 function personaFingerprint(owner, lens) {
-  return JSON.stringify(personaView(owner, lens));
+  const view = cloneViewData(personaView(owner, lens));
+  if (!view) return JSON.stringify(view);
+  // Native color inputs lowercase hex, and empty text inputs materialize
+  // absent optional icons. Merely visiting a queued view is not a user edit.
+  for (const series of ['seriesA', 'seriesB']) {
+    const color = view.affinities?.[series]?.color;
+    if (typeof color === 'string' && /^#[0-9a-f]{6}$/i.test(color)) view.affinities[series].color = color.toLowerCase();
+  }
+  for (const section of ['preferences', 'events', 'membership']) {
+    if (view[section] && view[section].icon == null) view[section].icon = '';
+  }
+  return UPGContract.canonicalJSON(view);
 }
 
 function commitPersonaView(owner, lens, variant) {
@@ -455,7 +467,7 @@ function updateProfileStrategyUI() {
     const visualNotice = visual?.state === 'generating'
       ? '<br><em>Creating distinct recommendation visuals for this view…</em>'
       : ['failed', 'partial'].includes(visual?.state)
-        ? `<br><em>${escHTML(visual.message || 'Some recommendation visuals are still missing.')}</em> <button type="button" class="quickstart-settings-toggle" style="color:#fff;text-decoration:underline;padding:0;min-height:0" onclick="retryPersonaRecommendationImages()">Retry visuals</button>`
+        ? `<br><em>${escHTML(visual.message || 'Some recommendation visuals are still missing.')}</em> <button type="button" class="quickstart-settings-toggle" style="text-decoration:underline;padding:0;min-height:0" onclick="retryPersonaRecommendationImages()">Retry visuals</button>`
         : '';
     blueprint.innerHTML = `<span>✦</span><span><strong>${escHTML(profileLabel)} view · ${strategy.objective}</strong><br>${preset.blueprint}${customReminder}<br><em>This view saves its own module choices and brief.</em>${visualNotice}</span>`;
   }
@@ -490,11 +502,27 @@ function renderPersonaOutputSwitcher(strategy = getProfileStrategy()) {
   if (!container) return;
   const label = getProfileStrategyLabel(strategy);
   setText('persona-output-summary', `${label} is selected. Present, download, or copy this saved persona view.`);
-  container.innerHTML = Object.entries(PERSONA_PRESETS).map(([lens, preset]) => {
+  const markup = Object.entries(PERSONA_PRESETS).map(([lens, preset]) => {
     const active = strategy.lens === lens;
     const name = lens === 'custom' && strategy.customRole ? strategy.customRole : preset.label;
-    return `<button type="button" class="${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700'} border rounded-lg px-3 py-2 text-xs font-700 transition" onclick="setPersonaOutputLens('${lens}')" aria-pressed="${active}">${escHTML(name)}</button>`;
+    return `<button type="button" data-focus-key="${lens}" class="${active ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-blue-400 hover:text-blue-700'} border rounded-lg px-3 py-2 text-xs font-700 transition" onclick="setPersonaOutputLens('${lens}')" aria-pressed="${active}">${escHTML(name)}</button>`;
   }).join('');
+  updateStableControlMarkup(container, markup);
+}
+
+// Async progress should never silently remove the control under keyboard focus.
+function updateStableControlMarkup(container, markup) {
+  if (container._upgMarkup === markup) return;
+  const active = document.activeElement;
+  const key = container.contains?.(active) ? active?.dataset?.focusKey : null;
+  container.innerHTML = markup;
+  container._upgMarkup = markup;
+  if (key) {
+    const controls = [...container.querySelectorAll('[data-focus-key]')];
+    const replacement = controls.find(control => control.dataset.focusKey === key)
+      || controls.find(control => control.dataset.focusKey === key.split(':')[0]);
+    replacement?.focus({ preventScroll: true });
+  }
 }
 
 function setPersonaOutputLens(lens) {
@@ -622,12 +650,13 @@ async function generatePersonaRecommendationImagesForTarget(lens, target, option
 async function ensurePersonaRecommendationImages(lens) {
   if (!state._aiContext?.sourceUrl || getProfileStrategy().lens !== lens) return;
   if (['queued', 'generating'].includes(ensureProfileSet().statuses[lens])) return;
-  if (ensureProfileSet().visuals[lens]?.state === 'generating') return;
+  if (['generating', 'stopped'].includes(ensureProfileSet().visuals[lens]?.state)) return;
   return generatePersonaRecommendationImagesForTarget(lens, state, { announce: true });
 }
 
 async function retryPersonaRecommendationImages() {
-  await ensurePersonaRecommendationImages(getProfileStrategy().lens);
+  const lens = getProfileStrategy().lens;
+  await generatePersonaRecommendationImagesForTarget(lens, state, { announce: true });
 }
 
 const brandLogoRequests = new WeakMap();
@@ -783,11 +812,42 @@ let previewTimer = null;
 let lastRenderedPreviewHTML = '';
 let previewContext = null;
 let presentationContext = null;
+let layoutPreviewFrame = null;
+let layoutCommitTimer = null;
+let layoutPreviewDirty = false;
 
 function cancelDraftRequests() {
   generationRunId += 1;
+  activeProfileSetRun = null;
+  // Never clear these IDs: a fresh request must not reuse an old request's ID.
+  for (const [lens, requestId] of personaVisualRequests) personaVisualRequests.set(lens, requestId + 1);
+  for (const [lens, requestId] of personaTextRequests) personaTextRequests.set(lens, requestId + 1);
   const button = document.getElementById('quickstart-btn');
   if (button) button.disabled = false;
+  const stop = document.getElementById('profile-set-stop');
+  if (stop) stop.hidden = true;
+}
+
+function isProfileSetGenerationRunning() { return !!activeProfileSetRun; }
+function stopProfileSetGeneration() {
+  if (!activeProfileSetRun) return;
+  const run = activeProfileSetRun;
+  cancelDraftRequests();
+  if (state === run.owner) {
+    const profileSet = ensureProfileSet();
+    for (const lens of new Set([...run.lenses, ...Object.keys(profileSet.statuses)])) {
+      if (['queued', 'generating'].includes(profileSet.statuses[lens])) profileSet.statuses[lens] = 'failed';
+      if (['queued', 'generating'].includes(profileSet.visuals[lens]?.state)) {
+        const count = (personaView(state, lens)?.recommendations?.items || []).filter(item => item.image).length;
+        profileSet.visuals[lens] = { state: 'stopped', count, message: 'Generation stopped. Completed images were kept; retry when ready.' };
+      }
+    }
+    snapshotPersonaView();
+  }
+  setText('quickstart-status', 'Stopped remaining views. Completed work and your draft were kept. A request already sent may finish on the server, but its late result will not replace your work.');
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
+  document.getElementById('quickstart-btn')?.focus({ preventScroll: true });
 }
 
 function captureOutputSnapshot() {
@@ -799,13 +859,68 @@ function captureOutputSnapshot() {
 
 function renderPreviewNow(snapshot = captureOutputSnapshot()) {
   clearTimeout(previewTimer);
+  clearTimeout(layoutCommitTimer);
+  if (layoutPreviewFrame !== null) cancelAnimationFrame(layoutPreviewFrame);
+  layoutPreviewFrame = null;
+  layoutPreviewDirty = false;
   previewTimer = null;
   const html = renderPreviewDocument(snapshot);
   lastRenderedPreviewHTML = html;
   previewContext = { owner: state, lens: snapshot.profileStrategy.lens, revision: snapshot._renderRevision };
   const iframe = document.getElementById('preview-iframe');
-  if (iframe) iframe.srcdoc = html;
+  // The sandbox stays opaque (no allow-same-origin). Only the live editor gets
+  // this narrow, numeric layout bridge; presentation/export retain clean HTML.
+  if (iframe) {
+    iframe.onload = () => { if (layoutPreviewDirty) postLayoutPreview(); };
+    iframe.srcdoc = withPreviewLayoutBridge(html, snapshot._renderRevision, snapshot.profileType);
+  }
   return html;
+}
+
+function withPreviewLayoutBridge(html, revision, profileType) {
+  const receiver = function (expectedRevision, expectedType, bounds, budget) {
+    window.addEventListener('message', function (event) {
+      const data = event.data;
+      if (event.source !== window.parent || !data || data.type !== 'upg:preview-layout' || data.revision !== expectedRevision || data.profileType !== expectedType) return;
+      const widths = data.widths;
+      if (!widths || typeof widths !== 'object') return;
+      const valid = (field, min, max) => Number.isInteger(widths[field]) && widths[field] >= min && widths[field] <= max;
+      if (expectedType === 'b2b') {
+        if (!valid('leftColWidth', 240, 390) || !valid('middleColWidth', 230, 390)) return;
+        const shell = document.querySelector('.account-shell');
+        if (shell) shell.style.gridTemplateColumns = `${widths.leftColWidth}px minmax(0,1fr)`;
+        document.querySelectorAll('.account-view,.account-custom-modules').forEach(node => {
+          node.style.gridTemplateColumns = `minmax(0,1fr) ${widths.middleColWidth}px`;
+        });
+      } else {
+        if (!Object.keys(bounds).every(field => valid(field, bounds[field][0], bounds[field][1]))) return;
+        if (widths.leftColWidth + widths.middleColWidth + widths.rightColWidth !== budget) return;
+        const shell = document.querySelector('.up-shell');
+        if (shell) shell.style.gridTemplateColumns = `${widths.leftColWidth}px ${widths.middleColWidth}px ${widths.rightColWidth}px`;
+      }
+      if (typeof window.upgReportLayout === 'function') window.upgReportLayout();
+    });
+  };
+  const args = JSON.stringify([String(revision), profileType === 'b2b' ? 'b2b' : 'b2c', PROFILE_COLUMN_BOUNDS, PROFILE_COLUMN_BUDGET]).replace(/</g, '\\u003c');
+  return html.replace('</body>', `<script data-upg-preview-layout>(${receiver.toString()}).apply(null,${args});</script></body>`);
+}
+
+function postLayoutPreview() {
+  if (!previewContext || previewContext.owner !== state || previewContext.lens !== getProfileStrategy().lens) return;
+  const b2b = state.profileType === 'b2b';
+  const widths = b2b ? {
+    leftColWidth: boundedWidth(state.layout?.leftColWidth, 240, 390, 290),
+    middleColWidth: boundedWidth(state.layout?.middleColWidth, 230, 390, 320)
+  } : getProfileColumnWidths(state.layout);
+  document.getElementById('preview-iframe')?.contentWindow?.postMessage({
+    type: 'upg:preview-layout', revision: previewContext.revision, profileType: b2b ? 'b2b' : 'b2c', widths
+  }, '*');
+}
+
+function commitLayoutPreview() {
+  if (!layoutPreviewDirty) return;
+  renderPreviewNow();
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
 }
 
 // The live preview is the source of truth for the "Preview & Present"
@@ -1113,7 +1228,17 @@ function onLayoutChange(field, value) {
     state.layout = Object.assign({}, state.layout, { [field]: boundedWidth(value, min, 390, field === 'leftColWidth' ? 290 : 320) });
   } else state.layout = Object.assign({}, state.layout, resizeProfileColumns(state.layout, field, value));
   syncLayoutControls();
-  refreshPreview();
+  layoutPreviewDirty = true;
+  clearTimeout(previewTimer);
+  clearTimeout(layoutCommitTimer);
+  if (layoutPreviewFrame === null) layoutPreviewFrame = requestAnimationFrame(() => {
+    layoutPreviewFrame = null;
+    postLayoutPreview();
+  });
+  // Pointer/keyboard release commits immediately. This timer also covers
+  // assistive input and interrupted gestures without reloading on every move.
+  layoutCommitTimer = setTimeout(commitLayoutPreview, 300);
+  if (typeof scheduleDraftRecovery === 'function') scheduleDraftRecovery();
 }
 function resetLayoutWidths() {
   state.layout = state.profileType === 'b2b' ? { leftColWidth: 290, middleColWidth: 320 } : getProfileColumnWidths();
@@ -1390,19 +1515,29 @@ function findCustomModule(moduleId) {
   return null;
 }
 
-function moveCustomModule(moduleId, destination) {
+function moveCustomModule(moduleId, destination, beforeId = null) {
   if (!['middle', 'right', 'suggested', 'hidden'].includes(destination)) return;
   const found = findCustomModule(moduleId);
-  if (!found) return;
+  if (!found || beforeId === moduleId) return;
+  const before = beforeId ? findCustomModule(beforeId) : null;
   const [card] = state[found.bucket].splice(found.index, 1);
+  let bucket;
   if (['suggested', 'hidden'].includes(destination)) {
     card.visibility = destination;
-    state[card.placement === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+    // The library displays both source buckets. Match the target's bucket so
+    // an insertion before it is exact while the eventual column stays explicit.
+    const libraryAnchor = before && before.card.visibility !== 'visible' ? before.card
+      : !beforeId ? getCustomModules().filter(item => item.visibility !== 'visible').at(-1) : null;
+    if (libraryAnchor) card.placement = libraryAnchor.placement;
+    bucket = card.placement === 'right' ? 'rightExtraCards' : 'extraCards';
   } else {
     card.placement = destination;
     card.visibility = 'visible';
-    state[destination === 'right' ? 'rightExtraCards' : 'extraCards'].push(card);
+    bucket = destination === 'right' ? 'rightExtraCards' : 'extraCards';
   }
+  const cards = state[bucket];
+  const index = before ? cards.findIndex(item => item.moduleId === beforeId) : -1;
+  cards.splice(index < 0 ? cards.length : index, 0, card);
   renderAll();
   refreshPreview();
   restoreModuleFocus(moduleId, 'move');
@@ -1425,24 +1560,66 @@ function reorderCustomModule(moduleId, delta) {
   setText('module-composer-status', `${found.card.title} moved ${delta < 0 ? 'up' : 'down'}.`);
 }
 
+let draggedModuleId = null;
 function onModuleDragStart(event, moduleId) {
+  if (!findCustomModule(moduleId)) { event.preventDefault(); return; }
+  draggedModuleId = moduleId;
   event.dataTransfer.effectAllowed = 'move';
   event.dataTransfer.setData('text/plain', moduleId);
+  const row = event.currentTarget.closest('.module-composer-card');
+  if (row) {
+    const rect = row.getBoundingClientRect();
+    event.dataTransfer.setDragImage?.(row, Math.max(0, event.clientX - rect.left), Math.max(0, event.clientY - rect.top));
+    row.classList.add('is-dragging');
+  }
+}
+
+function endModuleDrag() {
+  draggedModuleId = null;
+  document.querySelectorAll('.module-composer-drop-active,.is-dragging').forEach(node => {
+    node.classList.remove('module-composer-drop-active', 'is-dragging');
+    delete node.dataset.dropBefore;
+  });
+  document.querySelectorAll('.composer-drop-marker').forEach(node => node.remove());
 }
 
 function allowModuleDrop(event) {
+  if (!draggedModuleId) return;
   event.preventDefault();
-  event.currentTarget.classList.add('module-composer-drop-active');
+  event.dataTransfer.dropEffect = 'move';
+  const zone = event.currentTarget;
+  zone.classList.add('module-composer-drop-active');
+  const cards = [...zone.querySelectorAll('.module-composer-card')].filter(card => card.dataset.moduleId !== draggedModuleId);
+  const before = cards.find(card => {
+    const rect = card.getBoundingClientRect();
+    return event.clientY < rect.top + rect.height / 2;
+  });
+  zone.dataset.dropBefore = before?.dataset.moduleId || '';
+  let marker = zone.querySelector('.composer-drop-marker');
+  if (!marker) {
+    marker = document.createElement('div');
+    marker.className = 'composer-drop-marker';
+    marker.setAttribute('aria-hidden', 'true');
+  }
+  zone.insertBefore(marker, before || null);
 }
 
 function clearModuleDrop(event) {
-  event.currentTarget.classList.remove('module-composer-drop-active');
+  const zone = event.currentTarget;
+  if (event.relatedTarget && zone.contains(event.relatedTarget)) return;
+  zone.classList.remove('module-composer-drop-active');
+  delete zone.dataset.dropBefore;
+  zone.querySelector('.composer-drop-marker')?.remove();
 }
 
 function dropModule(event, destination) {
+  if (!draggedModuleId) return;
   event.preventDefault();
-  clearModuleDrop(event);
-  moveCustomModule(event.dataTransfer.getData('text/plain'), destination);
+  const moduleId = event.dataTransfer.getData('text/plain');
+  const beforeId = event.currentTarget.dataset.dropBefore || null;
+  const valid = moduleId === draggedModuleId;
+  endModuleDrag();
+  if (valid) moveCustomModule(moduleId, destination, beforeId);
 }
 
 function renderModuleComposer() {
@@ -1459,8 +1636,8 @@ function renderModuleComposer() {
       <div class="module-composer-zone-title">${title}</div>
       <p>${description}</p>
       ${zones[key].length ? zones[key].map(card => `
-        <div class="module-composer-card" data-module-id="${escAttr(card.moduleId)}" style="flex-wrap:wrap" draggable="true" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')">
-          <span class="module-composer-grip">⠿</span><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
+        <div class="module-composer-card" data-module-id="${escAttr(card.moduleId)}" style="flex-wrap:wrap">
+          <button type="button" class="composer-drag-handle" draggable="true" aria-label="Drag ${escAttr(card.title)}; or use its Move menu and arrow buttons" title="Drag to a position in a column" ondragstart="onModuleDragStart(event, '${escAttr(card.moduleId)}')" ondragend="endModuleDrag()">⠿</button><span>${raw(card.icon || '📋')}</span><strong>${esc(card.title || 'Custom section')}</strong>
           <select data-module-action="move" aria-label="Move ${escAttr(card.title)}" onchange="moveCustomModule('${escAttr(card.moduleId)}',this.value)">${[['middle','Middle column'],['right','Right column'],['suggested','Suggested library'],['hidden','Hidden']].map(([value, label]) => `<option value="${value}" ${value === (card.visibility === 'visible' ? card.placement : card.visibility) ? 'selected' : ''}>${label}</option>`).join('')}</select>
           <button type="button" data-module-action="up" aria-label="Move ${escAttr(card.title)} up" onclick="reorderCustomModule('${escAttr(card.moduleId)}',-1)">↑</button>
           <button type="button" data-module-action="down" aria-label="Move ${escAttr(card.title)} down" onclick="reorderCustomModule('${escAttr(card.moduleId)}',1)">↓</button>
@@ -1584,7 +1761,7 @@ function goToStep(n) {
   const heading = document.querySelector('.step-panel.active h2');
   if (heading) { heading.tabIndex = -1; heading.focus({ preventScroll: true }); }
   if (typeof labelEditorControls === 'function') labelEditorControls();
-  window.scrollTo({ top: 0, behavior: 'smooth' });
+  window.scrollTo({ top: 0, behavior: window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   window.renderStudioUI?.();
 }
 function nextStep() { if (currentStep < TOTAL_STEPS - 1) goToStep(currentStep + 1); else openPresentation(); }
@@ -1778,19 +1955,26 @@ function copyHTML() {
   tryCopyToClipboard(html);
 }
 
+let copyStatusTimer = null;
+let copyStatusRun = 0;
 function tryCopyToClipboard(html, sourceTextarea) {
+  const run = ++copyStatusRun;
+  clearTimeout(copyStatusTimer);
   const flashToast = () => {
+    if (run !== copyStatusRun) return;
     const s = document.getElementById('copy-success');
     if (!s) return;
     s.classList.remove('hidden');
     setTimeout(() => s.classList.add('hidden'), 2200);
   };
   const flashModalStatus = (msg, ok) => {
+    if (run !== copyStatusRun) return;
     const st = document.getElementById('copy-modal-status');
     if (!st) return;
     st.textContent = msg;
     st.className = 'text-sm font-600 ' + (ok ? 'text-green-700' : 'text-red-700');
-    setTimeout(() => { st.textContent = ''; st.className = 'text-sm font-600'; }, 2500);
+    clearTimeout(copyStatusTimer);
+    if (ok) copyStatusTimer = setTimeout(() => { st.textContent = ''; st.className = 'text-sm font-600'; }, 2500);
   };
   const legacyCopy = () => {
     try {
@@ -1808,6 +1992,7 @@ function tryCopyToClipboard(html, sourceTextarea) {
       flashToast();
       flashModalStatus('✓ Copied to clipboard', true);
     }).catch(() => {
+      if (run !== copyStatusRun) return;
       if (legacyCopy()) {
         flashToast();
         flashModalStatus('✓ Copied to clipboard', true);
@@ -2635,14 +2820,15 @@ async function onPersonalizeCurrentPersona() {
   if (typeof renderProfileProgress === 'function') renderProfileProgress();
   status.innerHTML = `<div class="spinner"></div> Personalizing ${escHTML(label)} view…`;
   try {
-    const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {} });
+    const context = await window.LocalAI.collectCustomerContext(sourceUrl, { onStatus: () => {}, isCurrent: current });
     if (!current()) return;
     const sharedIdentity = working.profileType === 'b2b'
       ? { brandName: working.brandName, account: working.account, accountMetrics: working.accountMetrics }
       : { brandName: working.brandName, profile: working.profile, loyalty: working.loyalty };
     const overlay = await window.LocalAI.generatePersonaOverlay(context, sharedIdentity, {
       profileType: working.profileType,
-      strategy: Object.assign({}, strategy)
+      strategy: Object.assign({}, strategy),
+      isCurrent: current
     });
     if (!current()) return;
     if (personaFingerprint(owner, strategy.lens) !== before) {
@@ -2671,6 +2857,7 @@ async function onPersonalizeCurrentPersona() {
 }
 
 async function onQuickStartAnalyze() {
+  if (activeProfileSetRun) return;
   const url = document.getElementById('quickstart-url').value.trim();
   readStaticFields();
   const requestedStrategy = getProfileStrategy();
@@ -2703,10 +2890,12 @@ async function onQuickStartAnalyze() {
   const btn = document.getElementById('quickstart-btn');
   const status = document.getElementById('quickstart-status');
   const runId = ++generationRunId;
+  activeProfileSetRun = { runId, owner: originalOwner, lenses: [...profileSetConfig.selectedLenses] };
   errBox.style.display = 'none';
   errBox.textContent = '';
   btn.disabled = true;
   status.innerHTML = '<div class="spinner"></div> Starting…';
+  if (typeof renderProfileProgress === 'function') renderProfileProgress();
 
   const setStatus = (label) => { if (runId === generationRunId) { status.innerHTML = `<div class="spinner"></div> ${escHTML(label)}`; if (typeof renderProfileProgress === 'function') renderProfileProgress(); } };
 
@@ -2715,6 +2904,7 @@ async function onQuickStartAnalyze() {
     const ai = await window.LocalAI.analyzeCustomerURL(url, {
       profileType: requestedType,
       strategy,
+      isCurrent: () => runId === generationRunId && state === originalOwner,
       onStatus: (phase) => {
         if (phase === 'fetching') setStatus('Fetching customer page…');
         else if (phase === 'fallback_url_only') setStatus('Site blocked scrape — analyzing from URL only…');
@@ -2741,6 +2931,7 @@ async function onQuickStartAnalyze() {
     ai._meta = Object.assign({}, ai._meta, { source_url: sourceContext?.url || ai._meta?.source_url || url });
     applyAIProfile(ai, strategy, nextProfileSet, requestedType);
     const owner = state;
+    activeProfileSetRun.owner = owner;
     const active = () => runId === generationRunId && state === owner;
     // Seed queued variants once so simply visiting one does not look like an
     // edit. Any real edits after this point win over later generated results.
@@ -2780,7 +2971,8 @@ async function onQuickStartAnalyze() {
       try {
         const overlay = await window.LocalAI.generatePersonaOverlay(sourceContext, sharedIdentity, {
           profileType: requestedType,
-          strategy: personaStrategy
+          strategy: personaStrategy,
+          isCurrent: active
         });
         if (!active()) return;
         if (personaFingerprint(owner, lens) !== before) {
@@ -2816,7 +3008,11 @@ async function onQuickStartAnalyze() {
     nudgeToAdvancedIfDefaultFailed(e.code);
     status.textContent = '';
   } finally {
-    if (runId === generationRunId) btn.disabled = false;
+    if (runId === generationRunId) {
+      activeProfileSetRun = null;
+      btn.disabled = false;
+      if (typeof renderProfileProgress === 'function') renderProfileProgress();
+    }
   }
 }
 
@@ -2873,6 +3069,11 @@ function bootstrap() {
   renderAll();
   initializeDraftRecovery();
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') persistDraftRecovery(); });
+  document.addEventListener('change', event => {
+    if (['left-col-w', 'middle-col-w', 'right-col-w'].includes(event.target.id)) commitLayoutPreview();
+  });
+  document.addEventListener('pointerup', commitLayoutPreview);
+  document.addEventListener('pointercancel', commitLayoutPreview);
   document.addEventListener('keydown', event => {
     const radio = event.target.closest?.('[role="radio"]');
     const group = radio?.closest('[role="radiogroup"]');

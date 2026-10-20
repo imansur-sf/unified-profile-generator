@@ -37,6 +37,14 @@ test('preview design loads last, keeps named navigation and has accessible prefe
   assert.doesNotMatch(source, /(?:innerHTML|outerHTML)\s*=/, 'chrome must not recreate focused controls');
 });
 
+test('visual-recovery link inherits a readable color on the light inspector surface', () => {
+  const app = fs.readFileSync(path.join(root, 'preview-v2/js/app.js'), 'utf8');
+  const retry = app.match(/<button[^>]+onclick="retryPersonaRecommendationImages\(\)"[^>]*>/)?.[0];
+  assert.ok(retry);
+  assert.doesNotMatch(retry, /style="[^"]*color\s*:/);
+  assert.match(css, /\.studio-app \.quickstart-settings-toggle \{ color: #335e90/);
+});
+
 function harness() {
   const elements = new Map();
   const calls = [];
@@ -88,7 +96,19 @@ test('workspace chrome reflects active view without changing customer state', ()
   assert.equal(get('studio-personalize-label').textContent, 'Personalize Service');
   assert.equal(get('studio-project-name').textContent, 'NCSA · Individual profiles');
   assert.equal(get('studio-view-set-summary').textContent, '2 selected');
+  assert.equal(get('profile-set-progress').hidden, true);
   assert.equal(JSON.stringify(profile), before);
+});
+
+test('real generation and image retry statuses remain visible', () => {
+  const { context, get, profile } = harness();
+  profile.profileSet.visuals = { service: { state: 'failed' } };
+  context.window.renderStudioUI();
+  assert.equal(get('profile-set-progress').hidden, false);
+  profile.profileSet.visuals = {};
+  profile.profileSet.statuses.service = 'generating';
+  context.window.renderStudioUI();
+  assert.equal(get('profile-set-progress').hidden, false);
 });
 
 test('view-set disclosure collapses only once and never closes around focused content', () => {

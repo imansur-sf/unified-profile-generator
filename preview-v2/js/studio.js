@@ -35,6 +35,10 @@
     setLabel('studio-view-set-summary', `${selected.length} selected`);
     const viewSet = get('studio-view-set');
     const statuses = state.profileSet?.statuses || {};
+    const progress = get('profile-set-progress');
+    // Sample-only rows repeat the persona choices without conveying progress.
+    // Real jobs and image retries always expose their status and recovery actions.
+    if (progress) progress.hidden = !Object.keys(statuses).length && !Object.keys(state.profileSet?.visuals || {}).length;
     // Collapse the creation choices once the first real set finishes. Respect
     // the user's later disclosure choices; never snap shut on every update.
     if (!initialGenerationSeen && Object.values(statuses).some(value => value === 'ready')) {

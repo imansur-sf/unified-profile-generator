@@ -426,6 +426,11 @@
                   <textarea id="profile-set-custom-brief" placeholder="e.g. Assess payment risk and revenue opportunities."></textarea>
                 </div>
               </details>
+              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create selected profile views →</button>
+              <div class="quickstart-status" id="quickstart-status" role="status" aria-live="polite" aria-atomic="true"></div>
+              <div class="quickstart-error" id="quickstart-error" role="alert" style="display:none;"></div>
+              <div id="profile-set-progress" class="profile-set-progress" aria-label="Profile view progress"></div>
+              <button type="button" id="profile-set-stop" class="studio-button studio-stop" onclick="stopProfileSetGeneration()" hidden>Stop remaining views</button>
               <div class="strategy-panel" id="studio-personalize-panel">
                 <div class="strategy-label" id="studio-personalize-label">Personalize Sales</div>
                 <p class="studio-field-help">Optional. Add requirements before creation, or refine just this view later.</p>
@@ -450,11 +455,6 @@
                 <p class="quickstart-note" id="studio-personalize-scope">Only this view will change. Brand and customer identity are shared across your profile set.</p>
                 <button type="button" id="btn-personalize-view" class="quickstart-settings-toggle" style="color:#fff;margin-top:8px;" onclick="onPersonalizeCurrentPersona()">Update Sales view with AI →</button>
               </div>
-              <button id="quickstart-btn" class="quickstart-btn mt-4" onclick="onQuickStartAnalyze()">Create selected profile views →</button>
-              <div class="quickstart-status" id="quickstart-status" role="status" aria-live="polite" aria-atomic="true"></div>
-              <div class="quickstart-error" id="quickstart-error" role="alert" style="display:none;"></div>
-              <div id="profile-set-progress" class="profile-set-progress" aria-label="Profile view progress"></div>
-              <button type="button" id="profile-set-stop" class="studio-button studio-stop" onclick="stopProfileSetGeneration()" hidden>Stop remaining views</button>
               <button class="quickstart-settings-toggle" id="quickstart-settings-toggle" aria-expanded="false" aria-controls="quickstart-settings" onclick="toggleQuickStartSettings()">Advanced · connection settings</button>
               <div class="quickstart-settings" id="quickstart-settings">
                 <div id="quickstart-mode-badge" class="quickstart-mode-badge">Default backend</div>

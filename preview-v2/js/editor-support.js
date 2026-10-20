@@ -56,21 +56,24 @@ function renderProfileProgress() {
   const strategy = getProfileStrategy();
   const label = getProfileStrategyLabel(strategy);
   const textLabels = { queued: 'Waiting', generating: 'Writing', ready: 'Ready', edited: 'Edits kept', 'template-ready': 'Needs retry', failed: 'Needs retry' };
-  const visualLabels = { queued: 'waiting', generating: 'creating', ready: 'ready', pending: 'needs update', partial: 'partly ready', failed: 'needs retry' };
+  const visualLabels = { queued: 'waiting', generating: 'creating', ready: 'ready', pending: 'needs update', partial: 'partly ready', failed: 'needs retry', stopped: 'stopped · retry when ready' };
   setText('selected-view-name', `Editing ${label}`);
   setText('selected-view-status', `${textLabels[profileSet.statuses[strategy.lens]] || 'Editable sample'} · Images ${visualLabels[profileSet.visuals[strategy.lens]?.state] || 'editable'}`);
   const personalize = document.getElementById('btn-personalize-view');
   if (personalize) { personalize.textContent = `Update ${label} view with AI`; personalize.disabled = ['queued', 'generating'].includes(profileSet.statuses[strategy.lens]); }
   window.renderStudioUI?.();
   const container = document.getElementById('profile-set-progress');
+  const stop = document.getElementById('profile-set-stop');
+  if (stop) stop.hidden = !isProfileSetGenerationRunning();
   if (!container) return;
-  container.innerHTML = profileSet.selectedLenses.filter(lens => PERSONA_PRESETS[lens]).map(lens => {
+  const markup = profileSet.selectedLenses.filter(lens => PERSONA_PRESETS[lens]).map(lens => {
     const textState = profileSet.statuses[lens];
     const visual = profileSet.visuals[lens] || {};
     const textReady = ['ready', 'edited'].includes(textState);
-    const retry = textReady && ['failed', 'partial', 'pending'].includes(visual.state);
-    return `<div class="flex flex-wrap items-center gap-2 py-1 text-xs"><button type="button" class="underline" onclick="setViewerLens('${lens}')">${escHTML(PERSONA_PRESETS[lens].label)}</button><span>${textLabels[textState] || 'Sample'} · Images ${visualLabels[visual.state] || 'editable'}</span>${retry ? `<button type="button" class="underline" onclick="retryPersonaVisuals('${lens}')">Retry images only</button>` : ''}${['template-ready', 'failed'].includes(textState) ? `<button type="button" class="underline" onclick="retryPersonaText('${lens}')">Retry this view</button>` : ''}</div>`;
+    const retry = textReady && ['failed', 'partial', 'pending', 'stopped'].includes(visual.state);
+    return `<div class="flex flex-wrap items-center gap-2 py-1 text-xs"><button type="button" data-focus-key="${lens}" class="underline" onclick="setViewerLens('${lens}')">${escHTML(PERSONA_PRESETS[lens].label)}</button><span>${textLabels[textState] || 'Sample'} · Images ${visualLabels[visual.state] || 'editable'}</span>${retry ? `<button type="button" data-focus-key="${lens}:images" class="underline" onclick="retryPersonaVisuals('${lens}')">Retry images only</button>` : ''}${['template-ready', 'failed'].includes(textState) ? `<button type="button" data-focus-key="${lens}:text" class="underline" onclick="retryPersonaText('${lens}')">Retry this view</button>` : ''}</div>`;
   }).join('');
+  updateStableControlMarkup(container, markup);
 }
 async function retryPersonaText(lens) { setViewerLens(lens); return onPersonalizeCurrentPersona(); }
 async function retryPersonaVisuals(lens) {

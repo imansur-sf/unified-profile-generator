@@ -1,5 +1,7 @@
 # UPG Session Handoff
 
+Preview-only revamp (October 20, 2026): see [PREVIEW-V2-IMPLEMENTATION.md](docs/PREVIEW-V2-IMPLEMENTATION.md) for the `/preview-v2/` trial, rollback checkpoints, copy-only saves, tests, and hosting status. The original `/` frontend is intentionally unchanged. **Do not promote the redesign to the original URL without the user's next approval.** Preview uses the same AI/auth backend, but separate local drafts and provider preferences; cloud saves make new `Preview ·` copies.
+
 Current implementation status: see [QUALITY-IMPLEMENTATION.md](docs/QUALITY-IMPLEMENTATION.md) for the October 7, 2026 two-phase release, rollback checkpoints, verified tests, and remaining live checks. The standing directives below still apply. The August 8 notes below are historical context, not the current backlog or deployment status.
 
 Customer-logo follow-up: see [LOGO-RECOVERY-2026-10-07.md](docs/LOGO-RECOVERY-2026-10-07.md) for safe SVG/ICO conversion, shared discovery/fallbacks, white image backgrounds, verification and its separate rollback checkpoint.

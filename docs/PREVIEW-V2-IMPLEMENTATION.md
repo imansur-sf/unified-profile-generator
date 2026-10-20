@@ -16,6 +16,7 @@
 - Development branch: `codex/preview-v2`.
 - Heroku baseline: release **v55**, succeeded, `Deploy c3e12b28` (2026-10-11).
 - Phase 1 checkpoint: `rollback/preview-v2-phase1-2026-10-20`.
+- Phase 2 checkpoint: `rollback/preview-v2-phase2-2026-10-20`.
 - Rollback code through a reviewed revert/redeploy or the retained stable tag. Heroku release rollback is an emergency fallback, not a data restore.
 
 ## Work tracking
@@ -36,14 +37,47 @@ TaskCreate/TaskUpdate tools are unavailable in this session; this checklist trac
 
 ### Phase 2 — responsive, forgiving interactions
 
-- [ ] Continuous column resize feedback.
-- [ ] Precise card insertion and keyboard alternatives.
-- [ ] Focus preservation and reduced-motion scroll behavior.
-- [ ] Persistent recovery feedback and stop-remaining-generation action.
-- [ ] Automated regression and isolation checks.
-- [ ] Approved-tool visual checks if available; record limitations honestly.
+- [x] Continuous column resize feedback through a bounded, revision-checked message bridge; the iframe sandbox remains intact and exports omit editor-only code.
+- [x] Precise card insertion, dedicated drag handles, placement markers and keyboard alternatives.
+- [x] Focus preservation and reduced-motion scroll behavior.
+- [x] Persistent recovery feedback and stop-remaining-generation action.
+- [x] Automated regression and isolation checks: 195/195 tests and 16/16 DOM workflow checks passed.
+- [x] Approved-tool visual checks assessed: unavailable; no browser/paint verification claimed.
 - [ ] Push source and deploy preview alongside unchanged production.
 - [ ] Hosted smoke checks, rollout notes and final checkpoint.
+
+## Design and implementation notes
+
+The Apple-design skill informed the editor's hierarchy and restrained interactions:
+readable system typography, consistent spacing, navy/cobalt accents on light
+surfaces, named navigation, one persistent persona selector, and a larger live
+preview. Generation choices and per-view personalization are separate actions.
+Focus mode, header save/present/export controls, and persistent feedback reduce
+trips through the wizard. Motion is brief and respects reduced-motion settings.
+The generated Salesforce profile design is deliberately unchanged.
+
+An additional regression was found during the DOM workflow audit: simply visiting
+a queued view caused native color-input normalization and empty optional fields
+to look like manual edits. Preview generation now compares those equivalent values
+canonically while preserving genuine user edits.
+
+Cancellation checks also run between the real initial scrape, backend health,
+text, and image stages. Stopping prevents subsequent AI requests; an already
+dispatched request may complete, but its late result is ignored. Regression tests
+exercise this actual client pipeline using deferred HTTP fixtures.
+
+## Reproduce verification
+
+```sh
+node --test test/*.test.cjs
+UPG_JSDOM_PATH=/path/to/node_modules/jsdom node scripts/check-preview-dom.cjs
+node scripts/preview-smoke.cjs
+```
+
+The DOM harness uses an optional external jsdom installation, not a new app
+dependency. The hosted smoke script accepts `--ai` to opt into one small real text
+call and one generated image; neither credentials nor generated image content
+are printed or saved. It does not create or modify cloud projects.
 
 ## Review tomorrow
 
