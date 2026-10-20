@@ -43,8 +43,23 @@ TaskCreate/TaskUpdate tools are unavailable in this session; this checklist trac
 - [x] Persistent recovery feedback and stop-remaining-generation action.
 - [x] Automated regression and isolation checks: 195/195 tests and 16/16 DOM workflow checks passed.
 - [x] Approved-tool visual checks assessed: unavailable; no browser/paint verification claimed.
-- [ ] Push source and deploy preview alongside unchanged production.
-- [ ] Hosted smoke checks, rollout notes and final checkpoint.
+- [x] Push source and deploy preview alongside unchanged production.
+- [x] Hosted smoke checks, rollout notes and final checkpoint.
+
+## Hosted release
+
+- Preview: `https://sassysolutions-unified-pro-gen-09e8f3d71dc2.pear-virginia.herokuapp-internal.com/preview-v2/`
+- The original URL remains `/`, with no redesign or changed generation runtime.
+- Application code: `6b9a7e4`; verified Heroku release **v56**, succeeded on October 20, 2026.
+- GitHub `main` contains the additive release; `codex/preview-v2` and all three rollback tags are backed up.
+- Authenticated one-off dyno verification of v56 passed: production file hashes, original and preview HTTP routes, every preview module, stylesheet, starter assets, backend health, shared sign-in script, one real Gemini text response, and one real generated recommendation image.
+- The generated test image was discarded and no cloud projects were created or changed.
+- A subsequent documentation-only commit records these results without changing application code.
+
+Hands-on review is still required for visual rendering, drag feel, keyboard and
+touch behavior in a real browser, actual OTP sign-in, and saving/reopening a cloud
+copy. Browser verification tools required by this repository were unavailable;
+the HTTP, unit, and DOM checks above do not replace those checks.
 
 ## Design and implementation notes
 
