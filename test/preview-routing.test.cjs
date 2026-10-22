@@ -8,7 +8,9 @@ const { app } = require('../server');
 const root = path.resolve(__dirname, '..');
 const baseline = require('./fixtures/preview-production-baseline.json');
 
-test('the preview trial leaves the production frontend and generation runtime byte-for-byte unchanged', () => {
+// The baseline includes the explicitly approved additive Feedback controls,
+// not promotion of the preview redesign. All generation hashes are retained.
+test('the preview trial preserves the approved production frontend and generation runtime baseline', () => {
   for (const [file, expected] of Object.entries(baseline)) {
     const actual = crypto.createHash('sha256').update(fs.readFileSync(path.join(root, file))).digest('hex');
     assert.equal(actual, expected, `${file}: production changes require explicit promotion approval`);

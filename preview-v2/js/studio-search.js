@@ -167,7 +167,7 @@
       else if (event.key === 'Tab') close();
     });
     document.addEventListener('keydown', event => {
-      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k' && !document.querySelector('[role="dialog"]:not(.hidden):not([hidden]), dialog[open]')) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k' && !document.querySelector('[role="dialog"]:not(.hidden):not([hidden]):not(dialog:not([open])), dialog[open]')) {
         event.preventDefault(); window.studioTogglePreviewFocus?.(false); input.focus(); input.select(); show();
       }
     });

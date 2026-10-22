@@ -29,6 +29,7 @@ SCRIPTS = [
     "js/localai.js",
     "js/editor-support.js",
     "js/app.js",
+    "js/feedback.js",
 ]
 
 
@@ -37,6 +38,9 @@ def build(out_path: Path) -> None:
         sys.exit(f"error: {INDEX} not found")
 
     html = INDEX.read_text(encoding="utf-8")
+    # The feedback UI belongs to the builder, including its bundled edition.
+    html = re.sub(r'<link rel="stylesheet" href="/assets/feedback\.css[^\"]*">',
+                  lambda _: '<style>\n' + (ROOT / 'assets/feedback.css').read_text(encoding='utf-8') + '\n</style>', html)
 
     # Strip the dev-time dynamic script loader (an inline <script> that
     # createElement()s each module URL with a cache-busting query param).

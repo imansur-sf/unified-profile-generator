@@ -123,7 +123,7 @@ body.studio-app {
 .studio-search-result mark { background: #d9e9ff; color: #163d70; }
 .studio-search-empty { padding: .875rem .625rem; color: #536981; font-size: .8125rem; line-height: 1.5; }
 .studio-app #wizard-col .studio-search-target { outline: 3px solid var(--studio-blue); outline-offset: 3px; scroll-margin-top: 8rem; }
-.studio-app #preview-col { display: block; min-width: 0; position: sticky; top: 6.5rem; }
+.studio-app #preview-col { display: block; min-width: 0; position: sticky; top: var(--studio-header-offset, 6.5rem); }
 .studio-preview-heading { display: flex; align-items: center; justify-content: space-between; gap: .75rem; margin-bottom: .75rem; }
 .studio-eyebrow { font-size: .6875rem; font-weight: 650; color: #64748b; letter-spacing: .075em; text-transform: uppercase; }
 .studio-preview-heading h2 { color: #193450; font-size: 1.125rem; line-height: 1.3; font-weight: 650; letter-spacing: -.025em; }

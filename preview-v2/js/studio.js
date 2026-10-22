@@ -15,6 +15,8 @@
   function fitStudioPreview() {
     cancelAnimationFrame(resizeFrame);
     resizeFrame = requestAnimationFrame(() => {
+      const height = document.querySelector('.app-topbar')?.getBoundingClientRect?.().height;
+      if (height > 0) document.body.style.setProperty('--studio-header-offset', `${height + 16}px`);
       if (typeof fitPreviewScale === 'function') fitPreviewScale();
     });
   }
@@ -117,7 +119,7 @@
         exportMenu.open = false;
         exportMenu.querySelector('summary')?.focus();
         event.preventDefault();
-      } else if (event.key === 'Escape' && previewFocused && !document.querySelector('[role="dialog"]:not(.hidden)')) {
+      } else if (event.key === 'Escape' && previewFocused && !document.querySelector('[role="dialog"]:not(.hidden):not([hidden]):not(dialog:not([open]))')) {
         window.studioTogglePreviewFocus(false);
         get('studio-focus-preview')?.focus();
       }
@@ -126,6 +128,8 @@
       const observer = new ResizeObserver(fitStudioPreview);
       const stage = get('preview-stage');
       if (stage) observer.observe(stage);
+      const header = document.querySelector('.app-topbar');
+      if (header) observer.observe(header);
     }
     // A focused desktop layout must not hide the editor after switching to a
     // narrow window, where the focus-mode control is intentionally omitted.

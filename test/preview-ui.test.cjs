@@ -54,7 +54,7 @@ test('preview logo stays prominent without shrinking or distorting the original 
   assert.match(css, /\.studio-brand-logo \{ width: 5rem; height: 5rem; flex: 0 0 5rem; \}/);
   assert.match(css, /\.studio-brand-logo > img \{ display: block; width: 100%; height: 100%; object-fit: contain; \}/);
   assert.doesNotMatch(css.slice(css.indexOf('@media')), /\.studio-brand-logo\s*\{/, 'Narrow layouts must not shrink the logo');
-  assert.match(css, /#preview-col \{[^}]*top: 6\.5rem;/, 'Sticky preview must clear the taller header');
+  assert.match(css, /#preview-col \{[^}]*top: var\(--studio-header-offset, 6\.5rem\);/, 'Sticky preview must clear the taller header');
   assert.match(css, /\.strategy-panel \{[^}]*scroll-margin-top: 6\.75rem;/);
 });
 
@@ -130,6 +130,7 @@ function harness() {
       readyState: 'loading',
       addEventListener() {},
       getElementById: get,
+      querySelector: () => null,
       querySelectorAll: () => [{ value: 'sales' }, { value: 'service' }],
       activeElement: { closest: () => null },
       body: { classList: { toggle: (...args) => calls.push(['toggle', ...args]) } }

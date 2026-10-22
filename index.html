@@ -286,6 +286,7 @@
     }
     @media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; } }
   </style>
+  <link rel="stylesheet" href="/assets/feedback.css?v=feedback-v1">
 </head>
 <body class="min-h-screen">
 
@@ -301,7 +302,9 @@
           <h1 class="text-base font-600 tracking-tight text-white">Unified Profile Generator</h1>
         </div>
       </div>
-      <div class="flex items-center gap-2 relative">
+      <div class="feedback-toolbar flex items-center gap-2 relative">
+        <button id="feedback-open" type="button" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">Feedback</button>
+        <button id="feedback-inbox-open" type="button" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full" hidden>Feedback Inbox <span id="feedback-unread"></span></button>
         <span id="auth-email" class="hidden text-xs text-white/70 max-w-[160px] truncate"></span>
         <button id="btn-auth" onclick="onAuthButtonClick()" class="btn-topbar px-4 py-2 text-xs font-600 rounded-full">Sign In</button>
         <button id="btn-account" onclick="toggleAccountMenu()" class="hidden btn-topbar px-3 py-2 text-xs font-600 rounded-full items-center gap-2" aria-haspopup="menu" aria-expanded="false">
@@ -329,6 +332,24 @@
       </div>
     </div>
   </div>
+
+  <dialog role="dialog" aria-modal="true" tabindex="-1" id="feedback-dialog" class="feedback-dialog" aria-labelledby="feedback-title">
+    <header class="feedback-heading"><div><p class="feedback-eyebrow">Unified Profile Generator</p><h2 id="feedback-title">Share feedback</h2></div><button type="button" data-feedback-close aria-label="Close feedback">×</button></header>
+    <form id="feedback-form" class="feedback-body">
+      <label for="feedback-category">What would you like to share?</label><select id="feedback-category" required><option value="feature">Feature request</option><option value="bug">Bug report</option><option value="general">General feedback</option></select>
+      <div class="feedback-fields"><div><label for="feedback-name">Name</label><input id="feedback-name" autocomplete="name" maxlength="120" required></div><div><label for="feedback-email">Email</label><input id="feedback-email" type="email" autocomplete="email" maxlength="254" required></div></div>
+      <label for="feedback-description">Description</label><textarea id="feedback-description" rows="5" maxlength="8000" required placeholder="Tell us what happened or what you’d like to see."></textarea>
+      <div id="feedback-drop" class="feedback-drop"><label for="feedback-files">Screenshots <span>(optional)</span></label><p>Choose images, drop them here, or paste a screenshot.</p><input id="feedback-files" type="file" accept="image/png,image/jpeg,image/webp" multiple aria-describedby="feedback-file-help"><p id="feedback-file-help">Up to 3 images. Images are resized to fit; 1 MB each maximum.</p></div>
+      <ul id="feedback-previews" class="feedback-previews"></ul><p id="feedback-message" role="status" aria-live="polite"></p>
+      <footer class="feedback-actions"><button type="button" data-feedback-close>Cancel</button><button id="feedback-submit" class="feedback-primary" type="submit">Send feedback</button></footer>
+    </form>
+    <div id="feedback-success" class="feedback-body" hidden><h3>Thank you for sharing</h3><p id="feedback-reference"></p><p>Your feedback has been saved for review.</p><button type="button" id="feedback-done" class="feedback-primary">Done</button></div>
+  </dialog>
+  <dialog role="dialog" aria-modal="true" tabindex="-1" id="feedback-inbox-dialog" class="feedback-dialog feedback-inbox" aria-labelledby="feedback-inbox-title">
+    <header class="feedback-heading"><div><p class="feedback-eyebrow">Unified Profile Generator · Admin</p><h2 id="feedback-inbox-title">Feedback Inbox</h2></div><button type="button" data-feedback-inbox-close aria-label="Close feedback inbox">×</button></header>
+    <div class="feedback-body"><div id="feedback-inbox-controls" class="feedback-fields"><div><label for="feedback-filter-category">Category</label><select id="feedback-filter-category"><option value="">All categories</option><option value="bug">Bug reports</option><option value="feature">Feature requests</option><option value="general">General feedback</option></select></div><div><label for="feedback-filter-status">Status</label><select id="feedback-filter-status"><option value="">All statuses</option><option value="new">New</option><option value="reviewing">Reviewing</option><option value="completed">Completed</option></select></div></div>
+    <p id="feedback-inbox-message" role="status" aria-live="polite"></p><button type="button" id="feedback-inbox-retry" hidden>Try again</button><div id="feedback-inbox-list"></div><div id="feedback-inbox-detail" hidden></div><nav id="feedback-pagination" class="feedback-actions" aria-label="Feedback pages"><button type="button" id="feedback-prev">Previous</button><span id="feedback-page"></span><button type="button" id="feedback-next">Next</button></nav></div>
+  </dialog>
 
   <!-- STEP INDICATORS -->
   <div class="stepper-shell">
@@ -1174,7 +1195,7 @@
   <script>
     // Load modules with a per-page-load cache buster so edits are picked up
     // without the browser's aggressive JS cache getting in the way.
-    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/brand-logo.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js'].forEach(src => {
+    ['js/defaults.js','js/profile-contract.js','js/images.js','js/generator.js','js/brand-logo.js','js/pagehost.js','js/localai.js','js/editor-support.js','js/app.js','js/feedback.js'].forEach(src => {
       const s = document.createElement('script');
       s.src = src + '?v=' + window.__UPG_BUILD__;
       s.defer = false;

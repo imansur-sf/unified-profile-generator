@@ -8,6 +8,7 @@ const { parsePublicOrigin, parseTrustedProxies, requestOrigin: resolveRequestOri
 const { buildState, renderSavedProfile, integrationArtifact, LENSES } = require('./lib/profile-runtime');
 const { runGenerationPipeline } = require('./lib/generation-pipeline');
 const { createGenerationWorker } = require('./lib/generation-worker');
+const { createFeedbackProxy } = require('./lib/feedback-proxy');
 const app = express();
 const PUBLIC_ORIGIN = parsePublicOrigin(process.env.PUBLIC_ORIGIN || '');
 app.set('trust proxy', parseTrustedProxies(process.env.TRUST_PROXY || ''));
@@ -41,6 +42,7 @@ const rateBuckets = new Map();
 // Saved profiles can include several AI-created recommendation images. Keep a
 // deliberate cap, but apply the larger allowance only to project saves.
 app.use('/projects', express.json({ limit: '20mb' }));
+app.use('/feedback', express.json({ limit: '5mb' }));
 app.use(express.json({ limit: '1mb' }));
 app.use('/api', (req, res, next) => {
   res.set({ 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'GET, POST, OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type', 'Access-Control-Expose-Headers': 'X-Scraper-URL, X-Scraper-Source, X-Scraper-Bytes', 'Access-Control-Max-Age': '86400' });
@@ -48,6 +50,11 @@ app.use('/api', (req, res, next) => {
   next();
 });
 app.use(['/saasy-auth.js', '/auth', '/projects', '/api-keys'], proxySaasyAccounts);
+app.use('/feedback', createFeedbackProxy({ upstream: SAASY_ACCOUNTS_URL }));
+app.get('/api/app-version', (req, res) => res.set('Cache-Control', 'no-store').json({
+  tool: 'upg', appName: 'Unified Profile Generator', version: require('./package.json').version,
+  commit: String(process.env.HEROKU_SLUG_COMMIT || process.env.SOURCE_VERSION || '').replace(/[^a-f0-9]/gi, '').slice(0, 40)
+}));
 app.use(['/integrations', '/mcp', '/.well-known/mcp.json'], requireConfiguredPublicOrigin);
 app.post('/integrations/v1/upg/generations', handleCreateGeneration);
 app.get('/integrations/v1/upg/generations/:id', handleGetGeneration);
@@ -206,7 +213,7 @@ async function fetchBrandImage(rawUrl) {
 }
 app.use((err, req, res, next) => {
   if (err?.type === 'entity.too.large') {
-    return res.status(413).json({ error: 'payload_too_large', message: 'The project is larger than the 20 MB save limit.' });
+    return res.status(413).json({ error: 'payload_too_large', message: req.path.startsWith('/feedback') ? 'Feedback exceeds the 5 MB submission limit.' : 'The project is larger than the 20 MB save limit.' });
   }
   return next(err);
 });
