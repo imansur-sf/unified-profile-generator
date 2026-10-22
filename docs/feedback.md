@@ -10,7 +10,7 @@ Implementation tracking (TaskCreate/TaskUpdate are unavailable in this session):
 - [x] Verify desktop/mobile behavior, compression and account changes.
 - [x] Run the final integrated regression suite (203 tests passing).
 - [x] Deploy accounts first (v32); coordinate compatibility with the LPG owner.
-- [ ] Push UPG and confirm its dependent release.
+- [x] Push UPG `fa3439c` and confirm its dependent release (v63 succeeded).
 
 The feedback service uses the existing SaaSy Accounts PostgreSQL database and
 SaasyAuth sessions. No new database, mail service or sign-in flow is introduced.
@@ -73,3 +73,9 @@ node scripts/check-feedback-browser.cjs
 The approved original-page baseline updates only the two builder HTML hashes for
 additive feedback markup/bundling; generation/runtime module hashes are unchanged.
 No redesign promotion, separate database, new mail provider or config is required.
+
+For a read-only hosted connectivity check (no test submissions or credentials):
+
+```sh
+heroku run --no-tty "node scripts/check-feedback-deployed.cjs" --app sassysolutions-unified-pro-gen
+```
