@@ -9,6 +9,8 @@ const { buildState, renderSavedProfile, integrationArtifact, LENSES } = require(
 const { runGenerationPipeline } = require('./lib/generation-pipeline');
 const { createGenerationWorker } = require('./lib/generation-worker');
 const { createFeedbackProxy } = require('./lib/feedback-proxy');
+const { buildProfileArtifacts } = require('./lib/profile-artifacts');
+const { createProfileCapture } = require('./lib/profile-capture');
 const app = express();
 const PUBLIC_ORIGIN = parsePublicOrigin(process.env.PUBLIC_ORIGIN || '');
 app.set('trust proxy', parseTrustedProxies(process.env.TRUST_PROXY || ''));
@@ -39,6 +41,7 @@ const DEFAULT_MODEL = TIER_MODELS.balanced;
 const RATE_LIMIT_WINDOW_MS = 60000;
 const RATE_LIMIT_MAX = 30;
 const rateBuckets = new Map();
+const profileCapture = createProfileCapture({ executablePath: process.env.UPG_CAPTURE_EXECUTABLE_PATH || '' });
 // Saved profiles can include several AI-created recommendation images. Keep a
 // deliberate cap, but apply the larger allowance only to project saves.
 app.use('/projects', express.json({ limit: '20mb' }));
@@ -60,6 +63,8 @@ app.post('/integrations/v1/upg/generations', handleCreateGeneration);
 app.get('/integrations/v1/upg/generations/:id', handleGetGeneration);
 app.post('/integrations/v1/upg/generations/:id/resume', handleResumeGeneration);
 app.get('/integrations/v1/upg/profiles/:id/export', handleProfileExport);
+app.get('/integrations/v1/upg/profiles/:id/artifacts', handleArtifactManifest);
+app.get('/integrations/v1/upg/profiles/:id/artifacts/:format', handleArtifactDownload);
 app.use('/integrations', proxySaasyAccounts);
 app.get('/.well-known/mcp.json', (req, res) => {
   let origin;
@@ -73,7 +78,8 @@ app.get('/.well-known/mcp.json', (req, res) => {
     authentication: { type: 'api-key', header: 'X-API-Key', keyPrefix: 'upg_' },
     protocolVersions: MCP_PROTOCOL_VERSIONS,
     capabilities: { tools: MCP_TOOLS.map(tool => tool.name) },
-    generation: { asynchronous: true, durable: true, explicitResume: true, requiredScopes: ['generations:write', 'profiles:write'] }
+    generation: { asynchronous: true, durable: true, explicitResume: true, requiredScopes: ['generations:write', 'profiles:write'] },
+    artifacts: { schemaVersion:'upg.artifacts.v1', manifestPath:'/integrations/v1/upg/profiles/{profileId}/artifacts', formats:['html','json','png'], captureConfigured:profileCapture.available, revisionPinned:true }
   });
 });
 app.post('/mcp', validateMcpOrigin, handleMcpRequest);
@@ -268,6 +274,18 @@ function validateMcpOrigin(req, res, next) {
 }
 const MCP_TOOLS = [
   {
+    name: 'upg_get_profile_artifacts',
+    title: 'Get editable presentation artifacts for a saved UPG view',
+    description: 'Return a revision-pinned manifest with authenticated HTML, selected-view JSON and PNG download paths. Does not start AI generation or run a screenshot. PNG requires a configured server browser. Download files with the X-API-Key header; do not embed credentials in a presentation. Local HTML edits require a new local screenshot and do not update the saved project.',
+    inputSchema: {
+      type: 'object', properties: {
+        profileId: { type: 'string' },
+        persona: { type: 'string', enum: ['sales', 'service', 'marketing', 'success', 'custom'] }
+      }, required: ['profileId'], additionalProperties: false
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, openWorldHint: false }
+  },
+  {
     name: 'upg_list_profiles',
     title: 'List saved Unified Profile Generator profiles',
     description: 'List the signed-in API key owner\'s saved UPG profiles. Use this to find an individual or account profile before retrieving or exporting it.',
@@ -398,6 +416,11 @@ async function callMcpTool(req, name, args) {
   }
   const profileId = typeof args.profileId === 'string' ? args.profileId.trim() : '';
   if (!profileId) return mcpToolError('profileId is required.');
+  if (name === 'upg_get_profile_artifacts') {
+    if (Object.keys(args).some(key => !['profileId','persona'].includes(key))) return mcpToolError('Unsupported artifact argument.');
+    const result = await getProfileArtifacts(req,profileId,args.persona);
+    return result.status === 200 ? mcpToolResult(result.bundle.manifest) : mcpToolError(result.body.error);
+  }
   if (name === 'upg_get_profile') {
     const response = await callAccountsIntegration(req, `/integrations/v1/upg/profiles/${encodeURIComponent(profileId)}`);
     const body = await readAccountsJson(response);
@@ -440,7 +463,7 @@ async function callAccountsIntegration(req, path, options = {}) {
 async function callAccountsWithApiKey(apiKey, path, options = {}) {
   if (!apiKey) return new Response(JSON.stringify({ error: 'missing_api_key' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20000);
+  const timeout = setTimeout(() => controller.abort(), options.timeoutMs || 20000);
   try {
     const headers = { 'X-API-Key': apiKey, Accept: 'application/json, text/html;q=0.9' };
     if (options.body !== undefined) headers['Content-Type'] = 'application/json';
@@ -699,6 +722,52 @@ async function handleProfileExport(req, res) {
     'Content-Security-Policy': "sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com data:; img-src data: https:"
   });
   res.send(result.body.html);
+}
+async function getProfileArtifacts(req,id,persona) {
+  if (!/^\d+$/.test(id || '')) return {status:400,body:{error:'invalid_profile_id'}};
+  if (persona !== undefined && (typeof persona !== 'string' || !LENSES.includes(persona))) return {status:400,body:{error:'invalid_persona'}};
+  try {
+    const origin = requestOrigin(req);
+    // Never share a cached owner's response or trust MCP initialization alone.
+    const response = await callAccountsIntegration(req,`/integrations/v1/upg/profiles/${encodeURIComponent(id)}/export-state`,{timeoutMs:10000});
+    const data = await readAccountsJson(response);
+    if (!response.ok) return {status:response.status,body:{error:integrationErrorMessage(response,data)}};
+    const bundle = buildProfileArtifacts(data.payload,{persona,origin,profileId:id,captureAvailable:profileCapture.available});
+    return {status:200,bundle};
+  } catch (error) { return {status:error.status || 422,body:{error:error.code || 'artifact_not_renderable'}}; }
+}
+async function handleArtifactManifest(req,res) {
+  res.set({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});
+  if (Object.keys(req.query).some(key => key !== 'persona')) return res.status(400).json({error:'invalid_artifact_option'});
+  const result = await getProfileArtifacts(req,req.params.id,req.query.persona);
+  return result.status === 200 ? res.json(result.bundle.manifest) : res.status(result.status).json(result.body);
+}
+async function handleArtifactDownload(req,res) {
+  res.set({'Cache-Control':'private, no-store','X-Content-Type-Options':'nosniff'});
+  const {format} = req.params;
+  if (!['html','json','png'].includes(format)) return res.status(400).json({error:'invalid_artifact_format'});
+  if (Object.keys(req.query).some(key => !['persona','revision'].includes(key)) || typeof req.query.revision !== 'string' || !/^art_[a-f0-9]{40}$/.test(req.query.revision)) return res.status(400).json({error:'artifact_revision_required'});
+  const result = await getProfileArtifacts(req,req.params.id,req.query.persona);
+  if (result.status !== 200) return res.status(result.status).json(result.body);
+  const {manifest,html,data} = result.bundle;
+  if (req.query.revision !== manifest.revision) return res.status(409).json({error:'artifact_revision_changed',message:'The saved view changed. Get a new manifest and download all artifacts from its revision.'});
+  if (format === 'png') {
+    if (!profileCapture.available) return res.status(503).json({error:'capture_not_configured',message:'A sandboxed Chromium runtime must be configured before hosted PNG capture is available. HTML and JSON downloads remain available.'});
+    if (!manifest.assets.selfContained) return res.status(422).json({error:'capture_external_assets',message:'Embed externally linked images before requesting capture. The browser cannot access the network.'});
+    try {
+      const captured = await profileCapture.capture(html);
+      res.set({'Content-Type':'image/png','Content-Disposition':`attachment; filename="upg-${req.params.id}-${manifest.persona}.png"`,'X-UPG-Artifact-Revision':manifest.revision});
+      return res.send(captured.png);
+    } catch (error) {
+      if (error.code === 'capture_busy') res.set('Retry-After','2');
+      return res.status(error.status || 502).json({error:error.code || 'capture_failed'});
+    }
+  }
+  res.set({'Content-Type':format === 'html' ? 'text/html; charset=utf-8' : 'application/json; charset=utf-8',
+    'Content-Disposition':`attachment; filename="upg-${req.params.id}-${manifest.persona}.${format}"`,
+    'X-UPG-Artifact-Revision':manifest.revision,
+    'Content-Security-Policy':"sandbox allow-scripts; default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: https:"});
+  return format === 'html' ? res.send(html) : res.json(data);
 }
 function requestOrigin(req) { return resolveRequestOrigin(req, PUBLIC_ORIGIN); }
 function requireConfiguredPublicOrigin(req, res, next) {

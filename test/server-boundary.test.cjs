@@ -10,12 +10,13 @@ const safeFetch = require('../lib/safe-fetch');
 const root = path.resolve(__dirname, '..');
 const localRequire = createRequire(path.join(root, 'server.js'));
 
-function loadServer({ env = {}, fetchPublicResource, worker, profileRuntime, fetch = async () => { throw Error('External network prohibited'); } } = {}) {
+function loadServer({ env = {}, fetchPublicResource, worker, profileRuntime, capture, fetch = async () => { throw Error('External network prohibited'); } } = {}) {
   const context = vm.createContext({
     require(name) {
       if (name === './lib/safe-fetch') return { ...safeFetch, fetchPublicResource: fetchPublicResource || (async () => { throw Error('External network prohibited'); }) };
       if (name === './lib/generation-worker' && worker) return { createGenerationWorker: () => worker };
       if (name === './lib/profile-runtime' && profileRuntime) return { ...localRequire(name), ...profileRuntime };
+      if (name === './lib/profile-capture' && capture) return { createProfileCapture: () => capture };
       return localRequire(name);
     },
     __dirname: root, module: { exports: {} }, process: { env }, console,
@@ -35,6 +36,83 @@ function res() {
     json(value) { this.body = value; return this; }, send(value) { this.body = value; return this; }
   };
 }
+
+test('artifact downloads reauthorize the owner, pin revisions and export only selected render fields',async()=>{
+  const state = localRequire('./lib/profile-runtime').getRuntime().cloneProfileMode('b2c','generic');
+  state.apiKey='DO-NOT-EXPORT';state.profile.apiKey='DO-NOT-EXPORT';
+  const calls=[];
+  const {app}=loadServer({fetch:async(url,options)=>{
+    calls.push({url,options});
+    if(options.headers['X-API-Key']!=='owner')return new Response(JSON.stringify({error:'invalid_api_key'}),{status:401});
+    return new Response(JSON.stringify({payload:state}));
+  }});
+  const request=()=>req({headers:{'X-API-Key':'owner'},params:{id:'42'},query:{persona:'sales'}});
+  const route='/integrations/v1/upg/profiles/:id/artifacts';
+  const manifest=await call(app,'get',route,request());
+  assert.equal(manifest.statusCode,200);assert.equal(manifest.body.capture.available,false);
+  assert.equal(manifest.headers['cache-control'],'private, no-store');
+  for(const format of ['html','json']){
+    const r=request();r.params.format=format;r.query.revision=manifest.body.revision;
+    const out=await call(app,'get',route+'/:format',r);
+    assert.equal(out.statusCode,200);assert.doesNotMatch(JSON.stringify(out.body),/DO-NOT-EXPORT/);
+    assert.match(out.headers['content-disposition'],/attachment/);
+    assert.equal(out.headers['x-upg-artifact-revision'],manifest.body.revision);
+  }
+  const changed=request();changed.params.format='html';changed.query.revision=manifest.body.revision;
+  state.profile.name='New revision';
+  assert.equal((await call(app,'get',route+'/:format',changed)).statusCode,409);
+  const other=request();other.headers['x-api-key']='other';other.params.format='json';other.query.revision=manifest.body.revision;
+  assert.equal((await call(app,'get',route+'/:format',other)).statusCode,401);
+  assert.equal(calls.length,5);
+  assert.ok(calls.every(item=>item.url.endsWith('/profiles/42/export-state')));
+});
+
+test('artifact selectors fail closed and unavailable PNG does not launch providers',async()=>{
+  const state=localRequire('./lib/profile-runtime').getRuntime().cloneProfileMode('b2b','generic');
+  const {app}=loadServer({fetch:async()=>new Response(JSON.stringify({payload:state}))});
+  const route='/integrations/v1/upg/profiles/:id/artifacts';
+  for(const query of [{persona:['sales','service']},{persona:'finance'},{html:'<script>'}]){
+    assert.equal((await call(app,'get',route,req({params:{id:'42'},query}))).statusCode,400);
+  }
+  const manifest=await call(app,'get',route,req({headers:{'X-API-Key':'owner'},params:{id:'42'}}));
+  const query={revision:manifest.body.revision};
+  const png=await call(app,'get',route+'/:format',req({headers:{'X-API-Key':'owner'},params:{id:'42',format:'png'},query}));
+  assert.equal(png.statusCode,503);assert.equal(png.body.error,'capture_not_configured');
+  for(const format of ['zip','png']){
+    const out=await call(app,'get',route+'/:format',req({params:{id:'42',format},query:{}}));
+    assert.equal(out.statusCode,400);
+  }
+});
+
+test('artifact PNG authenticates before capture and surfaces explicit runtime/capacity/asset failures',async()=>{
+  const state=localRequire('./lib/profile-runtime').getRuntime().cloneProfileMode('b2b','generic');
+  let captured=0,fail;
+  const {app}=loadServer({capture:{available:true,capture:async html=>{captured++;assert.match(html,/Account Unified Profile/);if(fail)throw fail;return{png:Buffer.from('png')};}},fetch:async(url,options)=>new Response(JSON.stringify(options.headers['X-API-Key']==='owner'?{payload:state}:{error:'forbidden'}),{status:options.headers['X-API-Key']==='owner'?200:403})});
+  const route='/integrations/v1/upg/profiles/:id/artifacts';
+  const make=query=>req({headers:{'X-API-Key':'owner'},params:{id:'42',format:'png'},query});
+  let manifest=await call(app,'get',route,make({}));
+  const query={revision:manifest.body.revision};
+  assert.equal((await call(app,'get',route+'/:format',make(query))).statusCode,200);
+  const nonowner=make(query);nonowner.headers['x-api-key']='other';
+  assert.equal((await call(app,'get',route+'/:format',nonowner)).statusCode,403);assert.equal(captured,1);
+  fail=Object.assign(Error('private diagnostic'),{status:429,code:'capture_busy'});
+  const busy=await call(app,'get',route+'/:format',make(query));assert.equal(busy.statusCode,429);assert.equal(busy.headers['retry-after'],'2');assert.doesNotMatch(JSON.stringify(busy.body),/private/);
+  state.account.logo='https://customer.example/logo.png';
+  manifest=await call(app,'get',route,make({}));
+  assert.equal((await call(app,'get',route+'/:format',make({revision:manifest.body.revision}))).body.error,'capture_external_assets');
+  assert.equal(captured,2);
+});
+
+test('MCP artifact discovery returns bounded download metadata, never screenshot bytes or full saved state',async()=>{
+  const state=localRequire('./lib/profile-runtime').getRuntime().cloneProfileMode('b2b','generic');state.apiKey='SECRET';
+  const {context}=loadServer({fetch:async()=>new Response(JSON.stringify({payload:state}))});
+  const output=await context.callMcpTool(req({headers:{'X-API-Key':'owner'}}),'upg_get_profile_artifacts',{profileId:'42',persona:'sales'});
+  const value=JSON.parse(output.content[0].text);
+  assert.equal(value.schemaVersion,'upg.artifacts.v1');assert.ok(value.downloads.json);
+  assert.doesNotMatch(output.content[0].text,/SECRET|renderedHtml|base64/);
+  assert.equal(value.state,undefined);
+  assert.equal((await context.callMcpTool(req(),'upg_get_profile_artifacts',{profileId:'42',html:'<script>'})).isError,true);
+});
 async function call(app, method, routePath, request) {
   const route = app._router.stack.find(layer => layer.route?.path === routePath && layer.route.methods[method]);
   const response = res();

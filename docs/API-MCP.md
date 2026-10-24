@@ -59,6 +59,80 @@ Discovery: `GET /.well-known/mcp.json`. Transport: JSON-RPC POST `/mcp`; GET ret
 
 ## Deployment and verification
 
+### Claude presentation artifacts (backend-only extension)
+
+`GET /integrations/v1/upg/profiles/{profileId}/artifacts?persona=service`
+returns a `upg.artifacts.v1` manifest. MCP tool **`upg_get_profile_artifacts`**
+accepts `{ "profileId": "42", "persona": "service" }` and returns the same
+metadata without injecting multi-megabyte HTML/PNG into Claude's conversation.
+This does not generate AI content or start screenshot work. First generate or
+select a saved profile using the existing tools.
+
+The manifest provides authenticated `downloads.html`, `downloads.json` and
+`downloads.png` paths, pinned to the same selected-view `revision`. Fetch them
+from the UPG origin using `X-API-Key`. Every download rechecks ownership and the
+existing Accounts export permissions. If that view changes before download,
+the service returns **409 `artifact_revision_changed`**; obtain a new manifest
+and download the set again rather than mixing revisions. Paths are not public
+links or authorization tokens.
+
+- **HTML**: editable selected-view document using UPG's existing renderer.
+- **JSON**: `upg.presentation.v1`, with `state` containing allowlisted selected-view
+  render fields. Provider settings, credentials, prompts, other personas and
+  local drafts are excluded. This is not a full cloud-project backup or a save API.
+- **PNG**: fixed **1920×1080**, captured at logical 1600×900 using a sandboxed
+  Chromium process with page scripts and network blocked. It captures the visible
+  first screen, not below-fold modules. Inline image failures return explicit
+  **422 `capture_assets_missing`**. Externally linked images return **422
+  `capture_external_assets`**; embed those images in the saved project first.
+
+Manifest `assets` reports external links and missing recommendation images.
+`selfContained` describes image sources, not a guarantee that every desired
+recommendation image was generated. Review generation `result.visuals` and those
+warnings before presenting; PNG capture does not regenerate missing artwork.
+
+Hosted PNG requires an approved Chromium installation configured through
+`UPG_CAPTURE_EXECUTABLE_PATH`. The current Heroku Fir build does **not** install
+one. Until configured, `capture.available` is false and PNG returns **503
+`capture_not_configured`**, while HTML/JSON and normal UPG usage remain available.
+Capture is on demand, not a durable job: one active browser per process, a
+12-second deadline, at most 8 MiB PNG, and **429 `capture_busy`** with Retry-After.
+The slot is retained until browser cleanup completes. A failed or hung teardown
+fails closed; restart that render process rather than allowing browser accumulation.
+Do not restart paid generation to retry a screenshot. There is no cross-dyno
+render queue, persistent PNG cache or public artifact storage in this first phase.
+
+For an approved local Claude environment with network access to UPG, use the
+helper with credentials supplied through its secret environment, not arguments:
+
+```sh
+# Set UPG_ORIGIN and UPG_API_KEY using the client's approved secret mechanism.
+node scripts/download-profile-artifacts.cjs --profile-id 42 --persona service --output ./new-profile-bundle --skip-png
+```
+
+Without `--skip-png`, the helper also requests hosted PNG and requires that
+capability to be configured. It rejects off-origin/changed artifact references
+and never overwrites an existing output folder. Downloads become local assets
+for the presentation; never embed the credential-bearing fetch in a published
+3D world or HTML slide.
+
+After downloading, Claude may edit **its local `profile.html`**. A local approved
+Chromium executable can produce a fresh screenshot without contacting UPG:
+
+```sh
+# Configure UPG_CAPTURE_EXECUTABLE_PATH to that machine's approved Chromium.
+node scripts/render-profile-artifact.cjs --html ./new-profile-bundle/profile.html --output ./updated-profile.png
+```
+
+Edits do not update the saved UPG project or the original PNG. JSON is an editable
+data companion, but changing JSON alone does not regenerate HTML; a future
+validated data-to-render adapter can support that. Fresh AI imagery still needs
+an image-generation tool/service. Corporate networking/SSO access remains a
+separate prerequisite: no tunnel or public gateway is created here.
+
+Operational plan, rollback and scaling boundaries:
+`docs/CLAUDE-ARTIFACT-ARCHITECTURE.md`.
+
 Deploy the additive accounts jobs migration/routes before this UPG version. Existing project/API clients remain supported. Configure `SAASY_ACCOUNTS_URL` for that accounts instance. Existing Gemini settings are reused; no worker secret is required.
 
 Production rollout requires `PUBLIC_ORIGIN`. When `NODE_ENV=production` and it is missing, API integrations, MCP, and discovery return `503 public_origin_required`; the editor and guest AI remain available. Health exposes only configuration booleans, never keys. Local development retains a validated Host/protocol fallback.
