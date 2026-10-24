@@ -1,0 +1,122 @@
+{
+  "insights": {
+    "title": "service insights",
+    "items": [
+      {
+        "label": "service priority",
+        "value": "Modeled demo signal"
+      }
+    ]
+  },
+  "affinities": {
+    "title": "service signals",
+    "seriesA": {
+      "label": "Recent intent",
+      "color": "#0B5CAB"
+    },
+    "seriesB": {
+      "label": "Historical interest",
+      "color": "#00A1E0"
+    },
+    "groups": [
+      {
+        "name": "service focus",
+        "items": [
+          {
+            "label": "Guided sessions",
+            "a": 72,
+            "b": 48
+          },
+          {
+            "label": "Resource usage",
+            "a": 54,
+            "b": 61
+          }
+        ]
+      }
+    ]
+  },
+  "preferences": {
+    "title": "service preferences",
+    "items": [
+      {
+        "label": "Preferred channel",
+        "value": "Email (fictional consent)"
+      }
+    ]
+  },
+  "events": {
+    "title": "service touchpoints",
+    "items": [
+      {
+        "name": "service planning session",
+        "date": "Demo timeline",
+        "confirmation": "Synthetic event"
+      }
+    ]
+  },
+  "membership": {
+    "title": "service program",
+    "items": [
+      {
+        "label": "Status",
+        "value": "Modeled active membership"
+      }
+    ]
+  },
+  "recommendations": {
+    "title": "service recommendations",
+    "items": [
+      {
+        "eyebrow": "Next best action",
+        "title": "service: Reschedule a family assessment; resolve access friction.",
+        "cta": "Review plan",
+        "image": ""
+      },
+      {
+        "eyebrow": "Recommended",
+        "title": "service: Send a relevant guided resource",
+        "cta": "View resource",
+        "image": ""
+      }
+    ]
+  },
+  "activity": {
+    "title": "service activity",
+    "items": [
+      {
+        "icon": "📋",
+        "title": "service review requested",
+        "body": "Fictional demo activity, not a live CRM record.",
+        "time": "Demo timeline"
+      }
+    ]
+  },
+  "railFields": [
+    {
+      "icon": "🎟️",
+      "label": "Events attended",
+      "value": "3 (synthetic)",
+      "visible": true
+    },
+    {
+      "icon": "📈",
+      "label": "Future attendance propensity",
+      "value": "72% (modeled)",
+      "visible": true
+    }
+  ],
+  "extraCards": [
+    {
+      "title": "service context",
+      "icon": "📋",
+      "items": [
+        {
+          "label": "Suggested focus",
+          "value": "Reschedule a family assessment; resolve access friction."
+        }
+      ]
+    }
+  ],
+  "rightExtraCards": []
+}

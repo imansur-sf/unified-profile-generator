@@ -1,0 +1,205 @@
+{
+  "schemaVersion": "upg.handoff.package.v1",
+  "files": [
+    {
+      "path": "00-START-HERE.md",
+      "bytes": 4472,
+      "sha256": "e8b069c1515c32a5c6b32607fc39ae302242b1305e2b113918316d7db42b06af"
+    },
+    {
+      "path": "01-CLAUDE-IMPLEMENTATION-BRIEF.md",
+      "bytes": 22138,
+      "sha256": "cc4d90007a83075d0dcbf597ec3e90e41b151398ff172c28ea1378325a525898"
+    },
+    {
+      "path": "02-HANDOFF-TEST-REPORT.md",
+      "bytes": 2891,
+      "sha256": "09391e7c61ede3357564147f4b4d09f9649d66b4b154a7fd18ead447eca2548d"
+    },
+    {
+      "path": "examples/base-b2b.json",
+      "bytes": 3626,
+      "sha256": "e071b05fd2a603922c3c24d4e88fd1a904a467608befc51c76b4bced92f02b27"
+    },
+    {
+      "path": "examples/base-b2c.json",
+      "bytes": 3626,
+      "sha256": "e071b05fd2a603922c3c24d4e88fd1a904a467608befc51c76b4bced92f02b27"
+    },
+    {
+      "path": "examples/overlay-custom.json",
+      "bytes": 2496,
+      "sha256": "6f1d1db484a70b935feb93703080de5c2031cccd3425ede8aeb06571e3a86441"
+    },
+    {
+      "path": "examples/overlay-marketing.json",
+      "bytes": 2512,
+      "sha256": "feac5e187951db37497b47f45e48f4202247fa8b095281d66e026a2aa5acb1fa"
+    },
+    {
+      "path": "examples/overlay-service.json",
+      "bytes": 2522,
+      "sha256": "6367f41612d561fcf666557a1fa59ef5a011847d2b6594cba9536b40ab43f45a"
+    },
+    {
+      "path": "examples/overlay-success.json",
+      "bytes": 2488,
+      "sha256": "2f1cc90b7cb05962612628a7a8e177d62f9ccb76941b62e5326f96af853906ed"
+    },
+    {
+      "path": "examples/request-b2b.json",
+      "bytes": 957,
+      "sha256": "cee42156380aa359c40d53973c61695badc1f708b1a0fbc9a523c26a06fa79aa"
+    },
+    {
+      "path": "examples/request-b2c.json",
+      "bytes": 957,
+      "sha256": "f5fc9f75f53f5435591541e03378620b318e50671dbed7fc707674ba6809aec7"
+    },
+    {
+      "path": "examples/source-b2b.json",
+      "bytes": 456,
+      "sha256": "07318c86529f7bdb8be03f95b7e77ca14f458b91c24372d07ec3691c66d6e698"
+    },
+    {
+      "path": "examples/source-b2c.json",
+      "bytes": 456,
+      "sha256": "07318c86529f7bdb8be03f95b7e77ca14f458b91c24372d07ec3691c66d6e698"
+    },
+    {
+      "path": "references/ENGINE-MAP.md",
+      "bytes": 6264,
+      "sha256": "99dac15f985130c0d35a6c8e0e36366f87e10cde7e9021141e9c2e946743d980"
+    },
+    {
+      "path": "references/INPUT-OUTPUT-CONTRACT.md",
+      "bytes": 5499,
+      "sha256": "efa9f4c9991fef577bdb243cc47d7ebf93c2614ad60f37aa242008b1aca557ea"
+    },
+    {
+      "path": "references/TESTING-AND-RUNTIME.md",
+      "bytes": 5173,
+      "sha256": "0ba2c03d12418ff82f063ed5b228151b7408f62d4f9afb03be11fcb993dff5de"
+    },
+    {
+      "path": "source/upg-core/assets/tony-robbins-coaching-v1.jpg",
+      "bytes": 59491,
+      "sha256": "d8305b2fd207b01933a577183fc28dd3acbffdb8680720d9bae6e790568a33a0"
+    },
+    {
+      "path": "source/upg-core/assets/tony-robbins-workshop-v1.jpg",
+      "bytes": 79594,
+      "sha256": "2c1bd023b9308903e2ca7e59c3d4a4e2b0ea4a1d773e04fbce201697b849a5a3"
+    },
+    {
+      "path": "source/upg-core/js/brand-logo.js",
+      "bytes": 8860,
+      "sha256": "33f01e6a2c2740d66fbaeb15fbab5e4fa56f8ef61db5a38cbaebae96dcb48b30"
+    },
+    {
+      "path": "source/upg-core/js/defaults.js",
+      "bytes": 34699,
+      "sha256": "99e678ae4804dcb8ac1b8509caf2b85dc1e3a189ba3b1ad571c40467cba7f121"
+    },
+    {
+      "path": "source/upg-core/js/generator.js",
+      "bytes": 78337,
+      "sha256": "3a3a3f6542a9eda1a16423ffdbe4a312c13d9c300528bbf8c0a7c40c4fe74055"
+    },
+    {
+      "path": "source/upg-core/js/localai.js",
+      "bytes": 22899,
+      "sha256": "d5c0a2e74c14bceb3c4a0927e4f8ba56a8de8e9487f5f6fa83efccb20b60deb1"
+    },
+    {
+      "path": "source/upg-core/js/pagehost.js",
+      "bytes": 22449,
+      "sha256": "134629af707d3491a14898faea6b34083684815facab30d8daa09b6501611f14"
+    },
+    {
+      "path": "source/upg-core/js/profile-contract.js",
+      "bytes": 6797,
+      "sha256": "eac5151aa5b0a55316d68145ab0029658b1b560d07e08178a890c3eb06ba3fbf"
+    },
+    {
+      "path": "source/upg-core/lib/brand-image.js",
+      "bytes": 12675,
+      "sha256": "1541cfcc9dfa2d852991cf4985d154e7e368d1b2705360a94c5e26b43b3d423c"
+    },
+    {
+      "path": "source/upg-core/lib/generation-pipeline.js",
+      "bytes": 7711,
+      "sha256": "6c0e688d5ca6652d4fad6b3c9e49eee0a7021fca571f701ac326d7c37abdeaec"
+    },
+    {
+      "path": "source/upg-core/lib/profile-artifacts.js",
+      "bytes": 5540,
+      "sha256": "91fdcee1d281a8b6a2893b532e2148f1817eed28a79179298b80db80bbd49c23"
+    },
+    {
+      "path": "source/upg-core/lib/profile-capture.js",
+      "bytes": 7260,
+      "sha256": "1a1d647037bd5fb6ebf6dae425b7a09658b5f6931e5e2c4ed6174b23b02dedd2"
+    },
+    {
+      "path": "source/upg-core/lib/profile-runtime.js",
+      "bytes": 7950,
+      "sha256": "00e1cbd8aeda983034f974fa253d9da9aa512ddfd35e5c91f0a3eb0dbd144186"
+    },
+    {
+      "path": "source/upg-core/lib/safe-fetch.js",
+      "bytes": 8226,
+      "sha256": "1261c9c863fcfd659505f7eb04adfd3a393d79a3c0918a2861297424cb20e987"
+    },
+    {
+      "path": "source/upg-core/scripts/check-profile-capture.cjs",
+      "bytes": 2235,
+      "sha256": "22a3428b44e3818406a8adcd1b03c3ddbea881fa5939318c9f98fb5896719851"
+    },
+    {
+      "path": "source/upg-core/scripts/render-profile-artifact.cjs",
+      "bytes": 901,
+      "sha256": "7bbfe18fc11cde46b014f68d0a4bbaeb2f5ff6143beab04ed200b12ffccc9aeb"
+    },
+    {
+      "path": "source/upg-core/test/profile-artifacts.test.cjs",
+      "bytes": 3854,
+      "sha256": "4e9f60080526536e3a1db781b5cda2ce12d1298d591c0df594153ac4501e5fae"
+    },
+    {
+      "path": "source/upg-core/test/profile-capture.test.cjs",
+      "bytes": 12843,
+      "sha256": "3389f9f9c65e2da97f23a9c8ff8d12569b2e27b88155b7fb5b77da49e8484ae7"
+    },
+    {
+      "path": "source/upg-core/test/server-generation.test.cjs",
+      "bytes": 12339,
+      "sha256": "5f4ceadebf132656994b54896a80ceb26c7be5067b657c37f3d61675bcd1340c"
+    },
+    {
+      "path": "SOURCE-MANIFEST.json",
+      "bytes": 4420,
+      "sha256": "df70428467d4c7ff9a82a9df2511a31b5c02377b706fa780a184efc389dac1d3"
+    },
+    {
+      "path": "SOURCE-NOTICE.md",
+      "bytes": 978,
+      "sha256": "add95fb8ce05dc095fe46fe6edfd0c1b6ef536b01364c215591249d8138ff473"
+    },
+    {
+      "path": "tools/emit-prompts.cjs",
+      "bytes": 1769,
+      "sha256": "1925e69098cc3c4983071429cc6b580933dfb067a0a0cd86cb58228225b9029a"
+    },
+    {
+      "path": "tools/render-example.cjs",
+      "bytes": 3476,
+      "sha256": "d44bc81d6621113c2282b7af2c9cbda2f3486e9b6cc9e4311de17725f7ad3bd9"
+    },
+    {
+      "path": "tools/verify-handoff.cjs",
+      "bytes": 1840,
+      "sha256": "9d8236d1f970b736cca1c6ac19f40b487f4138c2445dcb3f7c3ef23ba8fd38f7"
+    }
+  ]
+}

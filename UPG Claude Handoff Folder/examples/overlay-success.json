@@ -1,0 +1,122 @@
+{
+  "insights": {
+    "title": "success insights",
+    "items": [
+      {
+        "label": "success priority",
+        "value": "Modeled demo signal"
+      }
+    ]
+  },
+  "affinities": {
+    "title": "success signals",
+    "seriesA": {
+      "label": "Recent intent",
+      "color": "#0B5CAB"
+    },
+    "seriesB": {
+      "label": "Historical interest",
+      "color": "#00A1E0"
+    },
+    "groups": [
+      {
+        "name": "success focus",
+        "items": [
+          {
+            "label": "Guided sessions",
+            "a": 72,
+            "b": 48
+          },
+          {
+            "label": "Resource usage",
+            "a": 54,
+            "b": 61
+          }
+        ]
+      }
+    ]
+  },
+  "preferences": {
+    "title": "success preferences",
+    "items": [
+      {
+        "label": "Preferred channel",
+        "value": "Email (fictional consent)"
+      }
+    ]
+  },
+  "events": {
+    "title": "success touchpoints",
+    "items": [
+      {
+        "name": "success planning session",
+        "date": "Demo timeline",
+        "confirmation": "Synthetic event"
+      }
+    ]
+  },
+  "membership": {
+    "title": "success program",
+    "items": [
+      {
+        "label": "Status",
+        "value": "Modeled active membership"
+      }
+    ]
+  },
+  "recommendations": {
+    "title": "success recommendations",
+    "items": [
+      {
+        "eyebrow": "Next best action",
+        "title": "success: Improve adoption and renewal readiness.",
+        "cta": "Review plan",
+        "image": ""
+      },
+      {
+        "eyebrow": "Recommended",
+        "title": "success: Send a relevant guided resource",
+        "cta": "View resource",
+        "image": ""
+      }
+    ]
+  },
+  "activity": {
+    "title": "success activity",
+    "items": [
+      {
+        "icon": "📋",
+        "title": "success review requested",
+        "body": "Fictional demo activity, not a live CRM record.",
+        "time": "Demo timeline"
+      }
+    ]
+  },
+  "railFields": [
+    {
+      "icon": "🎟️",
+      "label": "Events attended",
+      "value": "3 (synthetic)",
+      "visible": true
+    },
+    {
+      "icon": "📈",
+      "label": "Future attendance propensity",
+      "value": "72% (modeled)",
+      "visible": true
+    }
+  ],
+  "extraCards": [
+    {
+      "title": "success context",
+      "icon": "📋",
+      "items": [
+        {
+          "label": "Suggested focus",
+          "value": "Improve adoption and renewal readiness."
+        }
+      ]
+    }
+  ],
+  "rightExtraCards": []
+}

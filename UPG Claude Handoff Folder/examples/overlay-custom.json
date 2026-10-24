@@ -1,0 +1,122 @@
+{
+  "insights": {
+    "title": "custom insights",
+    "items": [
+      {
+        "label": "custom priority",
+        "value": "Modeled demo signal"
+      }
+    ]
+  },
+  "affinities": {
+    "title": "custom signals",
+    "seriesA": {
+      "label": "Recent intent",
+      "color": "#0B5CAB"
+    },
+    "seriesB": {
+      "label": "Historical interest",
+      "color": "#00A1E0"
+    },
+    "groups": [
+      {
+        "name": "custom focus",
+        "items": [
+          {
+            "label": "Guided sessions",
+            "a": 72,
+            "b": 48
+          },
+          {
+            "label": "Resource usage",
+            "a": 54,
+            "b": 61
+          }
+        ]
+      }
+    ]
+  },
+  "preferences": {
+    "title": "custom preferences",
+    "items": [
+      {
+        "label": "Preferred channel",
+        "value": "Email (fictional consent)"
+      }
+    ]
+  },
+  "events": {
+    "title": "custom touchpoints",
+    "items": [
+      {
+        "name": "custom planning session",
+        "date": "Demo timeline",
+        "confirmation": "Synthetic event"
+      }
+    ]
+  },
+  "membership": {
+    "title": "custom program",
+    "items": [
+      {
+        "label": "Status",
+        "value": "Modeled active membership"
+      }
+    ]
+  },
+  "recommendations": {
+    "title": "custom recommendations",
+    "items": [
+      {
+        "eyebrow": "Next best action",
+        "title": "custom: Explain modeled invoice exposure for Finance.",
+        "cta": "Review plan",
+        "image": ""
+      },
+      {
+        "eyebrow": "Recommended",
+        "title": "custom: Send a relevant guided resource",
+        "cta": "View resource",
+        "image": ""
+      }
+    ]
+  },
+  "activity": {
+    "title": "custom activity",
+    "items": [
+      {
+        "icon": "📋",
+        "title": "custom review requested",
+        "body": "Fictional demo activity, not a live CRM record.",
+        "time": "Demo timeline"
+      }
+    ]
+  },
+  "railFields": [
+    {
+      "icon": "🎟️",
+      "label": "Events attended",
+      "value": "3 (synthetic)",
+      "visible": true
+    },
+    {
+      "icon": "📈",
+      "label": "Future attendance propensity",
+      "value": "72% (modeled)",
+      "visible": true
+    }
+  ],
+  "extraCards": [
+    {
+      "title": "Finance exposure summary",
+      "icon": "📋",
+      "items": [
+        {
+          "label": "Suggested focus",
+          "value": "Explain modeled invoice exposure for Finance."
+        }
+      ]
+    }
+  ],
+  "rightExtraCards": []
+}

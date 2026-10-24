@@ -1,0 +1,164 @@
+{
+  "insights": {
+    "title": "sales insights",
+    "items": [
+      {
+        "label": "sales priority",
+        "value": "Modeled demo signal"
+      }
+    ]
+  },
+  "affinities": {
+    "title": "sales signals",
+    "seriesA": {
+      "label": "Recent intent",
+      "color": "#0B5CAB"
+    },
+    "seriesB": {
+      "label": "Historical interest",
+      "color": "#00A1E0"
+    },
+    "groups": [
+      {
+        "name": "sales focus",
+        "items": [
+          {
+            "label": "Guided sessions",
+            "a": 72,
+            "b": 48
+          },
+          {
+            "label": "Resource usage",
+            "a": 54,
+            "b": 61
+          }
+        ]
+      }
+    ]
+  },
+  "preferences": {
+    "title": "sales preferences",
+    "items": [
+      {
+        "label": "Preferred channel",
+        "value": "Email (fictional consent)"
+      }
+    ]
+  },
+  "events": {
+    "title": "sales touchpoints",
+    "items": [
+      {
+        "name": "sales planning session",
+        "date": "Demo timeline",
+        "confirmation": "Synthetic event"
+      }
+    ]
+  },
+  "membership": {
+    "title": "sales program",
+    "items": [
+      {
+        "label": "Status",
+        "value": "Modeled active membership"
+      }
+    ]
+  },
+  "recommendations": {
+    "title": "sales recommendations",
+    "items": [
+      {
+        "eyebrow": "Next best action",
+        "title": "sales: Include call coaching and future-event propensity.",
+        "cta": "Review plan",
+        "image": ""
+      },
+      {
+        "eyebrow": "Recommended",
+        "title": "sales: Send a relevant guided resource",
+        "cta": "View resource",
+        "image": ""
+      }
+    ]
+  },
+  "activity": {
+    "title": "sales activity",
+    "items": [
+      {
+        "icon": "📋",
+        "title": "sales review requested",
+        "body": "Fictional demo activity, not a live CRM record.",
+        "time": "Demo timeline"
+      }
+    ]
+  },
+  "railFields": [
+    {
+      "icon": "🎟️",
+      "label": "Events attended",
+      "value": "3 (synthetic)",
+      "visible": true
+    },
+    {
+      "icon": "📈",
+      "label": "Future attendance propensity",
+      "value": "72% (modeled)",
+      "visible": true
+    }
+  ],
+  "extraCards": [
+    {
+      "title": "Call coaching summary",
+      "icon": "📋",
+      "items": [
+        {
+          "label": "Suggested focus",
+          "value": "Include call coaching and future-event propensity."
+        }
+      ]
+    }
+  ],
+  "rightExtraCards": [],
+  "brandName": "Northstar Demo",
+  "appName": "Data Cloud",
+  "industry": "generic",
+  "colors": {
+    "primary": "#0B5CAB",
+    "secondary": "#F1F7FF"
+  },
+  "profile": {
+    "name": "Alex Morgan (fictional)",
+    "city": "Demo City",
+    "customerId": "DEMO-001",
+    "email": "alex@person.example",
+    "phone": "Not supplied",
+    "address": "Synthetic demo address",
+    "segment": "Modeled member"
+  },
+  "account": {
+    "name": "Northstar Example Account",
+    "headquarters": "Demo City",
+    "accountId": "DEMO-ACC-001",
+    "industry": "Education services (synthetic)",
+    "type": "Demo customer",
+    "owner": "Demo account team",
+    "website": "northstar.example",
+    "employees": "120 (modeled)",
+    "tier": "Demo tier"
+  },
+  "accountMetrics": {
+    "revenue": "$120,000 (modeled)",
+    "pipeline": "$20,000 (modeled)",
+    "usageScore": "72",
+    "healthScore": "80",
+    "supportCases": "1 demo case",
+    "renewalDate": "Demo renewal date"
+  },
+  "loyalty": {
+    "title": "Demo membership",
+    "memberId": "DEMO-MEMBER-001",
+    "tier": "Demo tier",
+    "points": "100 (modeled)",
+    "redeemedPoints": "0"
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "url": "https://northstar.example/",
+  "profileType": "b2c",
+  "views": [
+    {
+      "lens": "sales",
+      "objective": "convert",
+      "brief": "Include call coaching and future-event propensity.",
+      "customRole": ""
+    },
+    {
+      "lens": "service",
+      "objective": "resolve",
+      "brief": "Reschedule a family assessment; resolve access friction.",
+      "customRole": ""
+    },
+    {
+      "lens": "marketing",
+      "objective": "engage",
+      "brief": "Recommend an opted-in event campaign.",
+      "customRole": ""
+    },
+    {
+      "lens": "success",
+      "objective": "retain",
+      "brief": "Improve adoption and renewal readiness.",
+      "customRole": ""
+    },
+    {
+      "lens": "custom",
+      "objective": "engage",
+      "brief": "Explain modeled invoice exposure for Finance.",
+      "customRole": "Finance"
+    }
+  ],
+  "includeImages": false,
+  "tier": "balanced",
+  "projectName": "Northstar synthetic proof"
+}
