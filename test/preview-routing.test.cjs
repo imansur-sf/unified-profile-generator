@@ -8,7 +8,7 @@ const { app } = require('../server');
 const root = path.resolve(__dirname, '..');
 const baseline = require('./fixtures/preview-production-baseline.json');
 
-// The baseline includes the explicitly approved additive Feedback controls,
+// The baseline includes the explicitly approved additive Feedback controls and app favicon,
 // not promotion of the preview redesign. All generation hashes are retained.
 test('the preview trial preserves the approved production frontend and generation runtime baseline', () => {
   for (const [file, expected] of Object.entries(baseline)) {

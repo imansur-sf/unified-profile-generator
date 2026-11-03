@@ -11,6 +11,7 @@ Usage:
 """
 
 import argparse
+import base64
 import re
 import sys
 from pathlib import Path
@@ -38,6 +39,10 @@ def build(out_path: Path) -> None:
         sys.exit(f"error: {INDEX} not found")
 
     html = INDEX.read_text(encoding="utf-8")
+    # Keep the app icon independent of customer branding and portable over file://.
+    icon = base64.b64encode((ROOT / "assets/saasy-upg-logo.png").read_bytes()).decode("ascii")
+    html = html.replace('href="assets/saasy-upg-logo.png"',
+                        f'href="data:image/png;base64,{icon}"')
     # The feedback UI belongs to the builder, including its bundled edition.
     html = re.sub(r'<link rel="stylesheet" href="/assets/feedback\.css[^\"]*">',
                   lambda _: '<style>\n' + (ROOT / 'assets/feedback.css').read_text(encoding='utf-8') + '\n</style>', html)
